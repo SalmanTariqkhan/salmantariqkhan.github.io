@@ -10,7 +10,7 @@
     <meta name="mobile-web-app-capable" content="yes" />
     <title>
       Defense of the Ancients 3D • Grandmaster Sovereign Multiplayer Edition
-      (v74)
+      (v76)
     </title>
     <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
     <script src="https://cdn.tailwindcss.com"></script>
@@ -1251,10 +1251,10 @@
             class="intro-badge-float inline-flex items-center gap-1.5 px-2.5 sm:px-3.5 py-0.5 rounded-full bg-amber-500/15 border border-amber-400/50 text-amber-300 text-[9px] sm:text-[11px] font-cinzel font-bold tracking-wider sm:tracking-widest uppercase shadow-[0_0_20px_rgba(250,204,21,0.22)] truncate"
           >
             <i class="fa-solid fa-crown shrink-0"></i>
-            <span class="sm:hidden">DOTA 3D • MULTIPLAYER EDITION (V74)</span>
+            <span class="sm:hidden">DOTA 3D • MULTIPLAYER EDITION (V76)</span>
             <span class="hidden sm:inline"
               >Defense of the Ancients 3D • Grandmaster Sovereign Multiplayer
-              Edition (v74)</span
+              Edition (v76)</span
             >
           </div>
           <button
@@ -3830,6 +3830,14 @@
                   >
                     <i class="fa-solid fa-satellite-dish mr-1"></i>Test TURN
                   </button>
+                  <button
+                    type="button"
+                    onclick="window.resetMpTurnPrefs()"
+                    class="px-2 py-0.5 rounded bg-slate-800 hover:bg-rose-950 border border-slate-600 text-slate-300 font-bold transition"
+                    title="Clear custom relay overrides and uncheck Force TURN Relay"
+                  >
+                    Reset
+                  </button>
                 </div>
               </div>
               <div class="grid grid-cols-1 sm:grid-cols-3 gap-1.5">
@@ -6198,17 +6206,33 @@
           const cUrl = document.getElementById("mp-custom-turn-url");
           const cUser = document.getElementById("mp-custom-turn-user");
           const cPass = document.getElementById("mp-custom-turn-pass");
-          const fRelay = document.getElementById("mp-force-relay");
           localStorage.setItem(
             "dota3d_turn_prefs_v71",
             JSON.stringify({
               url: cUrl ? cUrl.value.trim() : "",
               user: cUser ? cUser.value.trim() : "",
               pass: cPass ? cPass.value.trim() : "",
-              forceRelay: fRelay ? fRelay.checked : false,
             }),
           );
         } catch (e) {}
+      };
+
+      window.resetMpTurnPrefs = function () {
+        try {
+          localStorage.removeItem("dota3d_turn_prefs_v71");
+        } catch (e) {}
+        const cUrl = document.getElementById("mp-custom-turn-url");
+        const cUser = document.getElementById("mp-custom-turn-user");
+        const cPass = document.getElementById("mp-custom-turn-pass");
+        const fRelay = document.getElementById("mp-force-relay");
+        if (cUrl) cUrl.value = "";
+        if (cUser) cUser.value = "";
+        if (cPass) cPass.value = "";
+        if (fRelay) fRelay.checked = false;
+        setMpConnStatus(
+          "ready",
+          "Relay Reset • Direct STUN P2P + ExpressTURN UDP Defaults Restored",
+        );
       };
 
       (function restoreMpTurnPrefs() {
@@ -6219,12 +6243,9 @@
           const cUrl = document.getElementById("mp-custom-turn-url");
           const cUser = document.getElementById("mp-custom-turn-user");
           const cPass = document.getElementById("mp-custom-turn-pass");
-          const fRelay = document.getElementById("mp-force-relay");
           if (cUrl && prefs.url) cUrl.value = prefs.url;
           if (cUser && prefs.user) cUser.value = prefs.user;
           if (cPass && prefs.pass) cPass.value = prefs.pass;
-          if (fRelay && typeof prefs.forceRelay === "boolean")
-            fRelay.checked = prefs.forceRelay;
         } catch (e) {}
       })();
 
@@ -6376,31 +6397,51 @@
         });
       }
 
-      function createFastDataChannelOnGuest(conn) {
+      function bindGuestFastDc(dc) {
+        if (!dc) return;
+        const markOpen = () => {
+          mpState.fastDataChannels.set("host", dc);
+        };
+        if (dc.readyState === "open") markOpen();
+        else dc.addEventListener("open", markOpen);
+        dc.addEventListener("message", (mev) => {
+          try {
+            const data =
+              typeof mev.data === "string" ? JSON.parse(mev.data) : mev.data;
+            mpState.bytesRecv =
+              (mpState.bytesRecv || 0) +
+              (typeof mev.data === "string" ? mev.data.length : 120);
+            mpHandlePacket(data);
+          } catch (e) {}
+        });
+        dc.addEventListener("close", () => {
+          mpState.fastDataChannels.delete("host");
+        });
+      }
+
+      function prepareFastDataChannelBeforeOffer(conn) {
         const pc = conn && conn.peerConnection;
-        if (!pc || typeof pc.createDataChannel !== "function") return;
-        try {
-          const dc = pc.createDataChannel("fast-state", {
-            ordered: false,
-            maxRetransmits: 0,
-          });
-          dc.addEventListener("open", () => {
-            mpState.fastDataChannels.set("host", dc);
-          });
-          dc.addEventListener("message", (mev) => {
-            try {
-              const data =
-                typeof mev.data === "string" ? JSON.parse(mev.data) : mev.data;
-              mpState.bytesRecv =
-                (mpState.bytesRecv || 0) +
-                (typeof mev.data === "string" ? mev.data.length : 120);
-              mpHandlePacket(data);
-            } catch (e) {}
-          });
-          dc.addEventListener("close", () => {
-            mpState.fastDataChannels.delete("host");
-          });
-        } catch (e) {}
+        if (!pc || pc._fastOfferHooked) return;
+        pc._fastOfferHooked = true;
+        if (typeof pc.createOffer === "function") {
+          const origCreateOffer = pc.createOffer.bind(pc);
+          pc.createOffer = function (...args) {
+            if (
+              !pc._fastDcCreated &&
+              typeof pc.createDataChannel === "function"
+            ) {
+              pc._fastDcCreated = true;
+              try {
+                const dc = pc.createDataChannel("fast-state", {
+                  ordered: false,
+                  maxRetransmits: 0,
+                });
+                bindGuestFastDc(dc);
+              } catch (e) {}
+            }
+            return origCreateOffer(...args);
+          };
+        }
       }
 
       function attachIceDiagnostics(conn, roleLabel, code) {
@@ -6464,6 +6505,14 @@
                   }
                 });
                 mpState.iceModeLabel = pairType;
+                const hudPillTxt =
+                  document.getElementById("mp-hud-status-text");
+                if (hudPillTxt && mpState.active) {
+                  hudPillTxt.textContent =
+                    roleLabel === "host"
+                      ? `MP HOST • ${mpState.roomCode} • ${pairType}`
+                      : `MP GUEST • ${mpState.roomCode} • ${pairType}`;
+                }
                 if (roleLabel === "host") {
                   setMpConnStatus(
                     "connected",
@@ -6711,7 +6760,7 @@
             } else {
               setMpConnStatus(
                 "error",
-                `Could not reach Room [${code}] (${reason}). Ensure both players use v74.`,
+                `Could not reach Room [${code}] (${reason}). Ensure both players use v76.`,
               );
             }
           };
@@ -6726,11 +6775,11 @@
               serialization: "json",
             });
             mpState.conns.set("host", conn);
+            prepareFastDataChannelBeforeOffer(conn);
             attachIceDiagnostics(conn, "guest", code);
 
             conn.on("open", () => {
               connected = true;
-              createFastDataChannelOnGuest(conn);
               const via = mpState.iceModeLabel || "STUN/TURN";
               setMpConnStatus(
                 "connected",
@@ -7021,8 +7070,6 @@
               });
               existing.ownerPeerId = pRec.id;
               existing.isRemoteHuman = true;
-              existing.abilityLevels.Q = 1;
-              existing.skillPoints = 0;
               units.push(existing);
             }
             const targetConn = Array.from(mpState.conns.values()).find(
@@ -7186,6 +7233,8 @@
             actor.atkDamage += 4;
             actor.armor += 0.4;
             actor.atkSpeedMult += 0.03;
+            if (mpState.lastHeroExtras)
+              mpState.lastHeroExtras.delete(actor.netId);
           } else if (
             msg.cmd === "PICK_TALENT" &&
             actor.heroCfg &&
@@ -7197,6 +7246,8 @@
             if (opt) {
               actor.chosenTalents[msg.tierLvl] = msg.talentId;
               opt.apply(actor);
+              if (mpState.lastHeroExtras)
+                mpState.lastHeroExtras.delete(actor.netId);
             }
           } else if (msg.cmd === "BUY_ITEM") {
             const item = SHOP_ITEMS.find((it) => it.id === msg.itemId);
@@ -7344,8 +7395,14 @@
               mpSendOverConn(mpState.conns.get("host"), reply, null, 96);
             }
           } else if (mpState.role === "host") {
-            if (typeof msg.lastRtt === "number")
+            if (typeof msg.lastRtt === "number") {
               mpState.peerPings.set(msg.senderId, msg.lastRtt);
+              let worst = 0;
+              mpState.peerPings.forEach((v) => {
+                if (v > worst) worst = v;
+              });
+              if (worst > 0) mpState.pingMs = worst;
+            }
             let replied = false;
             mpState.conns.forEach((conn, peerKey) => {
               if (conn._playerId === msg.senderId) {
@@ -7461,6 +7518,8 @@
           u.tpCharges || 0, // 31
           isHero ? u.inventory.map((it) => (it ? it.id : null)) : null, // 32
           isHero ? u.lastProcessedCmdSeq || 0 : 0, // 33
+          isHero ? u.attrBonusRank || 0 : 0, // 34
+          isHero ? u.chosenTalents || {} : null, // 35
         ];
       }
 
@@ -7548,8 +7607,9 @@
             ];
             const kdaArr = [u.kills, u.deaths, u.assists, u.lastHits];
             const invArr = u.inventory.map((it) => (it ? it.id : null));
+            const talStr = Object.values(u.chosenTalents || {}).join(",");
 
-            const extraSig = `${abArr.join(",")}|${kdaArr.join(",")}|${invArr.join(",")}`;
+            const extraSig = `${abArr.join(",")}|${kdaArr.join(",")}|${invArr.join(",")}|${u.attrBonusRank || 0}|${talStr}`;
             const prevExtra = mpState.lastHeroExtras.get(u.netId);
             const sendExtras = forceRow || prevExtra !== extraSig;
             if (sendExtras) mpState.lastHeroExtras.set(u.netId, extraSig);
@@ -7585,6 +7645,8 @@
               u.tpCharges || 0,
               sendExtras ? invArr : null,
               ackSeq,
+              u.attrBonusRank || 0,
+              sendExtras ? u.chosenTalents || {} : null,
             ]);
           }
         }
@@ -7842,6 +7904,7 @@
             u.atkDamage = su[16];
             u.armor = su[19];
             u.moveSpeed = su[18];
+            const prevLvlFull = u.level;
             u.level = su[21];
             u.xp = su[22];
             u.xpToNext = su[23];
@@ -7871,6 +7934,25 @@
             u.tpCharges = su[31];
             if (typeof su[33] === "number") {
               u._ackCmdSeq = Math.max(u._ackCmdSeq || 0, su[33]);
+            }
+            if (typeof su[34] === "number") u.attrBonusRank = su[34];
+            if (su[35]) u.chosenTalents = { ...su[35] };
+            if (u.isPlayer && u.level > prevLvlFull && prevLvlFull >= 1) {
+              sfx.play("levelup");
+              const ultNote = u.level === 6 ? " • ULTIMATE UNLOCKED!" : "";
+              spawnFloatText(
+                u.mesh.position,
+                `LEVEL ${u.level}!${ultNote}`,
+                "#facc15",
+                18,
+              );
+              spawnShockwaveRing(
+                u.mesh.position.x,
+                u.mesh.position.z,
+                4.4,
+                0xfacc15,
+                0.7,
+              );
             }
 
             if (Array.isArray(su[32])) {
@@ -7932,6 +8014,7 @@
             u.atkDamage = dh[9];
             u.armor = dh[10];
             u.moveSpeed = dh[11];
+            const prevLvlDelta = u.level;
             u.level = dh[12];
             u.xp = dh[13];
             u.xpToNext = dh[14];
@@ -7961,6 +8044,25 @@
             u.tpCharges = dh[22];
             if (typeof dh[24] === "number") {
               u._ackCmdSeq = Math.max(u._ackCmdSeq || 0, dh[24]);
+            }
+            if (typeof dh[25] === "number") u.attrBonusRank = dh[25];
+            if (dh[26]) u.chosenTalents = { ...dh[26] };
+            if (u.isPlayer && u.level > prevLvlDelta && prevLvlDelta >= 1) {
+              sfx.play("levelup");
+              const ultNote = u.level === 6 ? " • ULTIMATE UNLOCKED!" : "";
+              spawnFloatText(
+                u.mesh.position,
+                `LEVEL ${u.level}!${ultNote}`,
+                "#facc15",
+                18,
+              );
+              spawnShockwaveRing(
+                u.mesh.position.x,
+                u.mesh.position.z,
+                4.4,
+                0xfacc15,
+                0.7,
+              );
             }
             if (Array.isArray(dh[23])) {
               let changed = false;
@@ -8685,7 +8787,6 @@
           mpState.pingAccum += dt;
           if (mpState.pingAccum >= 1.0 && mpState.conns.size > 0) {
             mpState.pingAccum = 0;
-            mpBroadcast({ type: "PING_REQ", ts: performance.now() });
             updateMpRelayUsageDisplay();
           }
         } else if (mpState.role === "guest") {
@@ -21589,9 +21690,10 @@ diffuseColor.rgb *= mix(0.58, 1.04, groundAO) * canopyShade;`,
 
         gainXp(amt) {
           if (this.type !== "hero" || this.dead) return;
-          const diffMult = this.isPlayer
-            ? 1.0
-            : AI_DIFFICULTY_PROFILES[aiDifficulty].xpMult;
+          const diffMult =
+            this.isPlayer || this.isRemoteHuman
+              ? 1.0
+              : AI_DIFFICULTY_PROFILES[aiDifficulty].xpMult;
           this.xp += amt * diffMult;
           while (this.xp >= this.xpToNext && this.level < 25) {
             this.xp -= this.xpToNext;
@@ -21640,7 +21742,7 @@ diffuseColor.rgb *= mix(0.58, 1.04, groundAO) * canopyShade;`,
                 0.7,
               );
               updateAbilityUpgradeButtons();
-            } else {
+            } else if (!this.isRemoteHuman) {
               for (const k of ["R", "Q", "W", "E"]) {
                 if (canHeroLevelAbility(this, k)) {
                   this.abilityLevels[k]++;
@@ -23167,6 +23269,7 @@ diffuseColor.rgb *= mix(0.58, 1.04, groundAO) * canopyShade;`,
         )
           return;
         if (mpState.active && mpState.role === "guest") {
+          sfx.play("levelup");
           mpSendToHost({ type: "CMD", cmd: "LEVEL_ATTR" });
           return;
         }
@@ -25124,7 +25227,7 @@ diffuseColor.rgb *= mix(0.58, 1.04, groundAO) * canopyShade;`,
         if (mpState.active && mpState.role === "guest") {
           if (statusPill) statusPill.classList.remove("hidden");
           if (statusText)
-            statusText.textContent = `MP GUEST • ROOM ${mpState.roomCode}`;
+            statusText.textContent = `MP GUEST • ${mpState.roomCode}${mpState.iceModeLabel ? " • " + mpState.iceModeLabel : ""}`;
           if (p2Pill) p2Pill.classList.add("hidden");
           const myCfg = HERO_ROSTER[selectedHeroId] || HERO_ROSTER.aurelius;
           applyHeroToHUD(myCfg, `Room ${mpState.roomCode}`);
@@ -25369,7 +25472,7 @@ diffuseColor.rgb *= mix(0.58, 1.04, groundAO) * canopyShade;`,
         if (mpState.active && mpState.role === "host") {
           if (statusPill) statusPill.classList.remove("hidden");
           if (statusText)
-            statusText.textContent = `MP HOST • ROOM ${mpState.roomCode} (${mpState.players.size}P)`;
+            statusText.textContent = `MP HOST • ${mpState.roomCode} (${mpState.players.size}P)${mpState.iceModeLabel ? " • " + mpState.iceModeLabel : ""}`;
           if (p2Pill) p2Pill.classList.add("hidden");
 
           let radCount = 0;
@@ -25405,8 +25508,6 @@ diffuseColor.rgb *= mix(0.58, 1.04, groundAO) * canopyShade;`,
             heroEnt.ownerPeerId = p.id;
             if (!isMe) {
               heroEnt.isRemoteHuman = true;
-              heroEnt.abilityLevels.Q = 1;
-              heroEnt.skillPoints = 0;
             } else {
               playerHero = heroEnt;
               applyHeroToHUD(
@@ -25820,6 +25921,7 @@ diffuseColor.rgb *= mix(0.58, 1.04, groundAO) * canopyShade;`,
       window.levelUpAbility = function (key) {
         if (!canHeroLevelAbility(playerHero, key)) return;
         if (mpState.active && mpState.role === "guest") {
+          sfx.play("levelup");
           mpSendToHost({ type: "CMD", cmd: "LEVEL_UP", key });
           return;
         }
