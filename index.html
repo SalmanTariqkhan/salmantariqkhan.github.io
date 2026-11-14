@@ -10,7 +10,7 @@
     <meta name="mobile-web-app-capable" content="yes" />
     <title>
       Defense of the Ancients 3D • Grandmaster Sovereign Multiplayer Edition
-      (v77)
+      (v78)
     </title>
     <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
     <script src="https://cdn.tailwindcss.com"></script>
@@ -1251,10 +1251,10 @@
             class="intro-badge-float inline-flex items-center gap-1.5 px-2.5 sm:px-3.5 py-0.5 rounded-full bg-amber-500/15 border border-amber-400/50 text-amber-300 text-[9px] sm:text-[11px] font-cinzel font-bold tracking-wider sm:tracking-widest uppercase shadow-[0_0_20px_rgba(250,204,21,0.22)] truncate"
           >
             <i class="fa-solid fa-crown shrink-0"></i>
-            <span class="sm:hidden">DOTA 3D • MULTIPLAYER EDITION (V77)</span>
+            <span class="sm:hidden">DOTA 3D • MULTIPLAYER EDITION (V78)</span>
             <span class="hidden sm:inline"
               >Defense of the Ancients 3D • Grandmaster Sovereign Multiplayer
-              Edition (v77)</span
+              Edition (v78)</span
             >
           </div>
           <button
@@ -6252,12 +6252,7 @@
         }
       }
 
-      const CF_TURN_CONFIG = {
-        tokenId: "feb353d1e13ba9978fabbc19ff13a82a",
-        apiToken:
-          "28a4f84e885564d73d43fdd4c0e6925b43c8d0b4f93dc641ba1997630b221451",
-        ttl: 86400,
-      };
+      const CF_TURN_WORKER_URL = "https://moba.takdevs01.workers.dev/";
 
       const RELAY_PROVIDER_META = {
         cloudflare: {
@@ -6357,14 +6352,11 @@
               ? new AbortController()
               : null;
           const timer = ctrl ? setTimeout(() => ctrl.abort(), 4500) : null;
-          const endpoint = `https://rtc.live.cloudflare.com/v1/turn/keys/${CF_TURN_CONFIG.tokenId}/credentials/generate-ice-servers`;
-          const res = await fetch(endpoint, {
+          const res = await fetch(CF_TURN_WORKER_URL, {
             method: "POST",
             headers: {
-              Authorization: `Bearer ${CF_TURN_CONFIG.apiToken}`,
               "Content-Type": "application/json",
             },
-            body: JSON.stringify({ ttl: CF_TURN_CONFIG.ttl }),
             signal: ctrl ? ctrl.signal : undefined,
           });
           if (timer) clearTimeout(timer);
