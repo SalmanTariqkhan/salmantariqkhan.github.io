@@ -10,7 +10,7 @@
     <meta name="mobile-web-app-capable" content="yes" />
     <title>
       Defense of the Ancients 3D • Grandmaster Sovereign Multiplayer Edition
-      (v65)
+      (v67)
     </title>
     <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
     <script src="https://cdn.tailwindcss.com"></script>
@@ -1251,10 +1251,10 @@
             class="intro-badge-float inline-flex items-center gap-1.5 px-2.5 sm:px-3.5 py-0.5 rounded-full bg-amber-500/15 border border-amber-400/50 text-amber-300 text-[9px] sm:text-[11px] font-cinzel font-bold tracking-wider sm:tracking-widest uppercase shadow-[0_0_20px_rgba(250,204,21,0.22)] truncate"
           >
             <i class="fa-solid fa-crown shrink-0"></i>
-            <span class="sm:hidden">DOTA 3D • MULTIPLAYER EDITION (V65)</span>
+            <span class="sm:hidden">DOTA 3D • MULTIPLAYER EDITION (V67)</span>
             <span class="hidden sm:inline"
               >Defense of the Ancients 3D • Grandmaster Sovereign Multiplayer
-              Edition (v65)</span
+              Edition (v67)</span
             >
           </div>
           <button
@@ -3601,8 +3601,8 @@
                 MULTIPLAYER ARENA LOBBY
               </h2>
               <p class="text-xs text-slate-300">
-                Cross-Tab LAN • Online P2P Room Code • Local 2-Player Shared
-                Screen
+                4-Player Optimized (2v2 / Co-op) • Cross-Tab LAN • Online P2P
+                Room Code
               </p>
             </div>
           </div>
@@ -3896,16 +3896,27 @@
           <div
             class="bg-slate-950/80 border border-slate-800 rounded-xl p-3 space-y-2"
           >
-            <div class="flex items-center justify-between">
+            <div class="flex flex-wrap items-center justify-between gap-1.5">
               <span
                 class="font-cinzel font-bold text-amber-300 uppercase tracking-wider"
-                >Arena Roster & Live Rooms</span
+                >Arena Roster & Live Rooms (4P Ready)</span
               >
-              <span
-                id="mp-room-badge"
-                class="font-mono text-[11px] text-cyan-300 bg-cyan-950/60 px-2 py-0.5 rounded border border-cyan-500/35"
-                >Solo Mode</span
-              >
+              <div class="flex items-center gap-1.5">
+                <button
+                  type="button"
+                  id="btn-mp-autobalance"
+                  onclick="window.autoBalanceMpTeams()"
+                  class="hidden px-2 py-0.5 rounded bg-amber-500/20 hover:bg-amber-500/30 border border-amber-400/50 text-amber-200 font-cinzel font-bold text-[10px] transition"
+                  title="Evenly split connected players into Radiant vs Dire (2v2)"
+                >
+                  <i class="fa-solid fa-scale-balanced mr-1"></i>Balance 2v2
+                </button>
+                <span
+                  id="mp-room-badge"
+                  class="font-mono text-[11px] text-cyan-300 bg-cyan-950/60 px-2 py-0.5 rounded border border-cyan-500/35"
+                  >Solo Mode</span
+                >
+              </div>
             </div>
             <div id="mp-discovered-rooms" class="space-y-1"></div>
             <div id="mp-roster-list" class="space-y-1.5"></div>
@@ -5633,7 +5644,21 @@
         pingAccum: 0,
         pingMs: null,
         peerPings: new Map(),
+        knownNetIds: new Set(),
+        lastEntitySig: new Map(),
+        lastHeroExtras: new Map(),
+        pendingRemovals: new Set(),
+        lastSyncReqTime: 0,
+        lastSnapApplyTime: 0,
+        fxEventQueue: [],
       };
+
+      function mpQueueFxEvent(evTuple) {
+        if (!mpState.active || mpState.role !== "host") return;
+        if (!mpState.fxEventQueue) mpState.fxEventQueue = [];
+        if (mpState.fxEventQueue.length < 42)
+          mpState.fxEventQueue.push(evTuple);
+      }
       let localP2Hero = null;
       const p2MoveKeys = { up: false, down: false, left: false, right: false };
 
@@ -5686,11 +5711,21 @@
           const dc = conn.dataChannel || conn._dc;
           if (
             packet.type === "WORLD_SNAP" &&
-            dc &&
-            typeof dc.bufferedAmount === "number" &&
-            dc.bufferedAmount > 10240
+            !(packet.snap && packet.snap.kf)
           ) {
-            return;
+            const buf =
+              dc && typeof dc.bufferedAmount === "number"
+                ? dc.bufferedAmount
+                : 0;
+            if (buf > 8192) {
+              conn._congestedSkip = true;
+              return;
+            }
+            if (conn._congestedSkip && buf > 2048) {
+              conn._congestedSkip = false;
+              return;
+            }
+            conn._congestedSkip = false;
           }
           const raw =
             preSerializedRaw !== null
@@ -5729,12 +5764,14 @@
             mpState.bc.postMessage(packet);
           } catch (e) {}
         }
-        try {
-          localStorage.setItem(
-            "dota3d_sovereign_mp_pkt_v60",
-            JSON.stringify({ nonce: Math.random(), payload: packet }),
-          );
-        } catch (e) {}
+        if (mpState.transport === "lan") {
+          try {
+            localStorage.setItem(
+              "dota3d_sovereign_mp_pkt_v60",
+              JSON.stringify({ nonce: Math.random(), payload: packet }),
+            );
+          } catch (e) {}
+        }
         mpState.conns.forEach((conn) => {
           mpSendOverConn(conn, packet, raw);
         });
@@ -5889,8 +5926,22 @@
           return;
         }
 
+        const balBtn = document.getElementById("btn-mp-autobalance");
+        if (balBtn)
+          balBtn.classList.toggle(
+            "hidden",
+            !(mpState.role === "host" && mpState.players.size >= 2),
+          );
+
+        let radP = 0,
+          direP = 0;
+        mpState.players.forEach((pl) => {
+          if (pl.team === "dire") direP++;
+          else radP++;
+        });
+        const modeTag = mpState.players.size >= 2 ? ` • ${radP}v${direP}` : "";
         if (badge)
-          badge.textContent = `${mpState.role.toUpperCase()} • ROOM [${mpState.roomCode}] (${mpState.players.size} Players)`;
+          badge.textContent = `${mpState.role.toUpperCase()} • ROOM [${mpState.roomCode}] (${mpState.players.size}/4P${modeTag})`;
         if (btnLabel)
           btnLabel.textContent = `Room ${mpState.roomCode} (${mpState.players.size}P)`;
         if (launchBtn) {
@@ -5973,6 +6024,28 @@
               ? "Click <strong>Host Room</strong> to generate a 4-character Online P2P Room Code via WebRTC, and share it with your friend!"
               : "Open this HTML file in a second browser tab/window and click <strong>Host Room</strong> in one tab and <strong>Join</strong> in the other!";
         }
+        renderMpRoster();
+      };
+
+      window.autoBalanceMpTeams = function () {
+        if (mpState.role !== "host" || mpState.players.size < 2) return;
+        let idx = 0;
+        mpState.players.forEach((p, id) => {
+          const nextTeam = idx % 2 === 0 ? "radiant" : "dire";
+          p.team = nextTeam;
+          if (id === mpState.myId) {
+            mpState.myTeam = nextTeam;
+            const teamEl = document.getElementById("mp-team-select");
+            if (teamEl) teamEl.value = nextTeam;
+          }
+          idx++;
+        });
+        mpBroadcast({
+          type: "LOBBY_SYNC",
+          players: Array.from(mpState.players.entries()),
+          aiDifficulty,
+          fillBots: mpState.fillBots,
+        });
         renderMpRoster();
       };
 
@@ -6080,7 +6153,7 @@
             "connecting",
             `Registering Room [${code}] on Global Signaling + Metered TURN Relay...`,
           );
-          const peer = new Peer(`dota3d-sov-v65-${code}`, getMpPeerOptions());
+          const peer = new Peer(`dota3d-sov-v67-${code}`, getMpPeerOptions());
           mpState.peer = peer;
 
           peer.on("open", () => {
@@ -6098,7 +6171,7 @@
               mpState.conns.set(conn.peer, conn);
               setMpConnStatus(
                 "connected",
-                `Remote Player Connected via P2P/TURN! (${mpState.conns.size} remote)`,
+                `Remote Players Connected: ${mpState.conns.size}/3 Guests (${mpState.conns.size + 1}P Total)`,
               );
               mpSendOverConn(conn, {
                 type: "LOBBY_SYNC",
@@ -6117,14 +6190,45 @@
                   aiDifficulty,
                   fillBots: mpState.fillBots,
                 });
+                mpSendOverConn(conn, {
+                  type: "WORLD_SNAP",
+                  senderId: mpState.myId,
+                  roomCode: code,
+                  snap: buildAuthoritativeSnapshot(true),
+                });
               }
             };
             if (conn.open) bindConn();
             else conn.on("open", bindConn);
 
-            conn.on("data", (data) => mpHandlePacket(data));
+            conn.on("data", (data) => {
+              if (data && data.senderId) conn._playerId = data.senderId;
+              mpHandlePacket(data);
+            });
             conn.on("close", () => {
               mpState.conns.delete(conn.peer);
+              if (conn._playerId) {
+                mpState.players.delete(conn._playerId);
+                mpState.peerPings.delete(conn._playerId);
+                mpBroadcast({
+                  type: "LOBBY_SYNC",
+                  players: Array.from(mpState.players.entries()),
+                  aiDifficulty,
+                  fillBots: mpState.fillBots,
+                });
+                renderMpRoster();
+              }
+              if (mpState.conns.size > 0) {
+                setMpConnStatus(
+                  "connected",
+                  `Remote Players Connected: ${mpState.conns.size}/3 Guests (${mpState.conns.size + 1}P Total)`,
+                );
+              } else {
+                setMpConnStatus(
+                  "ready",
+                  `Room [${code}] LIVE Online! Waiting for players to join...`,
+                );
+              }
             });
             conn.on("error", (err) => {
               setMpConnStatus(
@@ -6207,7 +6311,7 @@
               "connecting",
               `Negotiating P2P / Metered TURN Relay with Room [${code}]...`,
             );
-            const conn = peer.connect(`dota3d-sov-v65-${code}`, {
+            const conn = peer.connect(`dota3d-sov-v67-${code}`, {
               reliable: false,
               serialization: "json",
               _dcInit: { ordered: false, maxRetransmits: 0 },
@@ -6477,12 +6581,32 @@
           }
         } else if (msg.type === "LOBBY_SYNC" && mpState.role === "guest") {
           mpState.players = new Map(msg.players);
+          const myRec = mpState.players.get(mpState.myId);
+          if (myRec && myRec.team && myRec.team !== mpState.myTeam) {
+            mpState.myTeam = myRec.team;
+            const teamEl = document.getElementById("mp-team-select");
+            if (teamEl) teamEl.value = myRec.team;
+          }
           if (msg.aiDifficulty) aiDifficulty = msg.aiDifficulty;
           if (typeof msg.fillBots === "boolean")
             mpState.fillBots = msg.fillBots;
           renderMpRoster();
+        } else if (msg.type === "SYNC_REQ" && mpState.role === "host") {
+          const targetConn = Array.from(mpState.conns.values()).find(
+            (c) => c._playerId === msg.senderId,
+          );
+          const kfPkt = {
+            type: "WORLD_SNAP",
+            senderId: mpState.myId,
+            roomCode: mpState.roomCode,
+            snap: buildAuthoritativeSnapshot(true),
+          };
+          if (targetConn) mpSendOverConn(targetConn, kfPkt);
+          else mpBroadcast(kfPkt);
         } else if (msg.type === "START_MATCH" && mpState.role === "guest") {
           mpState.active = true;
+          mpState.lastRecvSeq = 0;
+          mpState.lastSnapApplyTime = 0;
           mpState.players = new Map(msg.players);
           if (msg.aiDifficulty) aiDifficulty = msg.aiDifficulty;
           if (typeof msg.fillBots === "boolean")
@@ -6655,31 +6779,88 @@
         }
       }
 
-      function buildAuthoritativeSnapshot() {
-        mpState.snapSeq = (mpState.snapSeq || 0) + 1;
-        const isFull = mpState.snapSeq % 20 === 1;
-        if (!mpState.lastStaticHp) mpState.lastStaticHp = new Map();
+      function serializeFullUnitRow(u) {
+        const flags =
+          (u.dead ? 1 : 0) |
+          (u.stunTimer > 0 ? 2 : 0) |
+          (u.slowTimer > 0 ? 4 : 0) |
+          (u.swingAnim > 0 ? 8 : 0) |
+          (u.castAnim > 0 ? 16 : 0);
+        const isHero = u.type === "hero";
+        return [
+          u.netId, // 0
+          u.name, // 1
+          u.team, // 2
+          u.type, // 3
+          u.subType || "melee", // 4
+          u.isMega ? 1 : 0, // 5
+          u.heroCfg ? u.heroCfg.id : null, // 6
+          u.ownerPeerId || null, // 7
+          Math.round(u.mesh.position.x * 100) / 100, // 8
+          Math.round(u.mesh.position.z * 100) / 100, // 9
+          Math.round(u.mesh.rotation.y * 100) / 100, // 10
+          Math.round(u.hp), // 11
+          Math.round(u.maxHp), // 12
+          Math.round(u.mana), // 13
+          Math.round(u.maxMana), // 14
+          Math.round(u.shield || 0), // 15
+          Math.round(u.atkDamage), // 16
+          u.atkRange, // 17
+          Math.round(u.moveSpeed * 10) / 10, // 18
+          Math.round(u.armor), // 19
+          u.radius, // 20
+          u.level, // 21
+          Math.round(u.xp), // 22
+          Math.round(u.xpToNext), // 23
+          u.skillPoints, // 24
+          isHero
+            ? [
+                u.abilityLevels.Q,
+                u.abilityLevels.W,
+                u.abilityLevels.E,
+                u.abilityLevels.R,
+              ]
+            : null, // 25
+          isHero
+            ? [
+                Math.round((u.cooldowns.Q || 0) * 10) / 10,
+                Math.round((u.cooldowns.W || 0) * 10) / 10,
+                Math.round((u.cooldowns.E || 0) * 10) / 10,
+                Math.round((u.cooldowns.R || 0) * 10) / 10,
+              ]
+            : null, // 26
+          isHero ? Math.floor(u.gold) : 0, // 27
+          isHero ? [u.kills, u.deaths, u.assists, u.lastHits] : null, // 28
+          flags, // 29
+          Math.round((u.respawnTimer || 0) * 10) / 10, // 30
+          u.tpCharges || 0, // 31
+          isHero ? u.inventory.map((it) => (it ? it.id : null)) : null, // 32
+        ];
+      }
 
-        const snapUnits = [];
+      function buildAuthoritativeSnapshot(forceKeyframe = false) {
+        mpState.snapSeq = (mpState.snapSeq || 0) + 1;
+        const isKeyframe = forceKeyframe || mpState.snapSeq % 40 === 1;
+        if (!mpState.knownNetIds) mpState.knownNetIds = new Set();
+        if (!mpState.lastEntitySig) mpState.lastEntitySig = new Map();
+        if (!mpState.lastHeroExtras) mpState.lastHeroExtras = new Map();
+        if (!mpState.pendingRemovals) mpState.pendingRemovals = new Set();
+
+        const activeIds = new Set();
+        const spawnRows = [];
+        const deltaMobs = [];
+        const deltaHeroes = [];
+
         for (let i = 0; i < units.length; i++) {
           const u = units[i];
           if (!u.netId) u.netId = u.id;
-          const isStatic = u.type === "tower" || u.type === "ancient";
-          const isIdleNeutral =
-            u.type === "neutral" && !u.targetUnit && !u.targetPos && !u.dead;
-          const roundedHp = Math.round(u.hp);
-          if ((isStatic || isIdleNeutral) && !isFull) {
-            const sig = `${roundedHp}:${Math.round(u.mesh.position.x * 10)}:${Math.round(u.mesh.position.z * 10)}`;
-            const prevSig = mpState.lastStaticHp.get(u.netId);
-            if (prevSig === sig) continue;
-          }
-          if (isStatic || isIdleNeutral) {
-            mpState.lastStaticHp.set(
-              u.netId,
-              `${roundedHp}:${Math.round(u.mesh.position.x * 10)}:${Math.round(u.mesh.position.z * 10)}`,
-            );
-          } else {
-            mpState.lastStaticHp.delete(u.netId);
+          activeIds.add(u.netId);
+
+          const isNew = !mpState.knownNetIds.has(u.netId);
+          if (isKeyframe || isNew) {
+            mpState.knownNetIds.add(u.netId);
+            spawnRows.push(serializeFullUnitRow(u));
+            continue;
           }
 
           const flags =
@@ -6688,71 +6869,115 @@
             (u.slowTimer > 0 ? 4 : 0) |
             (u.swingAnim > 0 ? 8 : 0) |
             (u.castAnim > 0 ? 16 : 0);
-          const isHero = u.type === "hero";
-          snapUnits.push([
-            u.netId, // 0
-            u.name, // 1
-            u.team, // 2
-            u.type, // 3
-            u.subType || "melee", // 4
-            u.isMega ? 1 : 0, // 5
-            u.heroCfg ? u.heroCfg.id : null, // 6
-            u.ownerPeerId || null, // 7
-            Math.round(u.mesh.position.x * 100) / 100, // 8
-            Math.round(u.mesh.position.z * 100) / 100, // 9
-            Math.round(u.mesh.rotation.y * 100) / 100, // 10
-            roundedHp, // 11
-            Math.round(u.maxHp), // 12
-            Math.round(u.mana), // 13
-            Math.round(u.maxMana), // 14
-            Math.round(u.shield || 0), // 15
-            Math.round(u.atkDamage), // 16
-            u.atkRange, // 17
-            u.moveSpeed, // 18
-            Math.round(u.armor), // 19
-            u.radius, // 20
-            u.level, // 21
-            Math.round(u.xp), // 22
-            Math.round(u.xpToNext), // 23
-            u.skillPoints, // 24
-            isHero
-              ? [
-                  u.abilityLevels.Q,
-                  u.abilityLevels.W,
-                  u.abilityLevels.E,
-                  u.abilityLevels.R,
-                ]
-              : null, // 25
-            isHero
-              ? [
-                  Math.round((u.cooldowns.Q || 0) * 10) / 10,
-                  Math.round((u.cooldowns.W || 0) * 10) / 10,
-                  Math.round((u.cooldowns.E || 0) * 10) / 10,
-                  Math.round((u.cooldowns.R || 0) * 10) / 10,
-                ]
-              : null, // 26
-            isHero ? Math.floor(u.gold) : 0, // 27
-            isHero ? [u.kills, u.deaths, u.assists, u.lastHits] : null, // 28
-            flags, // 29
-            Math.round((u.respawnTimer || 0) * 10) / 10, // 30
-            u.tpCharges || 0, // 31
-            isHero ? u.inventory.map((it) => (it ? it.id : null)) : null, // 32
-          ]);
+          const rx = Math.round(u.mesh.position.x * 100) / 100;
+          const rz = Math.round(u.mesh.position.z * 100) / 100;
+          const ry = Math.round(u.mesh.rotation.y * 100) / 100;
+          const rHp = Math.round(u.hp);
+          const rMaxHp = Math.round(u.maxHp);
+          const rSpd = Math.round(u.moveSpeed * 10) / 10;
+
+          if (u.type !== "hero") {
+            const sig = `${rx},${rz},${ry},${rHp},${rMaxHp},${flags}`;
+            if (mpState.lastEntitySig.get(u.netId) === sig) continue;
+            mpState.lastEntitySig.set(u.netId, sig);
+            deltaMobs.push([u.netId, rx, rz, ry, rHp, rMaxHp, rSpd, flags]);
+          } else {
+            const rMana = Math.round(u.mana);
+            const rMaxMana = Math.round(u.maxMana);
+            const rShield = Math.round(u.shield || 0);
+            const rAtk = Math.round(u.atkDamage);
+            const rArm = Math.round(u.armor);
+            const rXp = Math.round(u.xp);
+            const rGold = Math.floor(u.gold);
+            const rResp = Math.round((u.respawnTimer || 0) * 10) / 10;
+            const abArr = [
+              u.abilityLevels.Q,
+              u.abilityLevels.W,
+              u.abilityLevels.E,
+              u.abilityLevels.R,
+            ];
+            const cdArr = [
+              Math.round((u.cooldowns.Q || 0) * 10) / 10,
+              Math.round((u.cooldowns.W || 0) * 10) / 10,
+              Math.round((u.cooldowns.E || 0) * 10) / 10,
+              Math.round((u.cooldowns.R || 0) * 10) / 10,
+            ];
+            const kdaArr = [u.kills, u.deaths, u.assists, u.lastHits];
+            const invArr = u.inventory.map((it) => (it ? it.id : null));
+
+            const extraSig = `${abArr.join(",")}|${kdaArr.join(",")}|${invArr.join(",")}`;
+            const prevExtra = mpState.lastHeroExtras.get(u.netId);
+            const sendExtras = prevExtra !== extraSig;
+            if (sendExtras) mpState.lastHeroExtras.set(u.netId, extraSig);
+
+            const heroSig = `${rx},${rz},${ry},${rHp},${rMana},${rShield},${u.level},${rGold},${flags},${cdArr.join(",")},${extraSig}`;
+            if (mpState.lastEntitySig.get(u.netId) === heroSig) continue;
+            mpState.lastEntitySig.set(u.netId, heroSig);
+
+            deltaHeroes.push([
+              u.netId,
+              rx,
+              rz,
+              ry,
+              rHp,
+              rMaxHp,
+              rMana,
+              rMaxMana,
+              rShield,
+              rAtk,
+              rArm,
+              rSpd,
+              u.level,
+              rXp,
+              Math.round(u.xpToNext),
+              u.skillPoints,
+              sendExtras ? abArr : null,
+              cdArr,
+              rGold,
+              sendExtras ? kdaArr : null,
+              flags,
+              rResp,
+              u.tpCharges || 0,
+              sendExtras ? invArr : null,
+            ]);
+          }
         }
+
+        mpState.knownNetIds.forEach((kid) => {
+          if (!activeIds.has(kid)) {
+            mpState.knownNetIds.delete(kid);
+            mpState.lastEntitySig.delete(kid);
+            mpState.lastHeroExtras.delete(kid);
+            mpState.pendingRemovals.add(kid);
+          }
+        });
+
+        const remList = Array.from(mpState.pendingRemovals);
+        mpState.pendingRemovals.clear();
+
+        const evBatch =
+          mpState.fxEventQueue && mpState.fxEventQueue.length > 0
+            ? mpState.fxEventQueue.splice(0, 42)
+            : null;
+
         return {
           seq: mpState.snapSeq,
-          full: isFull ? 1 : 0,
+          kf: isKeyframe ? 1 : 0,
           t: Math.round(matchTime * 10) / 10,
           rk: radiantKills,
           dk: direKills,
           et: escalationTier,
           go: gameOver ? 1 : 0,
-          u: snapUnits,
+          sp: spawnRows.length > 0 ? spawnRows : null,
+          m: deltaMobs.length > 0 ? deltaMobs : null,
+          h: deltaHeroes.length > 0 ? deltaHeroes : null,
+          rem: remList.length > 0 ? remList : null,
+          ev: evBatch,
         };
       }
 
       function applyAuthoritativeSnapshot(snap) {
-        if (!snap || !Array.isArray(snap.u)) return;
+        if (!snap) return;
         if (typeof snap.seq === "number") {
           if (
             mpState.lastRecvSeq &&
@@ -6763,6 +6988,17 @@
           }
           mpState.lastRecvSeq = snap.seq;
         }
+        const nowMs = performance.now();
+        const snapDt =
+          mpState.lastSnapApplyTime > 0
+            ? THREE.MathUtils.clamp(
+                (nowMs - mpState.lastSnapApplyTime) / 1000,
+                0.025,
+                0.25,
+              )
+            : 0.065;
+        mpState.lastSnapApplyTime = nowMs;
+
         matchTime = snap.t;
         radiantKills = snap.rk;
         direKills = snap.dk;
@@ -6773,138 +7009,264 @@
         }
 
         const seenIds = new Set();
-        for (let i = 0; i < snap.u.length; i++) {
-          const su = snap.u[i];
-          const id = su[0];
-          seenIds.add(id);
-          let u = units.find((x) => x.netId === id);
-          if (!u) {
-            const heroId = su[6];
-            const cfg = heroId ? HERO_ROSTER[heroId] : null;
-            const isMe = su[7] === mpState.myId;
-            u = new MobaEntity({
-              name: su[1],
-              team: su[2],
-              type: su[3],
-              subType: su[4] || "melee",
-              isMega: !!su[5],
-              heroCfg: cfg,
-              isPlayer: isMe,
-              x: su[8],
-              z: su[9],
-              maxHp: su[12],
-              maxMana: su[14],
-              atkDamage: su[16] || 40,
-              atkRange: su[17] || 3.5,
-              moveSpeed: su[18] || 10,
-              armor: su[19] || 4,
-              radius: su[20] || 1.2,
-            });
-            u.netId = id;
-            u.ownerPeerId = su[7] || null;
-            u._netX = su[8];
-            u._netZ = su[9];
-            u._netYaw = su[10];
-            u._netHasPos = true;
-            units.push(u);
-            if (isMe && cfg) {
-              playerHero = u;
-              applyHeroToHUD(cfg, "Multiplayer Arena");
-              cameraFocus.copy(u.mesh.position);
-            }
-          }
+        let missingEntity = false;
 
-          const prevNetX = u._netHasPos ? u._netX : su[8];
-          const prevNetZ = u._netHasPos ? u._netZ : su[9];
-          u._netMoving = Math.hypot(su[8] - prevNetX, su[9] - prevNetZ) > 0.04;
-          u._netX = su[8];
-          u._netZ = su[9];
-          u._netYaw = su[10];
+        const updateNetTarget = (u, nx, nz, nyaw) => {
+          const prevNetX = u._netHasPos ? u._netX : nx;
+          const prevNetZ = u._netHasPos ? u._netZ : nz;
+          const dx = nx - prevNetX;
+          const dz = nz - prevNetZ;
+          u._netMoving = Math.hypot(dx, dz) > 0.03;
+          u._netVx = u._netMoving
+            ? THREE.MathUtils.clamp(dx / snapDt, -26, 26)
+            : 0;
+          u._netVz = u._netMoving
+            ? THREE.MathUtils.clamp(dz / snapDt, -26, 26)
+            : 0;
+          u._netExtrap = 0;
+          u._netX = nx;
+          u._netZ = nz;
+          u._netYaw = nyaw;
           u._netHasPos = true;
+        };
 
-          const wasDead = u.dead;
-          u.hp = su[11];
-          u.maxHp = su[12];
-          u.mana = su[13];
-          u.maxMana = su[14];
-          u.shield = su[15];
-          u.atkDamage = su[16];
-          u.armor = su[19];
-          u.moveSpeed = su[18];
-          u.level = su[21];
-          u.xp = su[22];
-          u.xpToNext = su[23];
-          u.skillPoints = su[24];
-          if (su[25]) {
-            u.abilityLevels = {
-              Q: su[25][0],
-              W: su[25][1],
-              E: su[25][2],
-              R: su[25][3],
-            };
-          }
-          if (su[26]) {
-            u.cooldowns = {
-              Q: su[26][0],
-              W: su[26][1],
-              E: su[26][2],
-              R: su[26][3],
-            };
-          }
-          u.gold = su[27];
-          if (su[28]) {
-            u.kills = su[28][0];
-            u.deaths = su[28][1];
-            u.assists = su[28][2];
-            u.lastHits = su[28][3];
-          }
-          const flags = su[29] || 0;
+        const applyFlagsAndVis = (u, flags, wasDead, nx, nz, nyaw) => {
           u.dead = !!(flags & 1);
           u.stunTimer = flags & 2 ? 0.2 : 0;
           u.slowTimer = flags & 4 ? 0.2 : 0;
           u.swingAnim = flags & 8 ? 0.25 : 0;
           u.castAnim = flags & 16 ? 0.25 : 0;
-          u.respawnTimer = su[30];
-          u.tpCharges = su[31];
-
-          if (u.isPlayer && Array.isArray(su[32])) {
-            let changed = false;
-            for (let s = 0; s < 6; s++) {
-              const curId = u.inventory[s] ? u.inventory[s].id : null;
-              if (curId !== su[32][s]) {
-                u.inventory[s] = su[32][s]
-                  ? SHOP_ITEMS.find((it) => it.id === su[32][s]) || null
-                  : null;
-                changed = true;
-              }
-            }
-            if (changed) refreshInventoryGrid();
-            updateAbilityUpgradeButtons();
-          }
-
           u.mesh.visible = !u.dead;
           if (u.bar && u.bar.el)
             u.bar.el.style.display = u.dead ? "none" : "flex";
 
-          // Snap immediately on respawn or large teleport/blink (> 14m discrepancy); otherwise 60 FPS frame loop interpolates smoothly
           const errDist = Math.hypot(
-            su[8] - u.mesh.position.x,
-            su[9] - u.mesh.position.z,
+            nx - u.mesh.position.x,
+            nz - u.mesh.position.z,
           );
           if ((wasDead && !u.dead) || errDist > 14.0) {
-            u.mesh.position.x = su[8];
-            u.mesh.position.z = su[9];
-            u.mesh.position.y = getTerrainHeightAt(su[8], su[9]);
-            u.mesh.rotation.y = su[10];
+            u.mesh.position.x = nx;
+            u.mesh.position.z = nz;
+            u.mesh.position.y = getTerrainHeightAt(nx, nz);
+            u.mesh.rotation.y = nyaw;
+            u._netVx = 0;
+            u._netVz = 0;
             if (u.isPlayer) {
               u.targetPos = null;
               u.targetUnit = null;
               u.attackMovePos = null;
             }
           }
+        };
+
+        // 1. Process full spawn/keyframe rows
+        if (Array.isArray(snap.sp)) {
+          for (let i = 0; i < snap.sp.length; i++) {
+            const su = snap.sp[i];
+            const id = su[0];
+            seenIds.add(id);
+            let u = units.find((x) => x.netId === id);
+            if (!u) {
+              const heroId = su[6];
+              const cfg = heroId ? HERO_ROSTER[heroId] : null;
+              const isMe = su[7] === mpState.myId;
+              u = new MobaEntity({
+                name: su[1],
+                team: su[2],
+                type: su[3],
+                subType: su[4] || "melee",
+                isMega: !!su[5],
+                heroCfg: cfg,
+                isPlayer: isMe,
+                x: su[8],
+                z: su[9],
+                maxHp: su[12],
+                maxMana: su[14],
+                atkDamage: su[16] || 40,
+                atkRange: su[17] || 3.5,
+                moveSpeed: su[18] || 10,
+                armor: su[19] || 4,
+                radius: su[20] || 1.2,
+              });
+              u.netId = id;
+              u.ownerPeerId = su[7] || null;
+              u._netX = su[8];
+              u._netZ = su[9];
+              u._netYaw = su[10];
+              u._netVx = 0;
+              u._netVz = 0;
+              u._netHasPos = true;
+              units.push(u);
+              if (isMe && cfg) {
+                if (playerHero && playerHero !== u && !playerHero.netId) {
+                  const oldIdx = units.indexOf(playerHero);
+                  if (oldIdx !== -1) units.splice(oldIdx, 1);
+                  scene.remove(playerHero.mesh);
+                  disposeObject3D(playerHero.mesh);
+                  if (playerHero.bar && playerHero.bar.el)
+                    playerHero.bar.el.remove();
+                }
+                playerHero = u;
+                applyHeroToHUD(cfg, `Room ${mpState.roomCode}`);
+                cameraFocus.copy(u.mesh.position);
+              }
+            }
+
+            updateNetTarget(u, su[8], su[9], su[10]);
+            const wasDead = u.dead;
+            u.hp = su[11];
+            u.maxHp = su[12];
+            u.mana = su[13];
+            u.maxMana = su[14];
+            u.shield = su[15];
+            u.atkDamage = su[16];
+            u.armor = su[19];
+            u.moveSpeed = su[18];
+            u.level = su[21];
+            u.xp = su[22];
+            u.xpToNext = su[23];
+            u.skillPoints = su[24];
+            if (su[25])
+              u.abilityLevels = {
+                Q: su[25][0],
+                W: su[25][1],
+                E: su[25][2],
+                R: su[25][3],
+              };
+            if (su[26])
+              u.cooldowns = {
+                Q: su[26][0],
+                W: su[26][1],
+                E: su[26][2],
+                R: su[26][3],
+              };
+            u.gold = su[27];
+            if (su[28]) {
+              u.kills = su[28][0];
+              u.deaths = su[28][1];
+              u.assists = su[28][2];
+              u.lastHits = su[28][3];
+            }
+            u.respawnTimer = su[30];
+            u.tpCharges = su[31];
+
+            if (u.isPlayer && Array.isArray(su[32])) {
+              let changed = false;
+              for (let s = 0; s < 6; s++) {
+                const curId = u.inventory[s] ? u.inventory[s].id : null;
+                if (curId !== su[32][s]) {
+                  u.inventory[s] = su[32][s]
+                    ? SHOP_ITEMS.find((it) => it.id === su[32][s]) || null
+                    : null;
+                  changed = true;
+                }
+              }
+              if (changed) refreshInventoryGrid();
+              updateAbilityUpgradeButtons();
+            }
+
+            applyFlagsAndVis(u, su[29] || 0, wasDead, su[8], su[9], su[10]);
+          }
         }
 
-        if (snap.full === 1) {
+        // 2. Process compact non-hero delta rows [id, x, z, yaw, hp, maxHp, spd, flags]
+        if (Array.isArray(snap.m)) {
+          for (let i = 0; i < snap.m.length; i++) {
+            const dm = snap.m[i];
+            const u = units.find((x) => x.netId === dm[0]);
+            if (!u) {
+              missingEntity = true;
+              continue;
+            }
+            updateNetTarget(u, dm[1], dm[2], dm[3]);
+            const wasDead = u.dead;
+            u.hp = dm[4];
+            u.maxHp = dm[5];
+            u.moveSpeed = dm[6];
+            applyFlagsAndVis(u, dm[7] || 0, wasDead, dm[1], dm[2], dm[3]);
+          }
+        }
+
+        // 3. Process compact hero delta rows
+        if (Array.isArray(snap.h)) {
+          for (let i = 0; i < snap.h.length; i++) {
+            const dh = snap.h[i];
+            const u = units.find((x) => x.netId === dh[0]);
+            if (!u) {
+              missingEntity = true;
+              continue;
+            }
+            updateNetTarget(u, dh[1], dh[2], dh[3]);
+            const wasDead = u.dead;
+            u.hp = dh[4];
+            u.maxHp = dh[5];
+            u.mana = dh[6];
+            u.maxMana = dh[7];
+            u.shield = dh[8];
+            u.atkDamage = dh[9];
+            u.armor = dh[10];
+            u.moveSpeed = dh[11];
+            u.level = dh[12];
+            u.xp = dh[13];
+            u.xpToNext = dh[14];
+            u.skillPoints = dh[15];
+            if (dh[16])
+              u.abilityLevels = {
+                Q: dh[16][0],
+                W: dh[16][1],
+                E: dh[16][2],
+                R: dh[16][3],
+              };
+            if (dh[17])
+              u.cooldowns = {
+                Q: dh[17][0],
+                W: dh[17][1],
+                E: dh[17][2],
+                R: dh[17][3],
+              };
+            u.gold = dh[18];
+            if (dh[19]) {
+              u.kills = dh[19][0];
+              u.deaths = dh[19][1];
+              u.assists = dh[19][2];
+              u.lastHits = dh[19][3];
+            }
+            u.respawnTimer = dh[21];
+            u.tpCharges = dh[22];
+            if (u.isPlayer) {
+              if (Array.isArray(dh[23])) {
+                let changed = false;
+                for (let s = 0; s < 6; s++) {
+                  const curId = u.inventory[s] ? u.inventory[s].id : null;
+                  if (curId !== dh[23][s]) {
+                    u.inventory[s] = dh[23][s]
+                      ? SHOP_ITEMS.find((it) => it.id === dh[23][s]) || null
+                      : null;
+                    changed = true;
+                  }
+                }
+                if (changed) refreshInventoryGrid();
+              }
+              updateAbilityUpgradeButtons();
+            }
+            applyFlagsAndVis(u, dh[20] || 0, wasDead, dh[1], dh[2], dh[3]);
+          }
+        }
+
+        // 4. Process explicit despawns & keyframe reconciliation
+        if (Array.isArray(snap.rem) && snap.rem.length > 0) {
+          const remSet = new Set(snap.rem);
+          for (let i = units.length - 1; i >= 0; i--) {
+            const u = units[i];
+            if (u.netId && remSet.has(u.netId)) {
+              scene.remove(u.mesh);
+              disposeObject3D(u.mesh);
+              if (u.bar && u.bar.el) u.bar.el.remove();
+              units.splice(i, 1);
+            }
+          }
+        }
+        if (snap.kf === 1) {
           for (let i = units.length - 1; i >= 0; i--) {
             const u = units[i];
             if (u.netId && !seenIds.has(u.netId)) {
@@ -6912,6 +7274,86 @@
               disposeObject3D(u.mesh);
               if (u.bar && u.bar.el) u.bar.el.remove();
               units.splice(i, 1);
+            }
+          }
+        } else if (
+          missingEntity &&
+          nowMs - (mpState.lastSyncReqTime || 0) > 800
+        ) {
+          mpState.lastSyncReqTime = nowMs;
+          mpSendToHost({ type: "SYNC_REQ" });
+        }
+
+        // 5. Replay combat visuals, projectiles, QWER abilities, damage popups & endgame on Guest
+        if (Array.isArray(snap.ev)) {
+          for (let ei = 0; ei < snap.ev.length; ei++) {
+            const ev = snap.ev[ei];
+            if (!Array.isArray(ev)) continue;
+            const kind = ev[0];
+            if (kind === "A") {
+              const att = units.find((x) => x.netId === ev[1]);
+              const tgt = units.find((x) => x.netId === ev[2]);
+              if (att && tgt && !att.dead && !tgt.dead) {
+                executeAutoAttack(att, tgt, true, !!ev[3]);
+              }
+            } else if (kind === "C") {
+              const caster = units.find((x) => x.netId === ev[1]);
+              if (caster && !caster.dead) {
+                castHeroAbility(
+                  caster,
+                  ev[2],
+                  new THREE.Vector3(ev[3], 0, ev[4]),
+                  true,
+                );
+              }
+            } else if (kind === "M") {
+              const mob = units.find((x) => x.netId === ev[1]);
+              const tgt = ev[2] ? units.find((x) => x.netId === ev[2]) : null;
+              if (mob && !mob.dead) {
+                executeNeutralOrBossSkill(mob, tgt || mob, true);
+              }
+            } else if (kind === "D") {
+              const tgt = units.find((x) => x.netId === ev[1]);
+              if (tgt && !tgt.dead) {
+                const dmgVal = ev[2];
+                const isCrit = !!ev[3];
+                tgt.hitFlashTimer = 0.12;
+                spawnFloatText(
+                  tgt.mesh.position,
+                  isCrit ? `CRIT -${dmgVal}!` : `-${dmgVal}`,
+                  isCrit
+                    ? "#fb923c"
+                    : tgt.team === "radiant"
+                      ? "#fb7185"
+                      : "#f8fafc",
+                  isCrit
+                    ? 18
+                    : tgt.type === "hero" ||
+                        tgt.type === "boss" ||
+                        tgt.type === "dragon" ||
+                        tgt.type === "kong" ||
+                        tgt.type === "redman"
+                      ? 15
+                      : 12,
+                );
+              }
+            } else if (kind === "T") {
+              const gy = getTerrainHeightAt(ev[1], ev[2]);
+              spawnFloatText(
+                new THREE.Vector3(ev[1], gy, ev[2]),
+                ev[3],
+                ev[4] || "#facc15",
+                ev[5] || 15,
+              );
+              if (typeof ev[3] === "string" && ev[3].startsWith("+")) {
+                const distCam = Math.hypot(
+                  ev[1] - cameraFocus.x,
+                  ev[2] - cameraFocus.z,
+                );
+                if (distCam < 55) sfx.play("gold");
+              }
+            } else if (kind === "W" && !gameOver) {
+              endMatch(ev[1]);
             }
           }
         }
@@ -7063,6 +7505,19 @@
           if (u.isPlayer) {
             isMoving = localHeroMoving || !!u._netMoving;
           } else if (u._netHasPos) {
+            if (u._netMoving && (u._netExtrap || 0) < 0.14) {
+              u._netExtrap = (u._netExtrap || 0) + dt;
+              u._netX = THREE.MathUtils.clamp(
+                u._netX + (u._netVx || 0) * dt,
+                -MAP_HALF + 3,
+                MAP_HALF - 3,
+              );
+              u._netZ = THREE.MathUtils.clamp(
+                u._netZ + (u._netVz || 0) * dt,
+                -MAP_HALF + 3,
+                MAP_HALF - 3,
+              );
+            }
             const dx = u._netX - u.mesh.position.x;
             const dz = u._netZ - u.mesh.position.z;
             isMoving = dx * dx + dz * dz > 0.004 || !!u._netMoving;
@@ -7129,7 +7584,141 @@
           }
         }
 
-        // 4. Step local visual effects & click ring on Guest
+        // 4. Step delayed spell impacts (meteors / Light Strike Array), visual projectiles, runes & FX on Guest
+        for (let i = scheduledEvents.length - 1; i >= 0; i--) {
+          scheduledEvents[i].delay -= dt;
+          if (scheduledEvents[i].delay <= 0) {
+            const ev = scheduledEvents.splice(i, 1)[0];
+            try {
+              ev.fn();
+            } catch (e) {}
+          }
+        }
+
+        for (let i = projectiles.length - 1; i >= 0; i--) {
+          const p = projectiles[i];
+          if (p.kind === "homing") {
+            if (!p.target || p.target.dead) {
+              scene.remove(p.mesh);
+              disposeObject3D(p.mesh);
+              projectiles.splice(i, 1);
+              continue;
+            }
+            _vScratch1.set(
+              p.target.mesh.position.x,
+              p.target.mesh.position.y + 1.6,
+              p.target.mesh.position.z,
+            );
+            _vScratch2.subVectors(_vScratch1, p.mesh.position);
+            const step = p.speed * dt;
+            const dist = _vScratch2.length();
+            if (dist <= step + 0.5) {
+              if (p.owner && p.owner.type === "tower") {
+                const distToCam = Math.hypot(
+                  p.target.mesh.position.x - cameraFocus.x,
+                  p.target.mesh.position.z - cameraFocus.z,
+                );
+                if (distToCam < 85) sfx.play("tower_hit", distToCam);
+                spawnShockwaveRing(
+                  p.target.mesh.position.x,
+                  p.target.mesh.position.z,
+                  2.1,
+                  p.owner.team === "radiant" ? 0x34d399 : 0xf43f5e,
+                  0.26,
+                );
+              }
+              scene.remove(p.mesh);
+              disposeObject3D(p.mesh);
+              projectiles.splice(i, 1);
+            } else {
+              _vScratch2.multiplyScalar(step / dist);
+              p.mesh.position.add(_vScratch2);
+            }
+          } else if (p.kind === "wave") {
+            const step = p.speed * dt;
+            p.mesh.position.addScaledVector(p.dir, step);
+            p.distLeft -= step;
+            if (p.spinMesh) p.mesh.rotation.y += 14 * dt;
+            if (p.trailColor && Math.random() < 0.5) {
+              spawnShockwaveRing(
+                p.mesh.position.x,
+                p.mesh.position.z,
+                1.45,
+                p.trailColor,
+                0.24,
+              );
+              if (p.leaveFissure)
+                spawnGroundRuneDecal(
+                  p.mesh.position.x,
+                  p.mesh.position.z,
+                  1.35,
+                  p.trailColor,
+                  0.65,
+                );
+            }
+            const px = p.mesh.position.x;
+            const pz = p.mesh.position.z;
+            for (let ui = 0; ui < units.length; ui++) {
+              const u = units[ui];
+              if (
+                !u.dead &&
+                u.team !== p.team &&
+                u.type !== "ancient" &&
+                !p.hitIds.has(u.id)
+              ) {
+                const rSum = p.hitRadius + u.radius;
+                const dx = u.mesh.position.x - px;
+                const dz = u.mesh.position.z - pz;
+                if (dx * dx + dz * dz <= rSum * rSum) {
+                  p.hitIds.add(u.id);
+                  if (p.chainLightning) {
+                    let hops = 0;
+                    for (let oi = 0; oi < units.length; oi++) {
+                      const other = units[oi];
+                      if (
+                        hops < 3 &&
+                        other !== u &&
+                        !other.dead &&
+                        other.team !== p.team &&
+                        other.type !== "ancient"
+                      ) {
+                        const cRad = 11.0 + other.radius;
+                        const cdx = other.mesh.position.x - u.mesh.position.x;
+                        const cdz = other.mesh.position.z - u.mesh.position.z;
+                        if (cdx * cdx + cdz * cdz <= cRad * cRad) {
+                          hops++;
+                          spawnLightningBolt3D(
+                            u.mesh.position,
+                            other.mesh.position,
+                            0xffffff,
+                            0x38bdf8,
+                            0.42,
+                          );
+                        }
+                      }
+                    }
+                  }
+                  spawnParticleBurst(
+                    u.mesh.position,
+                    p.trailColor || 0x38bdf8,
+                    12,
+                  );
+                }
+              }
+            }
+            if (p.distLeft <= 0) {
+              scene.remove(p.mesh);
+              disposeObject3D(p.mesh);
+              projectiles.splice(i, 1);
+            }
+          }
+        }
+
+        runes.forEach((r) => {
+          r.gem.rotation.y += 2.2 * dt;
+          r.gem.position.y = 1.5 + Math.sin(matchTime * 3.5) * 0.25;
+        });
+
         for (let i = fxList.length - 1; i >= 0; i--) {
           const fx = fxList[i];
           fx.t += dt;
@@ -7167,7 +7756,7 @@
 
         if (mpState.role === "host") {
           const remoteCount = Math.max(1, mpState.conns.size);
-          const targetInterval = remoteCount >= 2 ? 0.072 : 0.05;
+          const targetInterval = remoteCount >= 2 ? 0.062 : 0.05;
           mpState.syncAccum += dt;
           if (mpState.syncAccum >= targetInterval) {
             mpState.syncAccum = 0;
@@ -20331,8 +20920,16 @@ diffuseColor.rgb *= mix(0.58, 1.04, groundAO) * canopyShade;`,
               this.type === "kong" ||
               this.type === "redman" ||
               isCrit ||
-              (attacker && attacker.isPlayer))
+              (attacker && (attacker.isPlayer || attacker.isRemoteHuman)))
           ) {
+            if (mpState.active && mpState.role === "host") {
+              mpQueueFxEvent([
+                "D",
+                this.netId || this.id,
+                Math.round(dmg),
+                isCrit ? 1 : 0,
+              ]);
+            }
             spawnFloatText(
               this.mesh.position,
               isCrit ? `CRIT -${Math.round(dmg)}!` : `-${Math.round(dmg)}`,
@@ -20461,6 +21058,20 @@ diffuseColor.rgb *= mix(0.58, 1.04, groundAO) * canopyShade;`,
             killer.gold += bounty;
             if (["creep", "neutral", "tower", "dragon"].includes(this.type))
               killer.lastHits++;
+            if (
+              mpState.active &&
+              mpState.role === "host" &&
+              (killer.isPlayer || killer.isRemoteHuman)
+            ) {
+              mpQueueFxEvent([
+                "T",
+                Math.round(this.mesh.position.x),
+                Math.round(this.mesh.position.z),
+                `+${bounty}g`,
+                "#facc15",
+                17,
+              ]);
+            }
             if (killer.isPlayer) {
               sfx.play("gold");
               if (this.type === "hero" && killer.heroCfg)
@@ -23173,7 +23784,14 @@ diffuseColor.rgb *= mix(0.58, 1.04, groundAO) * canopyShade;`,
         }
       }
 
-      function executeNeutralOrBossSkill(mob, target) {
+      function executeNeutralOrBossSkill(mob, target, isVisualReplay = false) {
+        if (!isVisualReplay && mpState.active && mpState.role === "host") {
+          mpQueueFxEvent([
+            "M",
+            mob.netId || mob.id,
+            target ? target.netId || target.id : 0,
+          ]);
+        }
         const p = mob.mesh.position;
         const dmgScale = getEscalationMults().dmg;
         if (mob.type === "dragon") {
@@ -23192,22 +23810,24 @@ diffuseColor.rgb *= mix(0.58, 1.04, groundAO) * canopyShade;`,
                 u.team !== "neutral" &&
                 u.mesh.position.distanceTo(p) <= 11.5 + u.radius
               ) {
-                u.takeDamage(195 * dmgScale, mob);
-                u.stunTimer = 1.2;
+                if (!isVisualReplay) u.takeDamage(195 * dmgScale, mob);
+                if (!isVisualReplay) u.stunTimer = 1.2;
                 const pushDir = new THREE.Vector3()
                   .subVectors(u.mesh.position, p)
                   .setY(0)
                   .normalize();
-                u.mesh.position.x = THREE.MathUtils.clamp(
-                  u.mesh.position.x + pushDir.x * 6.5,
-                  -MAP_HALF + 3,
-                  MAP_HALF - 3,
-                );
-                u.mesh.position.z = THREE.MathUtils.clamp(
-                  u.mesh.position.z + pushDir.z * 6.5,
-                  -MAP_HALF + 3,
-                  MAP_HALF - 3,
-                );
+                if (!isVisualReplay)
+                  u.mesh.position.x = THREE.MathUtils.clamp(
+                    u.mesh.position.x + pushDir.x * 6.5,
+                    -MAP_HALF + 3,
+                    MAP_HALF - 3,
+                  );
+                if (!isVisualReplay)
+                  u.mesh.position.z = THREE.MathUtils.clamp(
+                    u.mesh.position.z + pushDir.z * 6.5,
+                    -MAP_HALF + 3,
+                    MAP_HALF - 3,
+                  );
               }
             });
           } else {
@@ -23225,8 +23845,8 @@ diffuseColor.rgb *= mix(0.58, 1.04, groundAO) * canopyShade;`,
                 u.team !== "neutral" &&
                 u.mesh.position.distanceTo(p) <= 12.2 + u.radius
               ) {
-                u.takeDamage(235 * dmgScale, mob, true);
-                u.slowTimer = 3.2;
+                if (!isVisualReplay) u.takeDamage(235 * dmgScale, mob, true);
+                if (!isVisualReplay) u.slowTimer = 3.2;
                 u.slowFactor = 0.45;
               }
             });
@@ -23245,8 +23865,8 @@ diffuseColor.rgb *= mix(0.58, 1.04, groundAO) * canopyShade;`,
               u.team !== "neutral" &&
               u.mesh.position.distanceTo(p) <= 9.2 + u.radius
             ) {
-              u.takeDamage(185 * dmgScale, mob);
-              u.slowTimer = 2.8;
+              if (!isVisualReplay) u.takeDamage(185 * dmgScale, mob);
+              if (!isVisualReplay) u.slowTimer = 2.8;
               u.slowFactor = 0.5;
             }
           });
@@ -23294,22 +23914,24 @@ diffuseColor.rgb *= mix(0.58, 1.04, groundAO) * canopyShade;`,
               u.type !== "ancient" &&
               u.mesh.position.distanceTo(p) <= blastR + u.radius
             ) {
-              u.takeDamage(slamDmg, mob, true);
-              u.stunTimer = isFury ? 1.75 : 1.4;
+              if (!isVisualReplay) u.takeDamage(slamDmg, mob, true);
+              if (!isVisualReplay) u.stunTimer = isFury ? 1.75 : 1.4;
               const pushDir = new THREE.Vector3()
                 .subVectors(u.mesh.position, p)
                 .setY(0)
                 .normalize();
-              u.mesh.position.x = THREE.MathUtils.clamp(
-                u.mesh.position.x + pushDir.x * 6.0,
-                -MAP_HALF + 3,
-                MAP_HALF - 3,
-              );
-              u.mesh.position.z = THREE.MathUtils.clamp(
-                u.mesh.position.z + pushDir.z * 6.0,
-                -MAP_HALF + 3,
-                MAP_HALF - 3,
-              );
+              if (!isVisualReplay)
+                u.mesh.position.x = THREE.MathUtils.clamp(
+                  u.mesh.position.x + pushDir.x * 6.0,
+                  -MAP_HALF + 3,
+                  MAP_HALF - 3,
+                );
+              if (!isVisualReplay)
+                u.mesh.position.z = THREE.MathUtils.clamp(
+                  u.mesh.position.z + pushDir.z * 6.0,
+                  -MAP_HALF + 3,
+                  MAP_HALF - 3,
+                );
             }
           });
         } else if (mob.type === "redman") {
@@ -23350,8 +23972,8 @@ diffuseColor.rgb *= mix(0.58, 1.04, groundAO) * canopyShade;`,
               u.type !== "ancient" &&
               u.mesh.position.distanceTo(p) <= stormR + u.radius
             ) {
-              u.takeDamage(stormDmg, mob, true);
-              u.slowTimer = 3.8;
+              if (!isVisualReplay) u.takeDamage(stormDmg, mob, true);
+              if (!isVisualReplay) u.slowTimer = 3.8;
               u.slowFactor = 0.35;
             }
           });
@@ -23378,7 +24000,7 @@ diffuseColor.rgb *= mix(0.58, 1.04, groundAO) * canopyShade;`,
               u.team !== "neutral" &&
               u.mesh.position.distanceTo(target.mesh.position) <= 5.4 + u.radius
             ) {
-              u.takeDamage(142 * dmgScale, mob);
+              if (!isVisualReplay) u.takeDamage(142 * dmgScale, mob);
             }
           });
         } else if (mob.subType === "wolf" && mob.name.includes("Alpha")) {
@@ -23412,11 +24034,12 @@ diffuseColor.rgb *= mix(0.58, 1.04, groundAO) * canopyShade;`,
               u.team !== "neutral" &&
               u.mesh.position.distanceTo(p) <= 5.8 + u.radius
             ) {
-              u.takeDamage(
-                (mob.subType === "behemoth" ? 128 : 94) * dmgScale,
-                mob,
-              );
-              u.stunTimer = 1.35;
+              if (!isVisualReplay)
+                u.takeDamage(
+                  (mob.subType === "behemoth" ? 128 : 94) * dmgScale,
+                  mob,
+                );
+              if (!isVisualReplay) u.stunTimer = 1.35;
             }
           });
         } else if (mob.subType === "hellbear") {
@@ -23429,8 +24052,8 @@ diffuseColor.rgb *= mix(0.58, 1.04, groundAO) * canopyShade;`,
               u.team !== "neutral" &&
               u.mesh.position.distanceTo(p) <= 5.6 + u.radius
             ) {
-              u.takeDamage(94 * dmgScale, mob);
-              u.slowTimer = 3.0;
+              if (!isVisualReplay) u.takeDamage(94 * dmgScale, mob);
+              if (!isVisualReplay) u.slowTimer = 3.0;
               u.slowFactor = 0.5;
             }
           });
@@ -23483,8 +24106,8 @@ diffuseColor.rgb *= mix(0.58, 1.04, groundAO) * canopyShade;`,
               u.team !== "neutral" &&
               u.mesh.position.distanceTo(target.mesh.position) <= 4.8 + u.radius
             ) {
-              u.takeDamage(124 * dmgScale, mob);
-              u.slowTimer = 2.8;
+              if (!isVisualReplay) u.takeDamage(124 * dmgScale, mob);
+              if (!isVisualReplay) u.slowTimer = 2.8;
               u.slowFactor = 0.52;
             }
           });
@@ -23567,7 +24190,11 @@ diffuseColor.rgb *= mix(0.58, 1.04, groundAO) * canopyShade;`,
           });
           playerHero.ownerPeerId = mpState.myId;
           units.push(playerHero);
-          setupNeutralCamps();
+          spawnRiverRunes();
+          setTimeout(() => {
+            if (mpState.active && mpState.role === "guest")
+              mpSendToHost({ type: "SYNC_REQ" });
+          }, 120);
           return;
         }
 
@@ -24457,42 +25084,51 @@ diffuseColor.rgb *= mix(0.58, 1.04, groundAO) * canopyShade;`,
         });
       }
 
-      function castHeroAbility(caster, key, targetPt) {
-        if (
-          caster.dead ||
-          caster.reincarnating ||
-          caster.stunTimer > 0 ||
-          gameOver ||
-          !caster.heroCfg
-        )
+      function castHeroAbility(caster, key, targetPt, isVisualReplay = false) {
+        if (caster.dead || caster.reincarnating || gameOver || !caster.heroCfg)
           return false;
+        if (!isVisualReplay && caster.stunTimer > 0) return false;
         const hCfg = caster.heroCfg;
         const sk = hCfg.skills[key];
-        const lvl = caster.abilityLevels[key] || 0;
-        if (lvl <= 0) {
-          if (caster.isPlayer) {
-            const msg =
-              key === "R" && caster.level < 6
-                ? "ULTIMATE UNLOCKS AT LVL 6!"
-                : "ABILITY NOT LEARNED!";
-            spawnFloatText(caster.mesh.position, msg, "#fb7185", 13);
+        const lvl = Math.max(1, caster.abilityLevels[key] || 0);
+        if (!isVisualReplay) {
+          if ((caster.abilityLevels[key] || 0) <= 0) {
+            if (caster.isPlayer) {
+              const msg =
+                key === "R" && caster.level < 6
+                  ? "ULTIMATE UNLOCKS AT LVL 6!"
+                  : "ABILITY NOT LEARNED!";
+              spawnFloatText(caster.mesh.position, msg, "#fb7185", 13);
+            }
+            return false;
           }
-          return false;
+          if (caster.cooldowns[key] > 0) {
+            if (caster.isPlayer)
+              spawnFloatText(
+                caster.mesh.position,
+                "ON COOLDOWN",
+                "#94a3b8",
+                13,
+              );
+            return false;
+          }
+          if (caster.mana < sk.mana) {
+            if (caster.isPlayer)
+              spawnFloatText(caster.mesh.position, "NO MANA", "#38bdf8", 13);
+            return false;
+          }
+          caster.mana -= sk.mana;
+          caster.cooldowns[key] = sk.cd * caster.cdrMult;
+          if (mpState.active && mpState.role === "host") {
+            mpQueueFxEvent([
+              "C",
+              caster.netId || caster.id,
+              key,
+              Math.round(targetPt.x * 10) / 10,
+              Math.round(targetPt.z * 10) / 10,
+            ]);
+          }
         }
-
-        if (caster.cooldowns[key] > 0) {
-          if (caster.isPlayer)
-            spawnFloatText(caster.mesh.position, "ON COOLDOWN", "#94a3b8", 13);
-          return false;
-        }
-        if (caster.mana < sk.mana) {
-          if (caster.isPlayer)
-            spawnFloatText(caster.mesh.position, "NO MANA", "#38bdf8", 13);
-          return false;
-        }
-
-        caster.mana -= sk.mana;
-        caster.cooldowns[key] = sk.cd * caster.cdrMult;
         caster.castAnim = 0.45;
 
         if (caster.isPlayer) {
@@ -24847,8 +25483,9 @@ diffuseColor.rgb *= mix(0.58, 1.04, groundAO) * canopyShade;`,
                 if (proj > 0 && proj <= sk.range + u.radius) {
                   const perp = Math.abs(toU.x * dir.z - toU.z * dir.x);
                   if (perp <= 3.4 + u.radius) {
-                    u.takeDamage(155 * powerMult, caster, true);
-                    u.stunTimer = 1.45;
+                    if (!isVisualReplay)
+                      u.takeDamage(155 * powerMult, caster, true);
+                    if (!isVisualReplay) u.stunTimer = 1.45;
                     spawnFloatText(
                       u.mesh.position,
                       "FISSURE STUN!",
@@ -24953,8 +25590,9 @@ diffuseColor.rgb *= mix(0.58, 1.04, groundAO) * canopyShade;`,
                       u.mesh.position.distanceTo(targetSpot) <=
                       6.0 + u.radius
                     ) {
-                      u.takeDamage(190 * powerMult, caster);
-                      u.stunTimer = 1.65;
+                      if (!isVisualReplay)
+                        u.takeDamage(190 * powerMult, caster);
+                      if (!isVisualReplay) u.stunTimer = 1.65;
                       spawnFloatText(
                         u.mesh.position,
                         "STUNNED!",
@@ -25008,7 +25646,8 @@ diffuseColor.rgb *= mix(0.58, 1.04, groundAO) * canopyShade;`,
             }
             const p = caster.mesh.position;
             caster.blinkBuffTimer = 4.8;
-            caster.critChance = Math.min(0.9, caster.critChance + 0.25);
+            if (!isVisualReplay)
+              caster.critChance = Math.min(0.9, caster.critChance + 0.25);
             scheduledEvents.push({
               delay: 4.8,
               fn: () => {
@@ -25037,8 +25676,9 @@ diffuseColor.rgb *= mix(0.58, 1.04, groundAO) * canopyShade;`,
                 u.type !== "ancient" &&
                 u.mesh.position.distanceTo(p) <= 7.5 + u.radius
               ) {
-                u.takeDamage(145 * powerMult, caster, true);
-                u.stunTimer = 1.1;
+                if (!isVisualReplay)
+                  u.takeDamage(145 * powerMult, caster, true);
+                if (!isVisualReplay) u.stunTimer = 1.1;
               }
             });
           } else {
@@ -25082,12 +25722,17 @@ diffuseColor.rgb *= mix(0.58, 1.04, groundAO) * canopyShade;`,
             }
 
             caster.mesh.position.set(nx, ny, nz);
+            if (isVisualReplay) {
+              caster._netX = nx;
+              caster._netZ = nz;
+            }
             caster.targetPos = null;
             caster.attackMovePos = null;
             caster.blinkBuffTimer = 4.8;
 
             if (hid === "vespera") {
-              caster.critChance = Math.min(0.9, caster.critChance + 0.25);
+              if (!isVisualReplay)
+                caster.critChance = Math.min(0.9, caster.critChance + 0.25);
               scheduledEvents.push({
                 delay: 4.5,
                 fn: () => {
@@ -25108,14 +25753,15 @@ diffuseColor.rgb *= mix(0.58, 1.04, groundAO) * canopyShade;`,
                   u.mesh.position.distanceTo(caster.mesh.position) <=
                   6.4 + u.radius
                 ) {
-                  u.takeDamage(
-                    (hid === "vespera" ? 135 : 115) * powerMult,
-                    caster,
-                    hid === "vespera",
-                  );
+                  if (!isVisualReplay)
+                    u.takeDamage(
+                      (hid === "vespera" ? 135 : 115) * powerMult,
+                      caster,
+                      hid === "vespera",
+                    );
                   if (hid === "aurelius" || hid === "terrakor")
-                    u.stunTimer = 1.2;
-                  u.slowTimer = 3.2;
+                    if (!isVisualReplay) u.stunTimer = 1.2;
+                  if (!isVisualReplay) u.slowTimer = 3.2;
                   u.slowFactor = 0.48;
                 }
               }
@@ -25168,16 +25814,20 @@ diffuseColor.rgb *= mix(0.58, 1.04, groundAO) * canopyShade;`,
                 u.mesh.position.distanceTo(caster.mesh.position) <=
                   7.6 + u.radius
               ) {
-                u.takeDamage(130 * powerMult, caster);
-                u.slowTimer = 3.5;
+                if (!isVisualReplay) u.takeDamage(130 * powerMult, caster);
+                if (!isVisualReplay) u.slowTimer = 3.5;
                 u.slowFactor = 0.45;
               }
             });
             caster.mesh.position.set(nx, getTerrainHeightAt(nx, nz), nz);
+            if (isVisualReplay) {
+              caster._netX = nx;
+              caster._netZ = nz;
+            }
             caster.targetPos = null;
             caster.blinkBuffTimer = 5.2;
-            caster.shield = 165 * powerMult;
-            caster.shieldTimer = 5.0;
+            if (!isVisualReplay) caster.shield = 165 * powerMult;
+            if (!isVisualReplay) caster.shieldTimer = 5.0;
             spawnOrbitalSkyBeam(nx, nz, 2.0, 0x22d3ee, 0.48);
           } else {
             const shieldBase =
@@ -25188,13 +25838,14 @@ diffuseColor.rgb *= mix(0.58, 1.04, groundAO) * canopyShade;`,
                   : hid === "aurelius"
                     ? 235
                     : 220;
-            caster.shield = shieldBase * powerMult;
-            caster.shieldTimer = 6.0;
+            if (!isVisualReplay) caster.shield = shieldBase * powerMult;
+            if (!isVisualReplay) caster.shieldTimer = 6.0;
             caster.blinkBuffTimer = Math.max(caster.blinkBuffTimer, 4.5);
             if (hid === "aurelius" || hid === "terrakor")
-              caster.bladeMailTimer = 4.5;
+              if (!isVisualReplay) caster.bladeMailTimer = 4.5;
             if (hid === "aurelia") {
-              caster.hp = Math.min(caster.maxHp, caster.hp + 165 * powerMult);
+              if (!isVisualReplay)
+                caster.hp = Math.min(caster.maxHp, caster.hp + 165 * powerMult);
               spawnFloatText(
                 caster.mesh.position,
                 `+${Math.round(165 * powerMult)} SANCTUARY HEAL!`,
@@ -25213,11 +25864,12 @@ diffuseColor.rgb *= mix(0.58, 1.04, groundAO) * canopyShade;`,
               if (!u.dead && u.team !== caster.team && u.type !== "ancient") {
                 if (u.mesh.position.distanceTo(p) <= sk.range + u.radius) {
                   const dmg = 136 * powerMult;
-                  u.takeDamage(dmg, caster);
-                  u.slowTimer = 3.5;
+                  if (!isVisualReplay) u.takeDamage(dmg, caster);
+                  if (!isVisualReplay) u.slowTimer = 3.5;
                   u.slowFactor = 0.5;
                   if (hid === "terrakor")
-                    u.stunTimer = Math.max(u.stunTimer, 1.15);
+                    if (!isVisualReplay)
+                      u.stunTimer = Math.max(u.stunTimer, 1.15);
                   if (hid === "zephyros")
                     spawnLightningBolt3D(
                       p,
@@ -25227,7 +25879,8 @@ diffuseColor.rgb *= mix(0.58, 1.04, groundAO) * canopyShade;`,
                       0.42,
                     );
                   if (hid === "malakor") {
-                    caster.hp = Math.min(caster.maxHp, caster.hp + dmg * 0.5);
+                    if (!isVisualReplay)
+                      caster.hp = Math.min(caster.maxHp, caster.hp + dmg * 0.5);
                     spawnLightningBolt3D(
                       u.mesh.position,
                       p,
@@ -25272,15 +25925,17 @@ diffuseColor.rgb *= mix(0.58, 1.04, groundAO) * canopyShade;`,
             units.forEach((u) => {
               if (!u.dead && u.team !== caster.team) {
                 if (u.mesh.position.distanceTo(impactPos) <= 6.0 + u.radius) {
-                  u.takeDamage(
-                    u.type === "tower" || u.type === "ancient"
-                      ? 190 * powerMult
-                      : 415 * powerMult,
-                    caster,
-                    true,
-                  );
+                  if (!isVisualReplay)
+                    u.takeDamage(
+                      u.type === "tower" || u.type === "ancient"
+                        ? 190 * powerMult
+                        : 415 * powerMult,
+                      caster,
+                      true,
+                    );
                   if (isZep && u.type !== "tower" && u.type !== "ancient")
-                    u.stunTimer = Math.max(u.stunTimer, 1.35);
+                    if (!isVisualReplay)
+                      u.stunTimer = Math.max(u.stunTimer, 1.35);
                 } else if (isZep && u.type === "hero") {
                   spawnLightningBolt3D(
                     new THREE.Vector3(u.mesh.position.x, 34, u.mesh.position.z),
@@ -25296,8 +25951,9 @@ diffuseColor.rgb *= mix(0.58, 1.04, groundAO) * canopyShade;`,
                     0x38bdf8,
                     0.7,
                   );
-                  u.takeDamage(290 * powerMult, caster, true);
-                  u.stunTimer = Math.max(u.stunTimer, 1.1);
+                  if (!isVisualReplay)
+                    u.takeDamage(290 * powerMult, caster, true);
+                  if (!isVisualReplay) u.stunTimer = Math.max(u.stunTimer, 1.1);
                 }
               }
             });
@@ -25323,8 +25979,9 @@ diffuseColor.rgb *= mix(0.58, 1.04, groundAO) * canopyShade;`,
             );
             const echoBonus = nearbyFoes.length * 55 * powerMult;
             nearbyFoes.forEach((u) => {
-              u.takeDamage(245 * powerMult + echoBonus, caster, true);
-              u.stunTimer = Math.max(u.stunTimer, 1.65);
+              if (!isVisualReplay)
+                u.takeDamage(245 * powerMult + echoBonus, caster, true);
+              if (!isVisualReplay) u.stunTimer = Math.max(u.stunTimer, 1.65);
               spawnRisingSpire(
                 u.mesh.position.x,
                 u.mesh.position.z,
@@ -25395,11 +26052,12 @@ diffuseColor.rgb *= mix(0.58, 1.04, groundAO) * canopyShade;`,
                   u.type === "tower" || u.type === "ancient"
                     ? 185 * powerMult
                     : 410 * powerMult;
-                u.takeDamage(dmg, caster, true);
-                caster.hp = Math.min(caster.maxHp, caster.hp + dmg * 0.3);
+                if (!isVisualReplay) u.takeDamage(dmg, caster, true);
+                if (!isVisualReplay)
+                  caster.hp = Math.min(caster.maxHp, caster.hp + dmg * 0.3);
                 if (u.type !== "tower" && u.type !== "ancient") {
-                  u.stunTimer = 1.4;
-                  u.slowTimer = 3.5;
+                  if (!isVisualReplay) u.stunTimer = 1.4;
+                  if (!isVisualReplay) u.slowTimer = 3.5;
                   u.slowFactor = 0.4;
                 }
               }
@@ -25484,15 +26142,17 @@ diffuseColor.rgb *= mix(0.58, 1.04, groundAO) * canopyShade;`,
                         u.type === "tower" || u.type === "ancient"
                           ? 180 * powerMult
                           : 375 * powerMult;
-                      u.takeDamage(dmg, caster);
+                      if (!isVisualReplay) u.takeDamage(dmg, caster);
                       if (hid === "malakor" || hid === "aurelia")
-                        caster.hp = Math.min(
-                          caster.maxHp,
-                          caster.hp + dmg * 0.25,
-                        );
+                        if (!isVisualReplay)
+                          caster.hp = Math.min(
+                            caster.maxHp,
+                            caster.hp + dmg * 0.25,
+                          );
                       if (u.type !== "tower" && u.type !== "ancient") {
-                        u.stunTimer = hid === "sylphira" ? 1.6 : 1.85;
-                        u.slowTimer = 3.5;
+                        if (!isVisualReplay)
+                          u.stunTimer = hid === "sylphira" ? 1.6 : 1.85;
+                        if (!isVisualReplay) u.slowTimer = 3.5;
                         u.slowFactor = 0.45;
                         spawnFloatText(
                           u.mesh.position,
@@ -25519,8 +26179,13 @@ diffuseColor.rgb *= mix(0.58, 1.04, groundAO) * canopyShade;`,
       /***********************************************************************
        * 12. COMBAT, TACTICAL GRANDMASTER AI ENGINE & SIMULATION LOOP
        ***********************************************************************/
-      function executeAutoAttack(attacker, target) {
-        attacker.atkTimer = attacker.getEffectiveAtkCd();
+      function executeAutoAttack(
+        attacker,
+        target,
+        isVisualReplay = false,
+        forcedCrit = false,
+      ) {
+        if (!isVisualReplay) attacker.atkTimer = attacker.getEffectiveAtkCd();
         attacker.swingAnim = 0.34;
 
         const dx = target.mesh.position.x - attacker.mesh.position.x;
@@ -25539,57 +26204,98 @@ diffuseColor.rgb *= mix(0.58, 1.04, groundAO) * canopyShade;`,
           attacker.mesh.rotation.y = Math.atan2(dx, dz);
         }
 
-        if (attacker.type === "dragon") {
+        if (!isVisualReplay) {
+          if (attacker.type === "dragon") {
+            attacker.dragonAnimState = "LUNGE_BITE";
+            attacker.dragonAnimTimer = 0.55;
+            if (Math.random() < 0.28) {
+              target.stunTimer = Math.max(target.stunTimer, 1.15);
+              spawnFloatText(
+                target.mesh.position,
+                "DRAGON JAW CRUSH!",
+                "#fb923c",
+                15,
+              );
+              mpQueueFxEvent([
+                "T",
+                Math.round(target.mesh.position.x),
+                Math.round(target.mesh.position.z),
+                "DRAGON JAW CRUSH!",
+                "#fb923c",
+                15,
+              ]);
+            }
+          } else if (attacker.type === "boss" && Math.random() < 0.25) {
+            target.stunTimer = Math.max(target.stunTimer, 1.2);
+            spawnFloatText(target.mesh.position, "ROSHAN BASH!", "#fb923c", 14);
+            mpQueueFxEvent([
+              "T",
+              Math.round(target.mesh.position.x),
+              Math.round(target.mesh.position.z),
+              "ROSHAN BASH!",
+              "#fb923c",
+              14,
+            ]);
+          } else if (
+            attacker.type === "kong" &&
+            Math.random() < (attacker.ancientFuryTimer > 0 ? 0.45 : 0.25)
+          ) {
+            target.stunTimer = Math.max(
+              target.stunTimer,
+              attacker.ancientFuryTimer > 0 ? 1.45 : 1.1,
+            );
+            const kTxt =
+              attacker.ancientFuryTimer > 0
+                ? "ENRAGED KONG CRUSH!"
+                : "KING KONG CRUSH!";
+            spawnFloatText(target.mesh.position, kTxt, "#facc15", 15);
+            mpQueueFxEvent([
+              "T",
+              Math.round(target.mesh.position.x),
+              Math.round(target.mesh.position.z),
+              kTxt,
+              "#facc15",
+              15,
+            ]);
+          } else if (
+            attacker.type === "redman" &&
+            Math.random() < (attacker.ancientFuryTimer > 0 ? 0.48 : 0.28)
+          ) {
+            target.stunTimer = Math.max(
+              target.stunTimer,
+              attacker.ancientFuryTimer > 0 ? 1.5 : 1.2,
+            );
+            const rTxt =
+              attacker.ancientFuryTimer > 0
+                ? "ENRAGED HELLFIRE CLEAVE!"
+                : "RED MAN CLEAVE!";
+            spawnFloatText(target.mesh.position, rTxt, "#ef4444", 15);
+            mpQueueFxEvent([
+              "T",
+              Math.round(target.mesh.position.x),
+              Math.round(target.mesh.position.z),
+              rTxt,
+              "#ef4444",
+              15,
+            ]);
+          }
+        } else if (attacker.type === "dragon") {
           attacker.dragonAnimState = "LUNGE_BITE";
           attacker.dragonAnimTimer = 0.55;
-          if (Math.random() < 0.28) {
-            target.stunTimer = Math.max(target.stunTimer, 1.15);
-            spawnFloatText(
-              target.mesh.position,
-              "DRAGON JAW CRUSH!",
-              "#fb923c",
-              15,
-            );
-          }
-        } else if (attacker.type === "boss" && Math.random() < 0.25) {
-          target.stunTimer = Math.max(target.stunTimer, 1.2);
-          spawnFloatText(target.mesh.position, "ROSHAN BASH!", "#fb923c", 14);
-        } else if (
-          attacker.type === "kong" &&
-          Math.random() < (attacker.ancientFuryTimer > 0 ? 0.45 : 0.25)
-        ) {
-          target.stunTimer = Math.max(
-            target.stunTimer,
-            attacker.ancientFuryTimer > 0 ? 1.45 : 1.1,
-          );
-          spawnFloatText(
-            target.mesh.position,
-            attacker.ancientFuryTimer > 0
-              ? "ENRAGED KONG CRUSH!"
-              : "KING KONG CRUSH!",
-            "#facc15",
-            15,
-          );
-        } else if (
-          attacker.type === "redman" &&
-          Math.random() < (attacker.ancientFuryTimer > 0 ? 0.48 : 0.28)
-        ) {
-          target.stunTimer = Math.max(
-            target.stunTimer,
-            attacker.ancientFuryTimer > 0 ? 1.5 : 1.2,
-          );
-          spawnFloatText(
-            target.mesh.position,
-            attacker.ancientFuryTimer > 0
-              ? "ENRAGED HELLFIRE CLEAVE!"
-              : "RED MAN CLEAVE!",
-            "#ef4444",
-            15,
-          );
         }
 
-        const isCrit =
-          attacker.critChance > 0 && Math.random() < attacker.critChance;
+        const isCrit = isVisualReplay
+          ? forcedCrit
+          : attacker.critChance > 0 && Math.random() < attacker.critChance;
+        if (!isVisualReplay && mpState.active && mpState.role === "host") {
+          mpQueueFxEvent([
+            "A",
+            attacker.netId || attacker.id,
+            target.netId || target.id,
+            isCrit ? 1 : 0,
+          ]);
+        }
+
         const guardianFuryMult =
           (attacker.type === "kong" || attacker.type === "redman") &&
           attacker.ancientFuryTimer > 0
@@ -25611,20 +26317,22 @@ diffuseColor.rgb *= mix(0.58, 1.04, groundAO) * canopyShade;`,
         }
 
         if (attacker.atkRange <= 4.6) {
-          target.takeDamage(dmg, attacker, isCrit);
-          if (
-            attacker.hasSkadi &&
-            target.type !== "tower" &&
-            target.type !== "ancient"
-          ) {
-            target.slowTimer = Math.max(target.slowTimer, 2.5);
-            target.slowFactor = Math.min(target.slowFactor, 0.65);
+          if (!isVisualReplay) {
+            target.takeDamage(dmg, attacker, isCrit);
+            if (
+              attacker.hasSkadi &&
+              target.type !== "tower" &&
+              target.type !== "ancient"
+            ) {
+              target.slowTimer = Math.max(target.slowTimer, 2.5);
+              target.slowFactor = Math.min(target.slowFactor, 0.65);
+            }
+            if (attacker.lifesteal > 0)
+              attacker.hp = Math.min(
+                attacker.maxHp,
+                attacker.hp + dmg * attacker.lifesteal,
+              );
           }
-          if (attacker.lifesteal > 0)
-            attacker.hp = Math.min(
-              attacker.maxHp,
-              attacker.hp + dmg * attacker.lifesteal,
-            );
           const slashCol = attacker.heroCfg
             ? attacker.heroCfg.primaryHex
             : attacker.team === "radiant"
@@ -31001,6 +31709,9 @@ diffuseColor.rgb *= mix(0.58, 1.04, groundAO) * canopyShade;`,
       };
 
       function endMatch(winner) {
+        if (mpState.active && mpState.role === "host" && !gameOver) {
+          mpQueueFxEvent(["W", winner]);
+        }
         gameOver = true;
         const modal = document.getElementById("endgame-modal");
         const title = document.getElementById("end-title");
@@ -31057,7 +31768,11 @@ diffuseColor.rgb *= mix(0.58, 1.04, groundAO) * canopyShade;`,
 
         mpState.snapSeq = 0;
         mpState.lastRecvSeq = 0;
-        if (mpState.lastStaticHp) mpState.lastStaticHp.clear();
+        mpState.lastSnapApplyTime = 0;
+        if (mpState.knownNetIds) mpState.knownNetIds.clear();
+        if (mpState.lastEntitySig) mpState.lastEntitySig.clear();
+        if (mpState.lastHeroExtras) mpState.lastHeroExtras.clear();
+        if (mpState.pendingRemovals) mpState.pendingRemovals.clear();
         matchTime = 0;
         waveCountdown = 1.5;
         runeCountdown = 5.0;
