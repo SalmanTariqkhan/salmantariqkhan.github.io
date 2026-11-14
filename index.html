@@ -10,7 +10,7 @@
     <meta name="mobile-web-app-capable" content="yes" />
     <title>
       Defense of the Ancients 3D • Grandmaster Sovereign Multiplayer Edition
-      (v78)
+      (v79)
     </title>
     <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
     <script src="https://cdn.tailwindcss.com"></script>
@@ -491,24 +491,49 @@
         animation: lvlPulse 1.35s infinite;
       }
 
-      /* Mobile & Tablet Responsive Ergonomics — Action-ARPG / Mobile MOBA Radial HUD */
+      /* Desktop & Mobile Responsive HUD Architecture */
       #hud-layer {
         padding-top: env(safe-area-inset-top, 0px);
         padding-bottom: env(safe-area-inset-bottom, 0px);
         padding-left: env(safe-area-inset-left, 0px);
         padding-right: env(safe-area-inset-right, 0px);
       }
+      @media (min-width: 1024px) {
+        #hud-top-bar {
+          position: fixed;
+          top: 0;
+          left: 0;
+          right: 0;
+          z-index: 30;
+        }
+        #hud-center-alerts {
+          position: fixed;
+          top: 66px;
+          left: 50%;
+          transform: translateX(-50%);
+          z-index: 26;
+          width: min(560px, calc(100vw - 420px));
+        }
+        #hud-bottom-wrapper {
+          position: fixed;
+          bottom: 0;
+          left: 0;
+          right: 0;
+          z-index: 25;
+          pointer-events: none;
+        }
+      }
       #mobile-joystick-base {
         background: radial-gradient(
           circle at center,
-          rgba(15, 23, 42, 0.35) 0%,
-          rgba(15, 23, 42, 0.65) 70%,
-          rgba(250, 204, 21, 0.24) 100%
+          rgba(15, 23, 42, 0.42) 0%,
+          rgba(15, 23, 42, 0.74) 70%,
+          rgba(250, 204, 21, 0.28) 100%
         );
-        border: 1.5px solid rgba(250, 204, 21, 0.42);
+        border: 1.5px solid rgba(250, 204, 21, 0.5);
         box-shadow:
-          0 8px 26px rgba(0, 0, 0, 0.55),
-          inset 0 0 18px rgba(250, 204, 21, 0.12);
+          0 8px 26px rgba(0, 0, 0, 0.65),
+          inset 0 0 18px rgba(250, 204, 21, 0.16);
         backdrop-filter: blur(4px);
       }
       #mobile-joystick-knob {
@@ -521,7 +546,7 @@
         border: 2px solid #fffbeb;
         box-shadow:
           0 4px 14px rgba(0, 0, 0, 0.85),
-          0 0 14px rgba(250, 204, 21, 0.65);
+          0 0 14px rgba(250, 204, 21, 0.72);
       }
       @media (max-width: 1023px) {
         /* Strip desktop bottom console & inventory wrapper backdrop-filter so fixed children anchor cleanly to viewport */
@@ -536,8 +561,14 @@
           padding: 0 !important;
           pointer-events: none !important;
         }
-        #hud-bottom-dock {
+        #hud-bottom-dock,
+        #hud-bottom-wrapper {
           pointer-events: none !important;
+        }
+
+        /* Always show virtual thumbstick & quick-attack on mobile/tablet unless explicitly toggled off */
+        body:not(.touchpad-forced-off) #mobile-touch-controls {
+          display: flex !important;
         }
 
         /* 1. TOP-LEFT: Circular Hero Portrait + Level Badge + Compact HP/Mana/Attributes */
@@ -554,10 +585,10 @@
           width: 44px !important;
           height: 44px !important;
           border-radius: 9999px !important;
-          border: 2px solid rgba(250, 204, 21, 0.9) !important;
+          border: 2px solid rgba(250, 204, 21, 0.92) !important;
           box-shadow:
             0 6px 18px rgba(0, 0, 0, 0.88),
-            0 0 12px rgba(250, 204, 21, 0.32) !important;
+            0 0 12px rgba(250, 204, 21, 0.35) !important;
         }
         #hud-portrait-name {
           display: none !important;
@@ -575,7 +606,7 @@
           position: fixed;
           top: calc(7px + env(safe-area-inset-top, 0px));
           left: calc(54px + env(safe-area-inset-left, 0px));
-          width: 92px;
+          width: 98px;
           z-index: 31;
           pointer-events: auto;
           display: flex;
@@ -595,19 +626,20 @@
         }
         #hud-mp-bar-wrap {
           height: 8px !important;
-          width: 84px !important;
+          width: 92px !important;
           border-radius: 999px !important;
         }
         #hud-mp-bar-wrap span {
           font-size: 6.5px !important;
         }
         #hud-attr-box {
-          background: rgba(7, 11, 19, 0.78) !important;
+          background: rgba(7, 11, 19, 0.84) !important;
           backdrop-filter: blur(8px);
-          border: 1px solid rgba(212, 175, 95, 0.32) !important;
+          border: 1px solid rgba(212, 175, 95, 0.36) !important;
           border-radius: 8px !important;
           padding: 2px 4px !important;
-          min-width: 92px !important;
+          min-width: 98px !important;
+          max-width: 98px !important;
           min-height: 0 !important;
           height: auto !important;
           margin-top: 23px !important;
@@ -633,14 +665,14 @@
         /* 2. LEFT VERTICAL UTILITY DOCK BELOW PORTRAIT */
         #hud-left-utility-dock {
           position: fixed;
-          top: calc(62px + env(safe-area-inset-top, 0px));
+          top: calc(66px + env(safe-area-inset-top, 0px));
           left: calc(8px + env(safe-area-inset-left, 0px));
           z-index: 28;
           flex-direction: column !important;
           padding: 3.5px !important;
           gap: 4px !important;
           border-radius: 12px !important;
-          background: rgba(9, 14, 26, 0.82) !important;
+          background: rgba(9, 14, 26, 0.84) !important;
         }
         #hud-left-utility-dock button {
           width: 28px !important;
@@ -653,7 +685,7 @@
           display: none !important;
         }
 
-        /* 3. TOP-RIGHT SECTION: Dire vs Radiant Scoreboard + Dragon Icon at Top-Right, Map & Shop Below It */
+        /* 3. TOP-RIGHT SECTION: Scoreboard + Dragon Icon, K/D/A, Circular Map & Gold/Shop */
         #hud-top-scoreboard {
           position: fixed;
           top: calc(6px + env(safe-area-inset-top, 0px));
@@ -667,8 +699,8 @@
           gap: 5px !important;
         }
         #dragon-hud-badge {
-          width: 28px !important;
-          height: 28px !important;
+          width: 26px !important;
+          height: 26px !important;
           padding: 0 !important;
           border-radius: 9999px !important;
           justify-content: center !important;
@@ -679,7 +711,7 @@
           border-top: 1px solid var(--trim-border) !important;
           padding: 3px 7px !important;
           gap: 5px !important;
-          background: rgba(9, 14, 26, 0.88) !important;
+          background: rgba(9, 14, 26, 0.9) !important;
         }
         #top-rad-badge,
         #top-dire-badge {
@@ -695,7 +727,7 @@
           font-size: 13px !important;
         }
         #hud-clock-well {
-          min-width: 68px !important;
+          min-width: 66px !important;
           padding-left: 4px !important;
           padding-right: 4px !important;
         }
@@ -721,10 +753,10 @@
           display: none !important;
         }
 
-        /* K/D/A + Aegis Telemetry Pill directly under Top-Right Scoreboard */
+        /* Compact K/D/A + LH + Ping Pill below Top-Right Scoreboard (never overlaps left vitals) */
         #hud-right-telemetry {
           position: fixed;
-          top: calc(41px + env(safe-area-inset-top, 0px));
+          top: calc(40px + env(safe-area-inset-top, 0px));
           right: calc(8px + env(safe-area-inset-right, 0px));
           left: auto !important;
           transform: none !important;
@@ -736,72 +768,82 @@
           gap: 4px !important;
           padding-top: 0 !important;
         }
+        #hud-fps,
+        #hud-ping-sep {
+          display: none !important;
+        }
         #mp-hud-status-pill {
           position: fixed !important;
-          top: calc(174px + env(safe-area-inset-top, 0px)) !important;
+          top: calc(184px + env(safe-area-inset-top, 0px)) !important;
           right: calc(8px + env(safe-area-inset-right, 0px)) !important;
           z-index: 29 !important;
           padding: 2px 6px !important;
-          font-size: 8.5px !important;
+          font-size: 8px !important;
           border-radius: 9px !important;
           white-space: nowrap !important;
         }
         #local-p2-hud-pill {
           position: fixed !important;
-          top: calc(196px + env(safe-area-inset-top, 0px)) !important;
+          top: calc(204px + env(safe-area-inset-top, 0px)) !important;
           right: calc(8px + env(safe-area-inset-right, 0px)) !important;
           z-index: 29 !important;
           padding: 2px 6px !important;
-          font-size: 8.5px !important;
+          font-size: 8px !important;
           border-radius: 9px !important;
           white-space: nowrap !important;
         }
         #aegis-hud-badge {
-          padding: 2px 6px !important;
-          font-size: 8.5px !important;
+          padding: 2px 5px !important;
+          font-size: 8px !important;
           border-radius: 9px !important;
           line-height: 1.15 !important;
           white-space: nowrap !important;
         }
         #hud-kda-pill {
-          height: 22px !important;
-          padding: 0 7px !important;
-          gap: 5px !important;
-          font-size: 9px !important;
-          background: rgba(9, 14, 26, 0.84) !important;
+          height: 21px !important;
+          padding: 0 6px !important;
+          gap: 4px !important;
+          font-size: 8.5px !important;
+          background: rgba(9, 14, 26, 0.88) !important;
           white-space: nowrap !important;
         }
 
-        /* Minimap & Gold/Shop stacked cleanly below Top-Right Scoreboard & K/D/A */
+        /* Circular Tactical Minimap & Gold/Shop stacked cleanly below K/D/A */
         #hud-minimap-card {
           position: fixed;
-          top: calc(68px + env(safe-area-inset-top, 0px));
+          top: calc(65px + env(safe-area-inset-top, 0px));
           right: calc(8px + env(safe-area-inset-right, 0px));
           z-index: 29;
           padding: 2px !important;
           border-radius: 9999px !important;
-          border: 2px solid rgba(250, 204, 21, 0.78) !important;
+          overflow: hidden !important;
+          border: 2px solid rgba(250, 204, 21, 0.85) !important;
           box-shadow:
             0 8px 24px rgba(0, 0, 0, 0.88),
-            0 0 14px rgba(250, 204, 21, 0.25) !important;
+            0 0 14px rgba(250, 204, 21, 0.28) !important;
+          pointer-events: auto !important;
         }
         #hud-minimap-header {
           display: none !important;
         }
         #hud-minimap-box {
-          width: 68px !important;
-          height: 68px !important;
+          width: 82px !important;
+          height: 82px !important;
           border-radius: 9999px !important;
+          overflow: hidden !important;
           border: none !important;
+        }
+        #minimap-canvas {
+          border-radius: 9999px !important;
         }
         #hud-inv-footer {
           position: fixed !important;
-          top: calc(144px + env(safe-area-inset-top, 0px));
+          top: calc(154px + env(safe-area-inset-top, 0px));
           right: calc(8px + env(safe-area-inset-right, 0px));
           z-index: 29;
-          padding: 4px 7px !important;
+          padding: 3px 6px !important;
           border-radius: 12px !important;
-          gap: 5px !important;
+          gap: 4px !important;
           background: rgba(9, 14, 26, 0.92) !important;
           border: 1px solid var(--panel-border) !important;
           box-shadow: 0 10px 24px rgba(0, 0, 0, 0.85) !important;
@@ -811,41 +853,41 @@
           padding: 2px 5px !important;
         }
         #hud-gold {
-          font-size: 10px !important;
+          font-size: 9.5px !important;
         }
         #btn-open-shop {
-          padding: 2.5px 7px !important;
-          font-size: 9px !important;
+          padding: 2.5px 6px !important;
+          font-size: 8.5px !important;
         }
 
         /* Top-Center Enemy / Boss Target Health Bar */
         #unit-inspector-panel {
           position: fixed !important;
-          top: calc(70px + env(safe-area-inset-top, 0px));
-          left: calc(50% - 20px);
+          top: calc(68px + env(safe-area-inset-top, 0px));
+          left: calc(50% - 22px);
           transform: translateX(-50%);
           z-index: 27;
-          max-width: min(226px, calc(100vw - 144px)) !important;
+          max-width: min(210px, calc(100vw - 156px)) !important;
           padding: 5px 8px !important;
-          background: rgba(12, 16, 28, 0.9) !important;
+          background: rgba(12, 16, 28, 0.92) !important;
         }
 
-        /* Center Arena Banners, Respawn, Channel & Target Prompts */
+        /* Center Arena Banners, Respawn, Channel & Target Prompts (below side docks so never clipped) */
         #hud-center-alerts {
           position: fixed !important;
-          top: calc(178px + env(safe-area-inset-top, 0px));
+          top: calc(218px + env(safe-area-inset-top, 0px));
           left: 50%;
           transform: translateX(-50%);
-          width: calc(100vw - 92px) !important;
-          max-width: 350px !important;
+          width: calc(100vw - 96px) !important;
+          max-width: 330px !important;
           padding-left: 0 !important;
           padding-right: 0 !important;
           z-index: 26;
         }
         #announce-title {
-          font-size: 15px !important;
+          font-size: 14px !important;
           line-height: 1.15 !important;
-          letter-spacing: 0.08em !important;
+          letter-spacing: 0.06em !important;
         }
         #announce-sub {
           font-size: 9.5px !important;
@@ -868,38 +910,49 @@
           padding: 3px 10px !important;
         }
 
-        /* 5. BOTTOM-LEFT: Floating Virtual Analog Thumbstick */
+        /* 5. BOTTOM-LEFT: Floating Virtual Analog Thumbstick & Quick Attack Button */
         #mobile-touch-controls {
           position: fixed !important;
-          bottom: calc(18px + env(safe-area-inset-bottom, 0px)) !important;
+          bottom: calc(16px + env(safe-area-inset-bottom, 0px)) !important;
           left: calc(12px + env(safe-area-inset-left, 0px)) !important;
           width: auto !important;
           z-index: 32;
           padding: 0 !important;
         }
         #mobile-joystick-zone {
-          width: 108px !important;
-          height: 108px !important;
+          width: 112px !important;
+          height: 112px !important;
         }
         #mobile-joystick-base {
-          width: 94px !important;
-          height: 94px !important;
+          width: 92px !important;
+          height: 92px !important;
         }
         #mobile-joystick-knob {
           width: 38px !important;
           height: 38px !important;
         }
         #mobile-side-actions {
-          display: none !important;
+          display: flex !important;
+          flex-direction: column !important;
+          gap: 6px !important;
+          padding-bottom: 6px !important;
+        }
+        #mobile-quick-atk-btn {
+          width: 44px !important;
+          height: 44px !important;
+        }
+        #mobile-center-cam-btn {
+          width: 44px !important;
+          height: 30px !important;
         }
 
-        /* 6. BOTTOM-RIGHT: Uniform Dual-Concentric Radial Skill & Utility Wheel */
+        /* 6. BOTTOM-RIGHT: Ergonomic Dual-Concentric Radial Skill & Utility Wheel */
         #hud-ability-row {
           position: fixed !important;
           bottom: calc(14px + env(safe-area-inset-bottom, 0px)) !important;
           right: calc(10px + env(safe-area-inset-right, 0px)) !important;
-          width: 228px !important;
-          height: 228px !important;
+          width: 224px !important;
+          height: 224px !important;
           z-index: 32;
           display: block !important;
           pointer-events: none !important;
@@ -924,13 +977,13 @@
           display: none !important;
         }
 
-        /* Primary Big Circular Ultimate (R) Orb in Bottom-Right Corner (Center: right 44px, bottom 46px) */
+        /* Primary Big Circular Ultimate (R) Orb in Bottom-Right Corner */
         #ab-btn-R {
           position: fixed !important;
           bottom: calc(14px + env(safe-area-inset-bottom, 0px)) !important;
-          right: calc(12px + env(safe-area-inset-right, 0px)) !important;
-          width: 64px !important;
-          height: 64px !important;
+          right: calc(14px + env(safe-area-inset-right, 0px)) !important;
+          width: 62px !important;
+          height: 62px !important;
           border-radius: 9999px !important;
           border: 2.5px solid rgba(251, 191, 36, 0.92) !important;
           box-shadow:
@@ -941,16 +994,16 @@
           z-index: 34;
         }
         #ab-btn-R i {
-          font-size: 22px !important;
+          font-size: 21px !important;
         }
 
-        /* Inner Arc: Skills 1, 2, 3 (Q, W, E) at Uniform 80px Radius & Uniform 42° Spacing */
+        /* Inner Arc: Skills Q, W, E evenly spaced around R */
         #ab-btn-Q,
         #ab-btn-W,
         #ab-btn-E {
           position: fixed !important;
-          width: 46px !important;
-          height: 46px !important;
+          width: 45px !important;
+          height: 45px !important;
           border-radius: 9999px !important;
           pointer-events: auto !important;
           box-shadow:
@@ -959,16 +1012,16 @@
           z-index: 33;
         }
         #ab-btn-Q {
-          bottom: calc(27px + env(safe-area-inset-bottom, 0px)) !important;
-          right: calc(101px + env(safe-area-inset-right, 0px)) !important;
+          bottom: calc(18px + env(safe-area-inset-bottom, 0px)) !important;
+          right: calc(106px + env(safe-area-inset-right, 0px)) !important;
         }
         #ab-btn-W {
-          bottom: calc(80px + env(safe-area-inset-bottom, 0px)) !important;
-          right: calc(78px + env(safe-area-inset-right, 0px)) !important;
+          bottom: calc(74px + env(safe-area-inset-bottom, 0px)) !important;
+          right: calc(84px + env(safe-area-inset-right, 0px)) !important;
         }
         #ab-btn-E {
-          bottom: calc(103px + env(safe-area-inset-bottom, 0px)) !important;
-          right: calc(25px + env(safe-area-inset-right, 0px)) !important;
+          bottom: calc(102px + env(safe-area-inset-bottom, 0px)) !important;
+          right: calc(26px + env(safe-area-inset-right, 0px)) !important;
         }
         #ab-btn-Q .hud-keycap,
         #ab-btn-W .hud-keycap,
@@ -992,71 +1045,71 @@
           padding: 0 3px !important;
         }
 
-        /* Floating Circular '+' Level-Up Badges perched uniformly on upper-left rim of each orb */
+        /* Floating Circular '+' Level-Up Badges perched on top-right rim of each orb (zero collision) */
         #lvlup-Q,
         #lvlup-W,
         #lvlup-E,
         #lvlup-R,
         #lvlup-ATTR {
           position: fixed !important;
-          width: 21px !important;
-          height: 21px !important;
+          width: 20px !important;
+          height: 20px !important;
           border-radius: 9999px !important;
           padding: 0 !important;
-          font-size: 9px !important;
+          font-size: 8.5px !important;
           pointer-events: auto !important;
           z-index: 36;
         }
         #lvlup-Q {
-          bottom: calc(58px + env(safe-area-inset-bottom, 0px)) !important;
-          right: calc(132px + env(safe-area-inset-right, 0px)) !important;
+          bottom: calc(50px + env(safe-area-inset-bottom, 0px)) !important;
+          right: calc(102px + env(safe-area-inset-right, 0px)) !important;
         }
         #lvlup-W {
-          bottom: calc(111px + env(safe-area-inset-bottom, 0px)) !important;
-          right: calc(109px + env(safe-area-inset-right, 0px)) !important;
+          bottom: calc(106px + env(safe-area-inset-bottom, 0px)) !important;
+          right: calc(80px + env(safe-area-inset-right, 0px)) !important;
         }
         #lvlup-E {
           bottom: calc(134px + env(safe-area-inset-bottom, 0px)) !important;
-          right: calc(56px + env(safe-area-inset-right, 0px)) !important;
+          right: calc(22px + env(safe-area-inset-right, 0px)) !important;
         }
         #lvlup-R {
           bottom: calc(62px + env(safe-area-inset-bottom, 0px)) !important;
-          right: calc(60px + env(safe-area-inset-right, 0px)) !important;
+          right: calc(12px + env(safe-area-inset-right, 0px)) !important;
         }
         #lvlup-ATTR {
-          bottom: calc(177px + env(safe-area-inset-bottom, 0px)) !important;
-          right: calc(99px + env(safe-area-inset-right, 0px)) !important;
+          bottom: calc(176px + env(safe-area-inset-bottom, 0px)) !important;
+          right: calc(68px + env(safe-area-inset-right, 0px)) !important;
         }
 
-        /* Outer Arc: TP, STOP, TALENT (icon), STATS (icon), INVENTORY BAG (swapped next to 3rd skill E!) */
+        /* Outer Arc: TP, STOP, TALENT, STATS, BAG */
         #btn-tp-scroll {
           position: fixed !important;
-          bottom: calc(17px + env(safe-area-inset-bottom, 0px)) !important;
-          right: calc(160px + env(safe-area-inset-right, 0px)) !important;
-          width: 40px !important;
-          height: 40px !important;
+          bottom: calc(16px + env(safe-area-inset-bottom, 0px)) !important;
+          right: calc(164px + env(safe-area-inset-right, 0px)) !important;
+          width: 36px !important;
+          height: 36px !important;
           border-radius: 9999px !important;
           pointer-events: auto !important;
           z-index: 33;
         }
         #btn-buytp-cmd {
           position: fixed !important;
-          bottom: calc(10px + env(safe-area-inset-bottom, 0px)) !important;
-          right: calc(184px + env(safe-area-inset-right, 0px)) !important;
-          width: 24px !important;
-          height: 17px !important;
+          bottom: calc(6px + env(safe-area-inset-bottom, 0px)) !important;
+          right: calc(168px + env(safe-area-inset-right, 0px)) !important;
+          width: 28px !important;
+          height: 15px !important;
           border-radius: 999px !important;
-          font-size: 7px !important;
+          font-size: 6.5px !important;
           padding: 0 !important;
           pointer-events: auto !important;
           z-index: 35;
         }
         #btn-stop-cmd {
           position: fixed !important;
-          bottom: calc(74px + env(safe-area-inset-bottom, 0px)) !important;
-          right: calc(153px + env(safe-area-inset-right, 0px)) !important;
-          width: 38px !important;
-          height: 38px !important;
+          bottom: calc(66px + env(safe-area-inset-bottom, 0px)) !important;
+          right: calc(148px + env(safe-area-inset-right, 0px)) !important;
+          width: 36px !important;
+          height: 36px !important;
           border-radius: 9999px !important;
           font-size: 7px !important;
           padding: 0 !important;
@@ -1065,10 +1118,10 @@
         }
         #btn-open-talents {
           position: fixed !important;
-          bottom: calc(122px + env(safe-area-inset-bottom, 0px)) !important;
-          right: calc(123px + env(safe-area-inset-right, 0px)) !important;
-          width: 40px !important;
-          height: 40px !important;
+          bottom: calc(114px + env(safe-area-inset-bottom, 0px)) !important;
+          right: calc(118px + env(safe-area-inset-right, 0px)) !important;
+          width: 36px !important;
+          height: 36px !important;
           padding: 0 !important;
           border-radius: 9999px !important;
           box-shadow:
@@ -1078,7 +1131,7 @@
           z-index: 33;
         }
         #btn-open-talents i {
-          font-size: 16px !important;
+          font-size: 14px !important;
           margin: 0 !important;
         }
         #btn-open-talents span:not(#talent-notif-dot) {
@@ -1086,10 +1139,10 @@
         }
         #btn-stats-cmd {
           position: fixed !important;
-          bottom: calc(151px + env(safe-area-inset-bottom, 0px)) !important;
+          bottom: calc(148px + env(safe-area-inset-bottom, 0px)) !important;
           right: calc(74px + env(safe-area-inset-right, 0px)) !important;
-          width: 40px !important;
-          height: 40px !important;
+          width: 36px !important;
+          height: 36px !important;
           padding: 0 !important;
           border-radius: 9999px !important;
           border-width: 1.5px !important;
@@ -1100,7 +1153,7 @@
           z-index: 33;
         }
         #btn-stats-cmd i {
-          font-size: 16px !important;
+          font-size: 14px !important;
           margin: 0 !important;
         }
         #btn-stats-cmd span {
@@ -1108,17 +1161,17 @@
         }
         #btn-toggle-mobile-bag {
           position: fixed !important;
-          bottom: calc(163px + env(safe-area-inset-bottom, 0px)) !important;
-          right: calc(25px + env(safe-area-inset-right, 0px)) !important;
-          width: 42px !important;
-          height: 42px !important;
+          bottom: calc(158px + env(safe-area-inset-bottom, 0px)) !important;
+          right: calc(24px + env(safe-area-inset-right, 0px)) !important;
+          width: 38px !important;
+          height: 38px !important;
           padding: 0 !important;
           border-radius: 9999px !important;
           flex-direction: column !important;
           justify-content: center !important;
           align-items: center !important;
           gap: 1px !important;
-          font-size: 7.5px !important;
+          font-size: 7px !important;
           background: linear-gradient(
             180deg,
             rgba(30, 41, 59, 0.96) 0%,
@@ -1138,7 +1191,7 @@
         }
         #hud-inventory-card.mobile-bag-open #hud-inv-drawer {
           position: fixed !important;
-          bottom: calc(208px + env(safe-area-inset-bottom, 0px)) !important;
+          bottom: calc(204px + env(safe-area-inset-bottom, 0px)) !important;
           right: calc(10px + env(safe-area-inset-right, 0px)) !important;
           z-index: 38 !important;
           display: flex !important;
@@ -1159,7 +1212,7 @@
 
         #voice-subtitle-box {
           position: fixed !important;
-          bottom: calc(210px + env(safe-area-inset-bottom, 0px)) !important;
+          bottom: calc(206px + env(safe-area-inset-bottom, 0px)) !important;
           left: 50%;
           transform: translateX(-50%);
           width: max-content;
@@ -1186,15 +1239,15 @@
           right: calc(8px + env(safe-area-inset-right, 0px)) !important;
         }
         #hud-right-telemetry {
-          top: calc(41px + env(safe-area-inset-top, 0px)) !important;
+          top: calc(40px + env(safe-area-inset-top, 0px)) !important;
           right: calc(8px + env(safe-area-inset-right, 0px)) !important;
         }
         #hud-minimap-card {
-          top: calc(68px + env(safe-area-inset-top, 0px)) !important;
+          top: calc(64px + env(safe-area-inset-top, 0px)) !important;
           right: calc(8px + env(safe-area-inset-right, 0px)) !important;
         }
         #hud-inv-footer {
-          top: calc(144px + env(safe-area-inset-top, 0px)) !important;
+          top: calc(152px + env(safe-area-inset-top, 0px)) !important;
           right: calc(8px + env(safe-area-inset-right, 0px)) !important;
         }
         #unit-inspector-panel {
@@ -1203,10 +1256,10 @@
         }
         #hud-center-alerts {
           top: calc(74px + env(safe-area-inset-top, 0px)) !important;
-          max-width: 400px !important;
+          max-width: 380px !important;
         }
         #hud-left-utility-dock {
-          top: calc(56px + env(safe-area-inset-top, 0px)) !important;
+          top: calc(62px + env(safe-area-inset-top, 0px)) !important;
           gap: 3px !important;
           padding: 3px !important;
         }
@@ -1251,10 +1304,10 @@
             class="intro-badge-float inline-flex items-center gap-1.5 px-2.5 sm:px-3.5 py-0.5 rounded-full bg-amber-500/15 border border-amber-400/50 text-amber-300 text-[9px] sm:text-[11px] font-cinzel font-bold tracking-wider sm:tracking-widest uppercase shadow-[0_0_20px_rgba(250,204,21,0.22)] truncate"
           >
             <i class="fa-solid fa-crown shrink-0"></i>
-            <span class="sm:hidden">DOTA 3D • MULTIPLAYER EDITION (V78)</span>
+            <span class="sm:hidden">DOTA 3D • MULTIPLAYER EDITION (V79)</span>
             <span class="hidden sm:inline"
               >Defense of the Ancients 3D • Grandmaster Sovereign Multiplayer
-              Edition (v78)</span
+              Edition (v79)</span
             >
           </div>
           <button
@@ -1991,7 +2044,10 @@
       </div>
 
       <!-- BOTTOM ORNATE DOTA 2 CONSOLE + TARGET UNIT INSPECTOR -->
-      <div class="w-full flex flex-col items-center px-2 sm:px-3 pb-2 gap-1.5">
+      <div
+        id="hud-bottom-wrapper"
+        class="w-full flex flex-col items-center px-2 sm:px-3 pb-2 gap-1.5"
+      >
         <!-- TARGET UNIT INSPECTOR PANEL -->
         <div
           id="unit-inspector-panel"
@@ -2196,13 +2252,12 @@
             </div>
             <div
               id="hud-minimap-box"
-              class="relative w-32 h-32 sm:w-44 sm:h-44 rounded-xl border border-amber-500/40 bg-[#0e291e] shadow-inner"
+              class="relative w-32 h-32 sm:w-44 sm:h-44 rounded-xl overflow-hidden border border-amber-500/40 bg-[#0e291e] shadow-inner"
             >
               <canvas
                 id="minimap-canvas"
                 width="184"
                 height="184"
-                style="transform: translateZ(0)"
                 class="w-full h-full block rounded-xl cursor-pointer"
               ></canvas>
             </div>
@@ -8608,7 +8663,9 @@
             }
           }
 
-          // 2. Client-side movement prediction for Guest's own hero
+          // 2. Client-side movement prediction for Guest's own hero (strictly 2D XZ distance so terrain height never stalls arrival)
+          const gPrevX = playerHero.mesh.position.x;
+          const gPrevZ = playerHero.mesh.position.z;
           if (playerHero.stunTimer > 0) {
             playerHero.targetUnit = null;
             playerHero.targetPos = null;
@@ -8618,39 +8675,34 @@
               playerHero.targetUnit = null;
             } else {
               const reach = playerHero.atkRange + playerHero.targetUnit.radius;
-              if (
-                playerHero.mesh.position.distanceToSquared(
-                  playerHero.targetUnit.mesh.position,
-                ) >
-                reach * reach
-              ) {
+              const tdx = playerHero.targetUnit.mesh.position.x - gPrevX;
+              const tdz = playerHero.targetUnit.mesh.position.z - gPrevZ;
+              if (tdx * tdx + tdz * tdz > reach * reach) {
                 stepMove(playerHero, playerHero.targetUnit.mesh.position, dt);
-                localHeroMoving = true;
               }
             }
           } else if (playerHero.attackMovePos) {
-            if (
-              playerHero.mesh.position.distanceToSquared(
-                playerHero.attackMovePos,
-              ) <= 0.64
-            ) {
+            const adx = playerHero.attackMovePos.x - gPrevX;
+            const adz = playerHero.attackMovePos.z - gPrevZ;
+            if (adx * adx + adz * adz <= 0.64) {
               playerHero.attackMovePos = null;
             } else {
               stepMove(playerHero, playerHero.attackMovePos, dt);
-              localHeroMoving = true;
             }
           } else if (playerHero.targetPos) {
-            if (
-              playerHero.mesh.position.distanceToSquared(
-                playerHero.targetPos,
-              ) <= 0.49
-            ) {
+            const pdx = playerHero.targetPos.x - gPrevX;
+            const pdz = playerHero.targetPos.z - gPrevZ;
+            if (pdx * pdx + pdz * pdz <= 0.49) {
               playerHero.targetPos = null;
             } else {
               stepMove(playerHero, playerHero.targetPos, dt);
-              localHeroMoving = true;
             }
           }
+          const gActualMoved = Math.hypot(
+            playerHero.mesh.position.x - gPrevX,
+            playerHero.mesh.position.z - gPrevZ,
+          );
+          localHeroMoving = gActualMoved > 0.006;
 
           // Latency-aware anti-rubberband reconciliation:
           // Guest predicts locally at t=0 and arrives at targetPos ~RTT/2 earlier than Host.
@@ -28879,36 +28931,66 @@ diffuseColor.rgb *= mix(0.58, 1.04, groundAO) * canopyShade;`,
             if (auto && u.atkTimer <= 0) executeAutoAttack(u, auto);
           }
 
-          let isMoving = false;
+          const prevX = u.mesh.position.x;
+          const prevZ = u.mesh.position.z;
+          let moveIntent = false;
           if (u.targetUnit) {
             if (u.targetUnit.dead) {
               u.targetUnit = null;
             } else {
               const reach = u.atkRange + u.targetUnit.radius;
-              if (
-                u.mesh.position.distanceToSquared(u.targetUnit.mesh.position) <=
-                reach * reach
-              ) {
+              const tdx = u.targetUnit.mesh.position.x - prevX;
+              const tdz = u.targetUnit.mesh.position.z - prevZ;
+              if (tdx * tdx + tdz * tdz <= reach * reach) {
                 if (u.atkTimer <= 0) executeAutoAttack(u, u.targetUnit);
               } else {
                 stepMove(u, u.targetUnit.mesh.position, dt);
-                isMoving = true;
+                moveIntent = true;
               }
             }
           } else if (u.attackMovePos) {
-            if (u.mesh.position.distanceToSquared(u.attackMovePos) <= 0.5625) {
+            const adx = u.attackMovePos.x - prevX;
+            const adz = u.attackMovePos.z - prevZ;
+            if (adx * adx + adz * adz <= 0.5625) {
               u.attackMovePos = null;
             } else {
               stepMove(u, u.attackMovePos, dt);
-              isMoving = true;
+              moveIntent = true;
             }
           } else if (u.targetPos) {
-            if (u.mesh.position.distanceToSquared(u.targetPos) <= 0.4225)
-              u.targetPos = null;
+            const pdx = u.targetPos.x - prevX;
+            const pdz = u.targetPos.z - prevZ;
+            if (pdx * pdx + pdz * pdz <= 0.4225) u.targetPos = null;
             else {
               stepMove(u, u.targetPos, dt);
-              isMoving = true;
+              moveIntent = true;
             }
+          }
+
+          // Measure true horizontal displacement (prevents running animation when stalled against towers/walls or high ground)
+          const movedDist = Math.hypot(
+            u.mesh.position.x - prevX,
+            u.mesh.position.z - prevZ,
+          );
+          const actualMoveSpeed = movedDist / Math.max(0.001, dt);
+          const isMoving = moveIntent && actualMoveSpeed > 1.25;
+          u.isActuallyMoving = isMoving;
+
+          if (
+            moveIntent &&
+            !isMoving &&
+            u.stunTimer <= 0 &&
+            (u.targetPos || u.attackMovePos) &&
+            !u.targetUnit
+          ) {
+            u.stuckTimer = (u.stuckTimer || 0) + dt;
+            if (u.stuckTimer > 0.45) {
+              u.targetPos = null;
+              u.attackMovePos = null;
+              u.stuckTimer = 0;
+            }
+          } else {
+            u.stuckTimer = 0;
           }
 
           if (isMoving && riverSplashAccum > 0.28) {
@@ -30079,10 +30161,34 @@ diffuseColor.rgb *= mix(0.58, 1.04, groundAO) * canopyShade;`,
           });
         }
 
+        if (window._minimapTapPulse && window._minimapTapPulse.ttl > 0) {
+          window._minimapTapPulse.ttl = Math.max(
+            0,
+            window._minimapTapPulse.ttl - 0.016,
+          );
+          const tp = mapPt(
+            window._minimapTapPulse.wx,
+            window._minimapTapPulse.wz,
+          );
+          const prog = 1 - window._minimapTapPulse.ttl / 0.85;
+          minimapCtx.strokeStyle = window._minimapTapPulse.color || "#22d3ee";
+          minimapCtx.lineWidth = 2.4 * (1 - prog * 0.5);
+          minimapCtx.beginPath();
+          minimapCtx.arc(tp.x, tp.y, 4 + prog * 14, 0, Math.PI * 2);
+          minimapCtx.stroke();
+        }
+
         const cp = mapPt(cameraFocus.x, cameraFocus.z);
-        minimapCtx.strokeStyle = "rgba(255,255,255,0.88)";
-        minimapCtx.lineWidth = 1.4;
+        minimapCtx.strokeStyle = "rgba(255,255,255,0.92)";
+        minimapCtx.lineWidth = 1.6;
         minimapCtx.strokeRect(cp.x - 16, cp.y - 12, 32, 24);
+        if (window.innerWidth < 1024) {
+          minimapCtx.strokeStyle = "rgba(250, 204, 21, 0.55)";
+          minimapCtx.lineWidth = 4;
+          minimapCtx.beginPath();
+          minimapCtx.arc(w * 0.5, h * 0.5, w * 0.5 - 2, 0, Math.PI * 2);
+          minimapCtx.stroke();
+        }
         minimapCtx.restore();
       }
 
@@ -31980,10 +32086,8 @@ diffuseColor.rgb *= mix(0.58, 1.04, groundAO) * canopyShade;`,
         }
       });
       const isTouchCapableDevice = () =>
-        "ontouchstart" in window ||
-        (navigator.maxTouchPoints && navigator.maxTouchPoints > 0) ||
-        window.matchMedia("(pointer: coarse)").matches ||
-        window.innerWidth <= 920;
+        window.innerWidth < 1024 ||
+        window.matchMedia("(pointer: coarse)").matches;
 
       let mobileTouchPadEnabled = isTouchCapableDevice();
       const mobileJoyState = {
@@ -31998,6 +32102,10 @@ diffuseColor.rgb *= mix(0.58, 1.04, groundAO) * canopyShade;`,
       window.toggleMobileTouchPad = function (forceVal) {
         mobileTouchPadEnabled =
           typeof forceVal === "boolean" ? forceVal : !mobileTouchPadEnabled;
+        document.body.classList.toggle(
+          "touchpad-forced-off",
+          !mobileTouchPadEnabled,
+        );
         const zone = document.getElementById("mobile-touch-controls");
         if (zone) {
           zone.classList.toggle("hidden", !mobileTouchPadEnabled);
@@ -32293,22 +32401,191 @@ diffuseColor.rgb *= mix(0.58, 1.04, groundAO) * canopyShade;`,
         { passive: false },
       );
 
-      // Minimap: Desktop (Left-Pan / Right-Move) + Touch (Tap-Move / Drag-Pan)
+      // Minimap: Desktop (Left-Pan / Right-Move) + Touch (Tap-Move / Drag-Pan / Double-Tap Re-Center)
       let miniTouchState = {
         active: false,
         startX: 0,
         startY: 0,
+        lastX: 0,
+        lastY: 0,
         dragged: false,
+        lastTapTs: 0,
       };
       const minimapClientToWorld = (clientX, clientY) => {
         const r = minimapCanvas.getBoundingClientRect();
+        const rw = Math.max(1, r.width);
+        const rh = Math.max(1, r.height);
         return {
-          wx: ((clientX - r.left) / r.width - 0.5) * (MAP_HALF * 2),
-          wz: ((clientY - r.top) / r.height - 0.5) * (MAP_HALF * 2),
+          wx: THREE.MathUtils.clamp(
+            ((clientX - r.left) / rw - 0.5) * (MAP_HALF * 2),
+            -MAP_HALF + 3,
+            MAP_HALF - 3,
+          ),
+          wz: THREE.MathUtils.clamp(
+            ((clientY - r.top) / rh - 0.5) * (MAP_HALF * 2),
+            -MAP_HALF + 3,
+            MAP_HALF - 3,
+          ),
         };
       };
 
+      const executeMinimapMoveOrder = (wx, wz, isAttackMove = false) => {
+        if (!playerHero || playerHero.dead) return;
+        if (isAttackMove) {
+          const miniEnemy = findEnemyNearWorldPoint({ x: wx, z: wz }, 14.0);
+          if (miniEnemy) {
+            orderHeroAttackTarget(miniEnemy);
+            window._minimapTapPulse = { wx, wz, ttl: 0.85, color: "#f43f5e" };
+            return;
+          }
+          if (playerHero.tpChannel)
+            window.cancelTeleportChannel("Teleport Canceled");
+          playerHero.targetUnit = null;
+          playerHero.targetPos = null;
+          playerHero.attackMovePos = new THREE.Vector3(wx, 0, wz);
+          if (mpState.active && mpState.role === "guest")
+            mpSendToHost({ type: "CMD", cmd: "ATTACK_MOVE", x: wx, z: wz });
+          attackMovePrimed = false;
+          updatePrimedState();
+          triggerMoveWaypoint(wx, wz, 0xf43f5e);
+          window._minimapTapPulse = { wx, wz, ttl: 0.85, color: "#f43f5e" };
+          sfx.play("move");
+          return;
+        }
+        if (playerHero.tpChannel)
+          window.cancelTeleportChannel("Teleport Canceled");
+        playerHero.targetUnit = null;
+        playerHero.attackMovePos = null;
+        playerHero.targetPos = new THREE.Vector3(wx, 0, wz);
+        if (mpState.active && mpState.role === "guest")
+          mpSendToHost({ type: "CMD", cmd: "MOVE", x: wx, z: wz });
+        triggerMoveWaypoint(wx, wz, 0x22c55e);
+        window._minimapTapPulse = { wx, wz, ttl: 0.85, color: "#22d3ee" };
+        sfx.play("move");
+      };
+
+      const handleMinimapTouchStart = (clientX, clientY) => {
+        const { wx, wz } = minimapClientToWorld(clientX, clientY);
+        if (tpTargetMode && playerHero && !playerHero.dead) {
+          const dests = getValidTeleportDestinations(playerHero.team);
+          let closestDest = null;
+          let bestD = 32.0;
+          dests.forEach((d) => {
+            const bx = d.towerPos ? d.towerPos.x : d.x;
+            const bz = d.towerPos ? d.towerPos.z : d.z;
+            const dist = Math.hypot(wx - bx, wz - bz);
+            if (dist < bestD) {
+              bestD = dist;
+              closestDest = d;
+            }
+          });
+          if (closestDest) window.startTeleportToDestination(closestDest.id);
+          return;
+        }
+        miniTouchState.active = true;
+        miniTouchState.startX = clientX;
+        miniTouchState.startY = clientY;
+        miniTouchState.lastX = clientX;
+        miniTouchState.lastY = clientY;
+        miniTouchState.dragged = false;
+      };
+
+      const handleMinimapTouchMove = (clientX, clientY) => {
+        if (!miniTouchState.active) return;
+        miniTouchState.lastX = clientX;
+        miniTouchState.lastY = clientY;
+        if (
+          Math.hypot(
+            clientX - miniTouchState.startX,
+            clientY - miniTouchState.startY,
+          ) > 6
+        ) {
+          miniTouchState.dragged = true;
+        }
+        if (miniTouchState.dragged) {
+          const { wx, wz } = minimapClientToWorld(clientX, clientY);
+          cameraLocked = false;
+          syncCamLockLabel();
+          cameraFocus.set(wx, 0, wz);
+        }
+      };
+
+      const handleMinimapTouchEnd = (clientX, clientY) => {
+        if (!miniTouchState.active) return;
+        const useX =
+          typeof clientX === "number" && clientX > 0
+            ? clientX
+            : miniTouchState.lastX;
+        const useY =
+          typeof clientY === "number" && clientY > 0
+            ? clientY
+            : miniTouchState.lastY;
+        const wasDragged = miniTouchState.dragged;
+        miniTouchState.active = false;
+        if (!wasDragged) {
+          const now = performance.now();
+          if (
+            now - miniTouchState.lastTapTs < 320 &&
+            playerHero &&
+            !playerHero.dead
+          ) {
+            miniTouchState.lastTapTs = 0;
+            window.centerCameraOnHero();
+            return;
+          }
+          miniTouchState.lastTapTs = now;
+          const { wx, wz } = minimapClientToWorld(useX, useY);
+          executeMinimapMoveOrder(wx, wz, attackMovePrimed);
+        }
+      };
+
+      minimapCanvas.addEventListener(
+        "touchstart",
+        (e) => {
+          if (!e.touches || e.touches.length === 0) return;
+          e.preventDefault();
+          e.stopPropagation();
+          handleMinimapTouchStart(e.touches[0].clientX, e.touches[0].clientY);
+        },
+        { passive: false },
+      );
+
+      minimapCanvas.addEventListener(
+        "touchmove",
+        (e) => {
+          if (!e.touches || e.touches.length === 0) return;
+          e.preventDefault();
+          e.stopPropagation();
+          handleMinimapTouchMove(e.touches[0].clientX, e.touches[0].clientY);
+        },
+        { passive: false },
+      );
+
+      minimapCanvas.addEventListener(
+        "touchend",
+        (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          const t =
+            e.changedTouches && e.changedTouches[0]
+              ? e.changedTouches[0]
+              : null;
+          handleMinimapTouchEnd(
+            t ? t.clientX : miniTouchState.lastX,
+            t ? t.clientY : miniTouchState.lastY,
+          );
+        },
+        { passive: false },
+      );
+
       minimapCanvas.addEventListener("pointerdown", (e) => {
+        if (e.pointerType === "touch") {
+          e.preventDefault();
+          e.stopPropagation();
+          if (!miniTouchState.active)
+            handleMinimapTouchStart(e.clientX, e.clientY);
+          return;
+        }
         const { wx, wz } = minimapClientToWorld(e.clientX, e.clientY);
 
         if (tpTargetMode && playerHero && !playerHero.dead) {
@@ -32332,51 +32609,18 @@ diffuseColor.rgb *= mix(0.58, 1.04, groundAO) * canopyShade;`,
           return;
         }
 
-        if (e.pointerType === "touch") {
-          e.stopPropagation();
-          try {
-            minimapCanvas.setPointerCapture(e.pointerId);
-          } catch (err) {}
-          miniTouchState = {
-            active: true,
-            startX: e.clientX,
-            startY: e.clientY,
-            dragged: false,
-          };
-          return;
-        }
-
         if (
           (attackMovePrimed || isAKeyHeld) &&
           playerHero &&
           !playerHero.dead &&
           e.button === 0
         ) {
-          const miniEnemy = findEnemyNearWorldPoint({ x: wx, z: wz }, 14.0);
-          if (miniEnemy) {
-            orderHeroAttackTarget(miniEnemy);
-            return;
-          }
-          if (playerHero.tpChannel)
-            window.cancelTeleportChannel("Teleport Canceled");
-          playerHero.targetUnit = null;
-          playerHero.targetPos = null;
-          playerHero.attackMovePos = new THREE.Vector3(wx, 0, wz);
-          attackMovePrimed = false;
-          updatePrimedState();
-          triggerMoveWaypoint(wx, wz, 0xf43f5e);
+          executeMinimapMoveOrder(wx, wz, true);
           return;
         }
 
         if (e.button === 2 && playerHero && !playerHero.dead) {
-          if (playerHero.tpChannel)
-            window.cancelTeleportChannel("Teleport Canceled");
-          playerHero.targetUnit = null;
-          playerHero.attackMovePos = null;
-          playerHero.targetPos = new THREE.Vector3(wx, 0, wz);
-          if (mpState.active && mpState.role === "guest")
-            mpSendToHost({ type: "CMD", cmd: "MOVE", x: wx, z: wz });
-          triggerMoveWaypoint(wx, wz, 0x22c55e);
+          executeMinimapMoveOrder(wx, wz, false);
         } else {
           cameraLocked = false;
           syncCamLockLabel();
@@ -32386,54 +32630,12 @@ diffuseColor.rgb *= mix(0.58, 1.04, groundAO) * canopyShade;`,
 
       minimapCanvas.addEventListener("pointermove", (e) => {
         if (e.pointerType !== "touch" || !miniTouchState.active) return;
-        if (
-          Math.hypot(
-            e.clientX - miniTouchState.startX,
-            e.clientY - miniTouchState.startY,
-          ) > 8
-        ) {
-          miniTouchState.dragged = true;
-        }
-        if (miniTouchState.dragged) {
-          const { wx, wz } = minimapClientToWorld(e.clientX, e.clientY);
-          cameraLocked = false;
-          syncCamLockLabel();
-          cameraFocus.set(wx, 0, wz);
-        }
+        handleMinimapTouchMove(e.clientX, e.clientY);
       });
 
       const endMinimapTouch = (e) => {
         if (e.pointerType !== "touch" || !miniTouchState.active) return;
-        const wasDragged = miniTouchState.dragged;
-        miniTouchState.active = false;
-        if (!wasDragged && playerHero && !playerHero.dead) {
-          const { wx, wz } = minimapClientToWorld(e.clientX, e.clientY);
-          if (attackMovePrimed) {
-            const miniEnemy = findEnemyNearWorldPoint({ x: wx, z: wz }, 14.0);
-            if (miniEnemy) {
-              orderHeroAttackTarget(miniEnemy);
-              return;
-            }
-            if (playerHero.tpChannel)
-              window.cancelTeleportChannel("Teleport Canceled");
-            playerHero.targetUnit = null;
-            playerHero.targetPos = null;
-            playerHero.attackMovePos = new THREE.Vector3(wx, 0, wz);
-            attackMovePrimed = false;
-            updatePrimedState();
-            triggerMoveWaypoint(wx, wz, 0xf43f5e);
-            return;
-          }
-          if (playerHero.tpChannel)
-            window.cancelTeleportChannel("Teleport Canceled");
-          playerHero.targetUnit = null;
-          playerHero.attackMovePos = null;
-          playerHero.targetPos = new THREE.Vector3(wx, 0, wz);
-          if (mpState.active && mpState.role === "guest")
-            mpSendToHost({ type: "CMD", cmd: "MOVE", x: wx, z: wz });
-          triggerMoveWaypoint(wx, wz, 0x22c55e);
-          sfx.play("move");
-        }
+        handleMinimapTouchEnd(e.clientX, e.clientY);
       };
       minimapCanvas.addEventListener("pointerup", endMinimapTouch);
       minimapCanvas.addEventListener("pointercancel", endMinimapTouch);
