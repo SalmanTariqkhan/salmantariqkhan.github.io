@@ -10,7 +10,7 @@
     <meta name="mobile-web-app-capable" content="yes" />
     <title>
       Defense of the Ancients 3D • Grandmaster Sovereign Multiplayer Edition
-      (v71)
+      (v72)
     </title>
     <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
     <script src="https://cdn.tailwindcss.com"></script>
@@ -1251,10 +1251,10 @@
             class="intro-badge-float inline-flex items-center gap-1.5 px-2.5 sm:px-3.5 py-0.5 rounded-full bg-amber-500/15 border border-amber-400/50 text-amber-300 text-[9px] sm:text-[11px] font-cinzel font-bold tracking-wider sm:tracking-widest uppercase shadow-[0_0_20px_rgba(250,204,21,0.22)] truncate"
           >
             <i class="fa-solid fa-crown shrink-0"></i>
-            <span class="sm:hidden">DOTA 3D • MULTIPLAYER EDITION (V71)</span>
+            <span class="sm:hidden">DOTA 3D • MULTIPLAYER EDITION (V72)</span>
             <span class="hidden sm:inline"
               >Defense of the Ancients 3D • Grandmaster Sovereign Multiplayer
-              Edition (v71)</span
+              Edition (v72)</span
             >
           </div>
           <button
@@ -5757,15 +5757,14 @@
 
       function mpSendOverConn(conn, packet, preSerializedRaw = null) {
         if (!conn || !conn.open) return;
-        // Drop routine delta snapshots or pings when WebRTC send buffer is congested so latency never snowballs
+        // Strict 6 KB SCTP buffer cap prevents bufferbloat ping spikes over TURN / mobile internet
         if (
           packet &&
-          ((packet.type === "WORLD_SNAP" &&
-            (!packet.snap || !packet.snap.full)) ||
-            packet.type === "PING_REQ")
+          packet.type === "WORLD_SNAP" &&
+          (!packet.snap || !packet.snap.full)
         ) {
           const dc = conn.dataChannel || conn._dc;
-          if (dc && dc.bufferedAmount > 48000) return;
+          if (dc && dc.bufferedAmount > 6144) return;
         }
         try {
           const raw =
@@ -6179,12 +6178,12 @@
             credential: "pPjyQknn9vnGzG1d",
           },
           {
-            urls: "turn:global.relay.metered.ca:80?transport=tcp",
+            urls: "turn:global.relay.metered.ca:443",
             username: "411fc0a2ffc61a5ad7d64b54",
             credential: "pPjyQknn9vnGzG1d",
           },
           {
-            urls: "turn:global.relay.metered.ca:443",
+            urls: "turn:global.relay.metered.ca:80?transport=tcp",
             username: "411fc0a2ffc61a5ad7d64b54",
             credential: "pPjyQknn9vnGzG1d",
           },
@@ -6208,6 +6207,8 @@
         const rtcConfig = {
           iceServers,
           iceCandidatePoolSize: 4,
+          bundlePolicy: "max-bundle",
+          rtcpMuxPolicy: "require",
         };
         if (fRelay && fRelay.checked) {
           rtcConfig.iceTransportPolicy = "relay";
@@ -6974,10 +6975,8 @@
           );
           if (!actor || gameOver) return;
           if (typeof msg.cmdSeq === "number") {
-            actor.lastProcessedCmdSeq = Math.max(
-              actor.lastProcessedCmdSeq || 0,
-              msg.cmdSeq,
-            );
+            if (msg.cmdSeq < (actor.lastProcessedCmdSeq || 0)) return; // Ignore out-of-order stale command
+            actor.lastProcessedCmdSeq = msg.cmdSeq;
           }
           if (msg.cmd === "MOVE" && !actor.dead) {
             if (actor.tpChannel) actor.tpChannel = null;
@@ -7205,10 +7204,18 @@
               Math.min(999, Math.round(performance.now() - msg.ts)),
             );
             if (mpState.role === "guest") {
+              if (!mpState.rttSamples) mpState.rttSamples = [];
+              mpState.rttSamples.push(rtt);
+              if (mpState.rttSamples.length > 4) mpState.rttSamples.shift();
+              const minRtt = Math.min(...mpState.rttSamples);
+              const blend =
+                rtt <= minRtt * 1.25
+                  ? rtt
+                  : Math.round(minRtt * 0.75 + rtt * 0.25);
               mpState.pingMs =
                 mpState.pingMs === null
-                  ? rtt
-                  : Math.round(mpState.pingMs * 0.65 + rtt * 0.35);
+                  ? blend
+                  : Math.round(mpState.pingMs * 0.6 + blend * 0.4);
             } else if (mpState.role === "host") {
               mpState.peerPings.set(msg.senderId, rtt);
               let worst = 0;
@@ -7241,7 +7248,8 @@
           (u.castAnim > 0 ? 16 : 0) |
           (u.hasAegis ? 32 : 0) |
           (u.celebrateTimer > 0 ? 64 : 0) |
-          (u.reincarnating ? 128 : 0);
+          (u.reincarnating ? 128 : 0) |
+          (u.blinkBuffTimer > 0 ? 256 : 0);
         const isHero = u.type === "hero";
         return [
           u.netId, // 0
@@ -7339,7 +7347,8 @@
             (u.castAnim > 0 ? 16 : 0) |
             (u.hasAegis ? 32 : 0) |
             (u.celebrateTimer > 0 ? 64 : 0) |
-            (u.reincarnating ? 128 : 0);
+            (u.reincarnating ? 128 : 0) |
+            (u.blinkBuffTimer > 0 ? 256 : 0);
           const rx = Math.round(u.mesh.position.x * 100) / 100;
           const rz = Math.round(u.mesh.position.z * 100) / 100;
           const ry = Math.round(u.mesh.rotation.y * 100) / 100;
@@ -7530,6 +7539,8 @@
           u.slowTimer = flags & 4 ? Math.max(u.slowTimer, 0.14) : 0;
           u.hasAegis = !!(flags & 32);
           u.reincarnating = !!(flags & 128);
+          u.blinkBuffTimer =
+            flags & 256 ? Math.max(u.blinkBuffTimer || 0, 0.2) : 0;
           if (flags & 64 && !(prevFlags & 64)) {
             u.celebrateTimer = 1.45;
           } else if (flags & 64) {
@@ -8113,13 +8124,19 @@
             }
           }
 
-          // Command-ACK-aware reconciliation so reversing direction never yanks Guest backward toward pre-ACK Host coords
+          // Latency-aware anti-rubberband reconciliation:
+          // Guest predicts locally at t=0 and arrives at targetPos ~RTT/2 earlier than Host.
+          const nowPerf = performance.now();
+          const estRttSec = Math.min(
+            0.65,
+            Math.max(0.06, (mpState.pingMs || 140) / 1000),
+          );
           const awaitingAck =
             (mpState.cmdSeq || 0) > (playerHero._ackCmdSeq || 0) &&
-            performance.now() - (mpState.lastCmdSentAt || 0) < 1200;
+            nowPerf - (mpState.lastCmdSentAt || 0) < 1400;
 
           if (localHeroMoving || awaitingAck) {
-            playerHero._stopGraceTimer = 0.22;
+            playerHero._stopGraceTimer = estRttSec + 0.35;
           } else if ((playerHero._stopGraceTimer || 0) > 0) {
             playerHero._stopGraceTimer = Math.max(
               0,
@@ -8131,9 +8148,17 @@
             const errX = playerHero._netX - playerHero.mesh.position.x;
             const errZ = playerHero._netZ - playerHero.mesh.position.z;
             const errDist = Math.hypot(errX, errZ);
+            // Expected network transit lead = hero speed * (RTT * 0.65) + 2.2m margin
+            const expectedLead = Math.max(
+              3.2,
+              playerHero.getEffectiveSpeed() * (estRttSec * 0.65) + 2.2,
+            );
+
             if (localHeroMoving) {
-              if (errDist > 5.0) {
-                const alpha = Math.min(1, dt * 4.5);
+              // Only pull if error exceeds expected network transit lead (prevents backward snap while moving)
+              if (errDist > expectedLead) {
+                const excess = (errDist - expectedLead) / errDist;
+                const alpha = Math.min(1, dt * 4.0) * excess;
                 playerHero.mesh.position.x += errX * alpha;
                 playerHero.mesh.position.z += errZ * alpha;
                 playerHero.mesh.position.y = getTerrainHeightAt(
@@ -8141,23 +8166,23 @@
                   playerHero.mesh.position.z,
                 );
               }
-            } else if (
-              (playerHero._stopGraceTimer || 0) <= 0 &&
-              errDist > 0.5
-            ) {
-              const alpha = 1 - Math.exp(-8.5 * dt);
-              playerHero.mesh.position.x += errX * alpha;
-              playerHero.mesh.position.z += errZ * alpha;
-              playerHero.mesh.position.y = getTerrainHeightAt(
-                playerHero.mesh.position.x,
-                playerHero.mesh.position.z,
-              );
-            }
-            if (!localHeroMoving && (playerHero._stopGraceTimer || 0) <= 0) {
-              let diff = playerHero._netYaw - playerHero.mesh.rotation.y;
-              while (diff > Math.PI) diff -= Math.PI * 2;
-              while (diff < -Math.PI) diff += Math.PI * 2;
-              playerHero.mesh.rotation.y += diff * Math.min(1, dt * 12.0);
+            } else if ((playerHero._stopGraceTimer || 0) <= 0) {
+              // Wait until Host has also finished arriving (_netMoving === false) before snapping to final resting spot
+              if (!playerHero._netMoving && errDist > 0.35) {
+                const alpha = 1 - Math.exp(-10.0 * dt);
+                playerHero.mesh.position.x += errX * alpha;
+                playerHero.mesh.position.z += errZ * alpha;
+                playerHero.mesh.position.y = getTerrainHeightAt(
+                  playerHero.mesh.position.x,
+                  playerHero.mesh.position.z,
+                );
+              }
+              if (!playerHero._netMoving) {
+                let diff = playerHero._netYaw - playerHero.mesh.rotation.y;
+                while (diff > Math.PI) diff -= Math.PI * 2;
+                while (diff < -Math.PI) diff += Math.PI * 2;
+                playerHero.mesh.rotation.y += diff * Math.min(1, dt * 12.0);
+              }
             }
           }
         }
@@ -8480,14 +8505,14 @@
             }
           }
           mpState.pingAccum += dt;
-          if (mpState.pingAccum >= 3.0 && mpState.conns.size > 0) {
+          if (mpState.pingAccum >= 1.2 && mpState.conns.size > 0) {
             mpState.pingAccum = 0;
             mpBroadcast({ type: "PING_REQ", ts: performance.now() });
             updateMpRelayUsageDisplay();
           }
         } else if (mpState.role === "guest") {
           mpState.pingAccum += dt;
-          if (mpState.pingAccum >= 3.0) {
+          if (mpState.pingAccum >= 1.2) {
             mpState.pingAccum = 0;
             mpSendToHost({
               type: "PING_REQ",
