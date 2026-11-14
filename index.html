@@ -10,7 +10,7 @@
     <meta name="mobile-web-app-capable" content="yes" />
     <title>
       Defense of the Ancients 3D • Grandmaster Sovereign Multiplayer Edition
-      (v76)
+      (v77)
     </title>
     <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
     <script src="https://cdn.tailwindcss.com"></script>
@@ -1251,10 +1251,10 @@
             class="intro-badge-float inline-flex items-center gap-1.5 px-2.5 sm:px-3.5 py-0.5 rounded-full bg-amber-500/15 border border-amber-400/50 text-amber-300 text-[9px] sm:text-[11px] font-cinzel font-bold tracking-wider sm:tracking-widest uppercase shadow-[0_0_20px_rgba(250,204,21,0.22)] truncate"
           >
             <i class="fa-solid fa-crown shrink-0"></i>
-            <span class="sm:hidden">DOTA 3D • MULTIPLAYER EDITION (V76)</span>
+            <span class="sm:hidden">DOTA 3D • MULTIPLAYER EDITION (V77)</span>
             <span class="hidden sm:inline"
               >Defense of the Ancients 3D • Grandmaster Sovereign Multiplayer
-              Edition (v76)</span
+              Edition (v77)</span
             >
           </div>
           <button
@@ -3708,6 +3708,49 @@
             id="mp-network-panel"
             class="bg-slate-950/80 border border-cyan-500/35 rounded-xl p-3 space-y-2.5"
           >
+            <!-- 3-Way TURN Relay Server Toggle -->
+            <div
+              class="flex flex-wrap items-center justify-between gap-1.5 bg-slate-900/90 border border-slate-800 rounded-lg px-2.5 py-1.5"
+            >
+              <span
+                class="text-[10px] font-cinzel font-bold text-amber-300 uppercase tracking-wider flex items-center gap-1"
+              >
+                <i class="fa-solid fa-server text-cyan-300"></i> Relay Server:
+              </span>
+              <div
+                class="inline-flex items-center gap-1 bg-slate-950 p-0.5 rounded-lg border border-slate-700/90"
+              >
+                <button
+                  type="button"
+                  id="mp-relay-btn-cloudflare"
+                  onclick="window.setMpTurnProvider('cloudflare')"
+                  class="setting-pill active-setting px-2 py-0.5 rounded-md border border-slate-700 text-[10px] font-bold text-slate-200 flex items-center gap-1 transition"
+                  title="Cloudflare Global Anycast TURN (Lowest Regional Ping • 1,000 GB/mo)"
+                >
+                  <i class="fa-solid fa-cloud text-orange-400"></i> Cloudflare
+                </button>
+                <button
+                  type="button"
+                  id="mp-relay-btn-express"
+                  onclick="window.setMpTurnProvider('express')"
+                  class="setting-pill px-2 py-0.5 rounded-md border border-slate-700 text-[10px] font-bold text-slate-300 flex items-center gap-1 transition"
+                  title="ExpressTURN Free Static Relay (100 GB/mo)"
+                >
+                  <i class="fa-solid fa-bolt text-emerald-400"></i> ExpressTURN
+                </button>
+                <button
+                  type="button"
+                  id="mp-relay-btn-metered"
+                  onclick="window.setMpTurnProvider('metered')"
+                  class="setting-pill px-2 py-0.5 rounded-md border border-slate-700 text-[10px] font-bold text-slate-300 flex items-center gap-1 transition"
+                  title="Legacy Metered TURN Relay (500 MB/mo)"
+                >
+                  <i class="fa-solid fa-database text-sky-400"></i> Old
+                  (Metered)
+                </button>
+              </div>
+            </div>
+
             <div class="flex flex-wrap items-center justify-between gap-2">
               <div class="flex flex-wrap items-center gap-2">
                 <button
@@ -3776,7 +3819,7 @@
                 <span
                   id="mp-conn-status-text"
                   class="text-slate-200 font-medium truncate"
-                  >Ready • ExpressTURN UDP Relay + Dual-Channel Low-Ping
+                  >Ready • Cloudflare Anycast TURN + Dual-Channel Low-Ping
                   Active</span
                 >
               </div>
@@ -3806,9 +3849,11 @@
               class="hidden bg-slate-900/80 border border-slate-700 rounded-lg p-2.5 space-y-2 text-[10px]"
             >
               <div class="flex flex-wrap items-center justify-between gap-2">
-                <span class="text-amber-300 font-bold"
-                  >TURN Relay Controls & Optional Override (ExpressTURN UDP
-                  Default Active):</span
+                <span
+                  id="mp-active-relay-title"
+                  class="text-amber-300 font-bold"
+                  >TURN Relay Controls & Optional Override (Cloudflare Anycast
+                  Active):</span
                 >
                 <div class="flex items-center gap-2">
                   <label
@@ -5701,6 +5746,9 @@
         bytesSent: 0,
         bytesRecv: 0,
         iceModeLabel: "",
+        turnProvider: "cloudflare", // 'cloudflare' | 'express' | 'metered'
+        cfIceServers: null,
+        cfIceExpiresAt: 0,
         fxEventQueue: [],
       };
 
@@ -6118,6 +6166,9 @@
         window.syncMpLobbyMeta();
         renderDiscoveredRooms();
         renderMpRoster();
+        if (mpState.turnProvider === "cloudflare") {
+          ensureCloudflareIceServers(true);
+        }
         document.getElementById("multiplayer-modal").classList.remove("hidden");
       };
 
@@ -6201,6 +6252,160 @@
         }
       }
 
+      const CF_TURN_CONFIG = {
+        tokenId: "feb353d1e13ba9978fabbc19ff13a82a",
+        apiToken:
+          "28a4f84e885564d73d43fdd4c0e6925b43c8d0b4f93dc641ba1997630b221451",
+        ttl: 86400,
+      };
+
+      const RELAY_PROVIDER_META = {
+        cloudflare: {
+          label: "Cloudflare TURN",
+          shortTag: "CF",
+          readyText:
+            "Ready • Cloudflare Global Anycast TURN + Dual-Channel Low-Ping Active",
+          panelTitle:
+            "TURN Relay Controls & Optional Override (Cloudflare Anycast Active):",
+        },
+        express: {
+          label: "ExpressTURN",
+          shortTag: "EXP",
+          readyText:
+            "Ready • ExpressTURN (UDP + TCP 3478/443) + Dual-Channel Active",
+          panelTitle:
+            "TURN Relay Controls & Optional Override (ExpressTURN Active):",
+        },
+        metered: {
+          label: "Metered (Old)",
+          shortTag: "MTR",
+          readyText: "Ready • Metered Legacy TURN + Dual-Channel Active",
+          panelTitle:
+            "TURN Relay Controls & Optional Override (Metered Old Active):",
+        },
+      };
+
+      function getRelayProviderLabel(prov = mpState.turnProvider) {
+        return (RELAY_PROVIDER_META[prov] || RELAY_PROVIDER_META.cloudflare)
+          .label;
+      }
+
+      function updateRelayProviderButtonsUI() {
+        const cur = mpState.turnProvider || "cloudflare";
+        ["cloudflare", "express", "metered"].forEach((p) => {
+          const btn = document.getElementById(`mp-relay-btn-${p}`);
+          if (btn) btn.classList.toggle("active-setting", p === cur);
+        });
+        const titleEl = document.getElementById("mp-active-relay-title");
+        if (titleEl && RELAY_PROVIDER_META[cur]) {
+          titleEl.textContent = RELAY_PROVIDER_META[cur].panelTitle;
+        }
+      }
+
+      window.setMpTurnProvider = function (provider, silent = false) {
+        const valid = ["cloudflare", "express", "metered"].includes(provider)
+          ? provider
+          : "cloudflare";
+        mpState.turnProvider = valid;
+        try {
+          localStorage.setItem("dota3d_turn_provider_v77", valid);
+        } catch (e) {}
+        updateRelayProviderButtonsUI();
+        if (!silent && mpState.role === "solo") {
+          setMpConnStatus("ready", RELAY_PROVIDER_META[valid].readyText);
+        }
+        if (valid === "cloudflare") {
+          ensureCloudflareIceServers(true);
+        }
+      };
+
+      async function ensureCloudflareIceServers(silent = false) {
+        const now = Date.now();
+        if (
+          Array.isArray(mpState.cfIceServers) &&
+          mpState.cfIceServers.length > 0 &&
+          now < mpState.cfIceExpiresAt
+        ) {
+          return mpState.cfIceServers;
+        }
+        try {
+          const cachedRaw = localStorage.getItem("dota3d_cf_ice_cache_v77");
+          if (cachedRaw) {
+            const cached = JSON.parse(cachedRaw);
+            if (
+              cached &&
+              Array.isArray(cached.iceServers) &&
+              cached.iceServers.length > 0 &&
+              now < (cached.expiresAt || 0)
+            ) {
+              mpState.cfIceServers = cached.iceServers;
+              mpState.cfIceExpiresAt = cached.expiresAt;
+              return mpState.cfIceServers;
+            }
+          }
+        } catch (e) {}
+
+        if (!silent) {
+          setMpConnStatus(
+            "connecting",
+            "Minting short-lived Cloudflare Anycast TURN credentials...",
+          );
+        }
+        try {
+          const ctrl =
+            typeof AbortController !== "undefined"
+              ? new AbortController()
+              : null;
+          const timer = ctrl ? setTimeout(() => ctrl.abort(), 4500) : null;
+          const endpoint = `https://rtc.live.cloudflare.com/v1/turn/keys/${CF_TURN_CONFIG.tokenId}/credentials/generate-ice-servers`;
+          const res = await fetch(endpoint, {
+            method: "POST",
+            headers: {
+              Authorization: `Bearer ${CF_TURN_CONFIG.apiToken}`,
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({ ttl: CF_TURN_CONFIG.ttl }),
+            signal: ctrl ? ctrl.signal : undefined,
+          });
+          if (timer) clearTimeout(timer);
+          if (!res.ok) throw new Error(`HTTP ${res.status}`);
+          const data = await res.json();
+          if (
+            data &&
+            Array.isArray(data.iceServers) &&
+            data.iceServers.length > 0
+          ) {
+            const expiresAt = Date.now() + 12 * 60 * 60 * 1000; // Cache 12h (24h TTL)
+            mpState.cfIceServers = data.iceServers;
+            mpState.cfIceExpiresAt = expiresAt;
+            try {
+              localStorage.setItem(
+                "dota3d_cf_ice_cache_v77",
+                JSON.stringify({
+                  iceServers: data.iceServers,
+                  expiresAt,
+                }),
+              );
+            } catch (e) {}
+            if (!silent && mpState.role === "solo") {
+              setMpConnStatus(
+                "ready",
+                "Cloudflare Anycast TURN Credentials Ready (1,000 GB/mo)!",
+              );
+            }
+            return data.iceServers;
+          }
+        } catch (err) {
+          if (!silent) {
+            setMpConnStatus(
+              "connecting",
+              "Cloudflare API unreachable from browser — using ExpressTURN backup...",
+            );
+          }
+        }
+        return null;
+      }
+
       window.saveMpTurnPrefs = function () {
         try {
           const cUrl = document.getElementById("mp-custom-turn-url");
@@ -6220,7 +6425,10 @@
       window.resetMpTurnPrefs = function () {
         try {
           localStorage.removeItem("dota3d_turn_prefs_v71");
+          localStorage.removeItem("dota3d_cf_ice_cache_v77");
         } catch (e) {}
+        mpState.cfIceServers = null;
+        mpState.cfIceExpiresAt = 0;
         const cUrl = document.getElementById("mp-custom-turn-url");
         const cUser = document.getElementById("mp-custom-turn-user");
         const cPass = document.getElementById("mp-custom-turn-pass");
@@ -6229,56 +6437,104 @@
         if (cUser) cUser.value = "";
         if (cPass) cPass.value = "";
         if (fRelay) fRelay.checked = false;
-        setMpConnStatus(
-          "ready",
-          "Relay Reset • Direct STUN P2P + ExpressTURN UDP Defaults Restored",
-        );
+        window.setMpTurnProvider("cloudflare", false);
       };
 
       (function restoreMpTurnPrefs() {
         try {
+          const savedProv = localStorage.getItem("dota3d_turn_provider_v77");
+          if (
+            savedProv &&
+            ["cloudflare", "express", "metered"].includes(savedProv)
+          ) {
+            mpState.turnProvider = savedProv;
+          }
+          updateRelayProviderButtonsUI();
           const raw = localStorage.getItem("dota3d_turn_prefs_v71");
-          if (!raw) return;
-          const prefs = JSON.parse(raw);
-          const cUrl = document.getElementById("mp-custom-turn-url");
-          const cUser = document.getElementById("mp-custom-turn-user");
-          const cPass = document.getElementById("mp-custom-turn-pass");
-          if (cUrl && prefs.url) cUrl.value = prefs.url;
-          if (cUser && prefs.user) cUser.value = prefs.user;
-          if (cPass && prefs.pass) cPass.value = prefs.pass;
+          if (raw) {
+            const prefs = JSON.parse(raw);
+            const cUrl = document.getElementById("mp-custom-turn-url");
+            const cUser = document.getElementById("mp-custom-turn-user");
+            const cPass = document.getElementById("mp-custom-turn-pass");
+            if (cUrl && prefs.url) cUrl.value = prefs.url;
+            if (cUser && prefs.user) cUser.value = prefs.user;
+            if (cPass && prefs.pass) cPass.value = prefs.pass;
+          }
         } catch (e) {}
       })();
+
+      function getExpressTurnEntries() {
+        return {
+          urls: [
+            "turn:free.expressturn.com:3478?transport=udp",
+            "turn:free.expressturn.com:3478?transport=tcp",
+            "turn:free.expressturn.com:443?transport=udp",
+            "turn:free.expressturn.com:443?transport=tcp",
+          ],
+          username: "000000002110078584",
+          credential: "Vlg3xY13QbYMFkldofvLpO2CCrw=",
+        };
+      }
+
+      function getMeteredTurnEntries() {
+        return [
+          {
+            urls: "turn:global.relay.metered.ca:80",
+            username: "411fc0a2ffc61a5ad7d64b54",
+            credential: "pPjyQknn9vnGzG1d",
+          },
+          {
+            urls: "turn:global.relay.metered.ca:443",
+            username: "411fc0a2ffc61a5ad7d64b54",
+            credential: "pPjyQknn9vnGzG1d",
+          },
+          {
+            urls: "turn:global.relay.metered.ca:80?transport=tcp",
+            username: "411fc0a2ffc61a5ad7d64b54",
+            credential: "pPjyQknn9vnGzG1d",
+          },
+          {
+            urls: "turns:global.relay.metered.ca:443?transport=tcp",
+            username: "411fc0a2ffc61a5ad7d64b54",
+            credential: "pPjyQknn9vnGzG1d",
+          },
+        ];
+      }
 
       function getMpPeerOptions(useBackupRelay = false) {
         const fRelay = document.getElementById("mp-force-relay");
         const forceRelay = Boolean(fRelay && fRelay.checked);
-        // Include ExpressTURN on both UDP & TCP (ports 3478 & 443) so ICE picks UDP when open or TCP/443 when UDP is firewalled
+        const prov = mpState.turnProvider || "cloudflare";
         const iceServers = [
-          { urls: "stun:stun.expressturn.com:3478" },
           { urls: "stun:stun.cloudflare.com:3478" },
           { urls: "stun:stun.l.google.com:19302" },
-          {
-            urls: [
-              "turn:free.expressturn.com:3478?transport=udp",
-              "turn:free.expressturn.com:3478?transport=tcp",
-              "turn:free.expressturn.com:443?transport=udp",
-              "turn:free.expressturn.com:443?transport=tcp",
-            ],
-            username: "000000002110078584",
-            credential: "Vlg3xY13QbYMFkldofvLpO2CCrw=",
-          },
+          { urls: "stun:stun.expressturn.com:3478" },
         ];
-        if (useBackupRelay) {
-          iceServers.push({
-            urls: [
-              "turn:global.relay.metered.ca:80",
-              "turn:global.relay.metered.ca:443",
-              "turns:global.relay.metered.ca:443?transport=tcp",
-            ],
-            username: "411fc0a2ffc61a5ad7d64b54",
-            credential: "pPjyQknn9vnGzG1d",
-          });
+
+        if (prov === "cloudflare") {
+          if (
+            Array.isArray(mpState.cfIceServers) &&
+            mpState.cfIceServers.length > 0
+          ) {
+            mpState.cfIceServers.forEach((srv) => iceServers.push(srv));
+          } else {
+            iceServers.push(getExpressTurnEntries());
+          }
+          if (useBackupRelay) {
+            iceServers.push(getExpressTurnEntries());
+          }
+        } else if (prov === "express") {
+          iceServers.push(getExpressTurnEntries());
+          if (useBackupRelay) {
+            getMeteredTurnEntries().forEach((srv) => iceServers.push(srv));
+          }
+        } else {
+          getMeteredTurnEntries().forEach((srv) => iceServers.push(srv));
+          if (useBackupRelay) {
+            iceServers.push(getExpressTurnEntries());
+          }
         }
+
         const cUrl = document.getElementById("mp-custom-turn-url");
         const cUser = document.getElementById("mp-custom-turn-user");
         const cPass = document.getElementById("mp-custom-turn-pass");
@@ -6308,11 +6564,16 @@
         };
       }
 
-      window.testTurnRelayAllocation = function () {
+      window.testTurnRelayAllocation = async function () {
+        const prov = mpState.turnProvider || "cloudflare";
+        const provName = getRelayProviderLabel(prov);
+        if (prov === "cloudflare") {
+          await ensureCloudflareIceServers(false);
+        }
         const opts = getMpPeerOptions(false);
         setMpConnStatus(
           "connecting",
-          "Testing ExpressTURN (UDP + TCP 3478/443) candidate allocation...",
+          `Testing ${provName} candidate allocation...`,
         );
         try {
           const pc = new RTCPeerConnection({
@@ -6330,12 +6591,12 @@
             if (ok)
               setMpConnStatus(
                 "ready",
-                `ExpressTURN Relay Verified (${detail}) • Ready for Online P2P!`,
+                `${provName} Verified (${detail}) • Ready for Online P2P!`,
               );
             else
               setMpConnStatus(
                 "error",
-                `ExpressTURN Probe Failed (${detail}) • Check internet or custom TURN`,
+                `${provName} Probe Failed (${detail}) • Try switching Relay Server`,
               );
           };
           pc.onicecandidate = (ev) => {
@@ -6507,11 +6768,15 @@
                 mpState.iceModeLabel = pairType;
                 const hudPillTxt =
                   document.getElementById("mp-hud-status-text");
+                const pTag = (
+                  RELAY_PROVIDER_META[mpState.turnProvider] ||
+                  RELAY_PROVIDER_META.cloudflare
+                ).shortTag;
                 if (hudPillTxt && mpState.active) {
                   hudPillTxt.textContent =
                     roleLabel === "host"
-                      ? `MP HOST • ${mpState.roomCode} • ${pairType}`
-                      : `MP GUEST • ${mpState.roomCode} • ${pairType}`;
+                      ? `MP HOST • ${mpState.roomCode} • ${pairType} (${pTag})`
+                      : `MP GUEST • ${mpState.roomCode} • ${pairType} (${pTag})`;
                 }
                 if (roleLabel === "host") {
                   setMpConnStatus(
@@ -6530,7 +6795,7 @@
         });
       }
 
-      function setupPeerHost(code, attempt = 1) {
+      async function setupPeerHost(code, attempt = 1) {
         if (window.location.protocol === "content:") {
           setMpConnStatus(
             "error",
@@ -6553,9 +6818,13 @@
           }
           mpState.conns.clear();
           mpState.fastDataChannels.clear();
+          const provName = getRelayProviderLabel();
+          if (mpState.turnProvider === "cloudflare") {
+            await ensureCloudflareIceServers(false);
+          }
           setMpConnStatus(
             "connecting",
-            `Registering Room [${code}] on Signaling + ExpressTURN${attempt > 1 ? ` (Backup Relay ${attempt}/2)` : ""}...`,
+            `Registering Room [${code}] on Signaling + ${provName}${attempt > 1 ? ` (Backup Relay ${attempt}/2)` : ""}...`,
           );
           const peer = new Peer(
             `dota3d-sov-v68-${code}`,
@@ -6570,8 +6839,8 @@
               window.location.hostname,
             );
             const hostNote = isLocalHost
-              ? `Room [${code}] LIVE Online (ExpressTURN Ready)! Share HTML + Code ${code}`
-              : `Room [${code}] LIVE Online (ExpressTURN Ready)! Friends join with Code ${code}`;
+              ? `Room [${code}] LIVE Online (${provName} Ready)! Share HTML + Code ${code}`
+              : `Room [${code}] LIVE Online (${provName} Ready)! Friends join with Code ${code}`;
             setMpConnStatus("ready", hostNote);
           });
 
@@ -6710,7 +6979,7 @@
         }
       }
 
-      function setupPeerGuest(code, attempt = 1) {
+      async function setupPeerGuest(code, attempt = 1) {
         if (window.location.protocol === "content:") {
           setMpConnStatus(
             "error",
@@ -6733,9 +7002,13 @@
           }
           mpState.conns.clear();
           mpState.fastDataChannels.clear();
+          const provName = getRelayProviderLabel();
+          if (mpState.turnProvider === "cloudflare") {
+            await ensureCloudflareIceServers(false);
+          }
           setMpConnStatus(
             "connecting",
-            `Connecting to Room [${code}] via ExpressTURN (Attempt ${attempt}/3)...`,
+            `Connecting to Room [${code}] via ${provName} (Attempt ${attempt}/3)...`,
           );
           const peer = new Peer(getMpPeerOptions(attempt >= 2));
           mpState.peer = peer;
@@ -6760,7 +7033,7 @@
             } else {
               setMpConnStatus(
                 "error",
-                `Could not reach Room [${code}] (${reason}). Ensure both players use v76.`,
+                `Could not reach Room [${code}] (${reason}). Ensure both players use v77.`,
               );
             }
           };
