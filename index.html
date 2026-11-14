@@ -10,7 +10,7 @@
     <meta name="mobile-web-app-capable" content="yes" />
     <title>
       Defense of the Ancients 3D • Grandmaster Sovereign Multiplayer Edition
-      (v73)
+      (v74)
     </title>
     <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
     <script src="https://cdn.tailwindcss.com"></script>
@@ -1251,10 +1251,10 @@
             class="intro-badge-float inline-flex items-center gap-1.5 px-2.5 sm:px-3.5 py-0.5 rounded-full bg-amber-500/15 border border-amber-400/50 text-amber-300 text-[9px] sm:text-[11px] font-cinzel font-bold tracking-wider sm:tracking-widest uppercase shadow-[0_0_20px_rgba(250,204,21,0.22)] truncate"
           >
             <i class="fa-solid fa-crown shrink-0"></i>
-            <span class="sm:hidden">DOTA 3D • MULTIPLAYER EDITION (V72)</span>
+            <span class="sm:hidden">DOTA 3D • MULTIPLAYER EDITION (V74)</span>
             <span class="hidden sm:inline"
               >Defense of the Ancients 3D • Grandmaster Sovereign Multiplayer
-              Edition (v73)</span
+              Edition (v74)</span
             >
           </div>
           <button
@@ -5670,7 +5670,7 @@
         bc: null,
         peer: null,
         conns: new Map(),
-        fastConns: new Map(),
+        fastDataChannels: new Map(),
         players: new Map(),
         discoveredRooms: new Map(),
         syncAccum: 0,
@@ -5771,6 +5771,21 @@
         return 140;
       }
 
+      function mpSendNativeFastDc(dc, packet, estBytes = 0) {
+        if (!dc || dc.readyState !== "open") return false;
+        if (dc.bufferedAmount > 16384) return true; // Drop delta cleanly under congestion
+        try {
+          const raw = JSON.stringify(packet);
+          if (raw.length > 12000) return false; // Fall back to reliable chunked channel for huge packets
+          mpState.bytesSent =
+            (mpState.bytesSent || 0) + (estBytes || raw.length);
+          dc.send(raw);
+          return true;
+        } catch (e) {
+          return false;
+        }
+      }
+
       function mpSendOverConn(
         conn,
         packet,
@@ -5787,7 +5802,6 @@
           if (dc && dc.bufferedAmount > 16384) return;
         }
         try {
-          // Only serialize to string when packet could exceed 11 KB chunk limit (full keyframes / lobby sync)
           const mayNeedChunk =
             packet &&
             ((packet.type === "WORLD_SNAP" &&
@@ -5859,9 +5873,11 @@
           const raw = mayNeedChunk ? JSON.stringify(packet) : null;
           const est = raw ? raw.length : estimatePacketBytes(packet);
           mpState.conns.forEach((conn, key) => {
-            const fastConn = useFastChannel ? mpState.fastConns.get(key) : null;
-            const targetConn = fastConn && fastConn.open ? fastConn : conn;
-            mpSendOverConn(targetConn, packet, raw, est);
+            if (useFastChannel) {
+              const fastDc = mpState.fastDataChannels.get(key);
+              if (fastDc && mpSendNativeFastDc(fastDc, packet, est)) return;
+            }
+            mpSendOverConn(conn, packet, raw, est);
           });
         }
       }
@@ -6212,23 +6228,36 @@
         } catch (e) {}
       })();
 
-      function getMpPeerOptions(allowTcpTurn = false) {
+      function getMpPeerOptions(useBackupRelay = false) {
         const fRelay = document.getElementById("mp-force-relay");
         const forceRelay = Boolean(fRelay && fRelay.checked);
-        const turnUrls = ["turn:free.expressturn.com:3478?transport=udp"];
-        if (allowTcpTurn || forceRelay) {
-          turnUrls.push("turn:free.expressturn.com:3478?transport=tcp");
-        }
+        // Include ExpressTURN on both UDP & TCP (ports 3478 & 443) so ICE picks UDP when open or TCP/443 when UDP is firewalled
         const iceServers = [
           { urls: "stun:stun.expressturn.com:3478" },
           { urls: "stun:stun.cloudflare.com:3478" },
           { urls: "stun:stun.l.google.com:19302" },
           {
-            urls: turnUrls,
+            urls: [
+              "turn:free.expressturn.com:3478?transport=udp",
+              "turn:free.expressturn.com:3478?transport=tcp",
+              "turn:free.expressturn.com:443?transport=udp",
+              "turn:free.expressturn.com:443?transport=tcp",
+            ],
             username: "000000002110078584",
             credential: "Vlg3xY13QbYMFkldofvLpO2CCrw=",
           },
         ];
+        if (useBackupRelay) {
+          iceServers.push({
+            urls: [
+              "turn:global.relay.metered.ca:80",
+              "turn:global.relay.metered.ca:443",
+              "turns:global.relay.metered.ca:443?transport=tcp",
+            ],
+            username: "411fc0a2ffc61a5ad7d64b54",
+            credential: "pPjyQknn9vnGzG1d",
+          });
+        }
         const cUrl = document.getElementById("mp-custom-turn-url");
         const cUser = document.getElementById("mp-custom-turn-user");
         const cPass = document.getElementById("mp-custom-turn-pass");
@@ -6243,7 +6272,7 @@
         }
         const rtcConfig = {
           iceServers,
-          iceCandidatePoolSize: 2,
+          iceCandidatePoolSize: 4,
           bundlePolicy: "max-bundle",
           rtcpMuxPolicy: "require",
         };
@@ -6259,10 +6288,10 @@
       }
 
       window.testTurnRelayAllocation = function () {
-        const opts = getMpPeerOptions(true);
+        const opts = getMpPeerOptions(false);
         setMpConnStatus(
           "connecting",
-          "Testing ExpressTURN Relay candidate allocation...",
+          "Testing ExpressTURN (UDP + TCP 3478/443) candidate allocation...",
         );
         try {
           const pc = new RTCPeerConnection({
@@ -6285,7 +6314,7 @@
             else
               setMpConnStatus(
                 "error",
-                `TURN Probe Failed (${detail}) • Check internet/firewall or custom TURN`,
+                `ExpressTURN Probe Failed (${detail}) • Check internet or custom TURN`,
               );
           };
           pc.onicecandidate = (ev) => {
@@ -6293,7 +6322,7 @@
               const c = ev.candidate.candidate;
               if (c.includes("typ relay")) {
                 gotRelay = true;
-                const proto = c.includes(" tcp ") ? "TCP/TLS" : "UDP";
+                const proto = c.includes(" tcp ") ? "TCP" : "UDP";
                 finish(true, `${proto} Relay Allocated`);
               }
             } else if (!ev.candidate && !gotRelay) {
@@ -6315,33 +6344,96 @@
         }
       };
 
+      function attachFastDataChannelOnHost(conn) {
+        const pc = conn && conn.peerConnection;
+        if (!pc || pc._fastDcHooked) return;
+        pc._fastDcHooked = true;
+        pc.addEventListener("datachannel", (ev) => {
+          const dc = ev.channel;
+          if (dc && dc.label === "fast-state") {
+            const bindDc = () => {
+              mpState.fastDataChannels.set(conn.peer, dc);
+            };
+            if (dc.readyState === "open") bindDc();
+            else dc.addEventListener("open", bindDc);
+            dc.addEventListener("message", (mev) => {
+              try {
+                const data =
+                  typeof mev.data === "string"
+                    ? JSON.parse(mev.data)
+                    : mev.data;
+                if (data && data.senderId) conn._playerId = data.senderId;
+                mpState.bytesRecv =
+                  (mpState.bytesRecv || 0) +
+                  (typeof mev.data === "string" ? mev.data.length : 96);
+                mpHandlePacket(data);
+              } catch (e) {}
+            });
+            dc.addEventListener("close", () => {
+              mpState.fastDataChannels.delete(conn.peer);
+            });
+          }
+        });
+      }
+
+      function createFastDataChannelOnGuest(conn) {
+        const pc = conn && conn.peerConnection;
+        if (!pc || typeof pc.createDataChannel !== "function") return;
+        try {
+          const dc = pc.createDataChannel("fast-state", {
+            ordered: false,
+            maxRetransmits: 0,
+          });
+          dc.addEventListener("open", () => {
+            mpState.fastDataChannels.set("host", dc);
+          });
+          dc.addEventListener("message", (mev) => {
+            try {
+              const data =
+                typeof mev.data === "string" ? JSON.parse(mev.data) : mev.data;
+              mpState.bytesRecv =
+                (mpState.bytesRecv || 0) +
+                (typeof mev.data === "string" ? mev.data.length : 120);
+              mpHandlePacket(data);
+            } catch (e) {}
+          });
+          dc.addEventListener("close", () => {
+            mpState.fastDataChannels.delete("host");
+          });
+        } catch (e) {}
+      }
+
       function attachIceDiagnostics(conn, roleLabel, code) {
         const pc = conn && conn.peerConnection;
         if (!pc || pc._diagAttached) return;
         pc._diagAttached = true;
         pc._sawRelay = false;
+        pc._sawSrflx = false;
 
         pc.addEventListener("icecandidate", (ev) => {
-          if (
-            ev.candidate &&
-            ev.candidate.candidate &&
-            ev.candidate.candidate.includes("typ relay")
-          ) {
-            pc._sawRelay = true;
+          if (ev.candidate && ev.candidate.candidate) {
+            const c = ev.candidate.candidate;
+            if (c.includes("typ relay")) pc._sawRelay = true;
+            if (c.includes("typ srflx")) pc._sawSrflx = true;
           }
         });
 
         pc.addEventListener("iceconnectionstatechange", () => {
           const st = pc.iceConnectionState;
           if (st === "checking" && !conn.open) {
+            const candTag = pc._sawRelay
+              ? "TURN Relay Ready"
+              : pc._sawSrflx
+                ? "STUN Ready"
+                : "Gathering Candidates";
             setMpConnStatus(
               "connecting",
-              `ICE Checking (${pc._sawRelay ? "TURN Relay Ready" : "STUN/TURN"}) for Room [${code}]...`,
+              `ICE Checking (${candTag}) for Room [${code}]...`,
             );
           } else if (st === "failed") {
             setMpConnStatus(
               "connecting",
-              "ICE Path Stalled — Restarting ICE via TURN Relay...",
+              "ICE Path Stalled — Restarting ICE...",
             );
             try {
               if (typeof pc.restartIce === "function") pc.restartIce();
@@ -6411,10 +6503,10 @@
             } catch (e) {}
           }
           mpState.conns.clear();
-          mpState.fastConns.clear();
+          mpState.fastDataChannels.clear();
           setMpConnStatus(
             "connecting",
-            `Registering Room [${code}] on Signaling + ExpressTURN${attempt > 1 ? ` (Retry ${attempt}/3)` : ""}...`,
+            `Registering Room [${code}] on Signaling + ExpressTURN${attempt > 1 ? ` (Backup Relay ${attempt}/2)` : ""}...`,
           );
           const peer = new Peer(
             `dota3d-sov-v68-${code}`,
@@ -6429,31 +6521,14 @@
               window.location.hostname,
             );
             const hostNote = isLocalHost
-              ? `Room [${code}] LIVE Online (ExpressTURN UDP Ready)! Share HTML + Code ${code}`
-              : `Room [${code}] LIVE Online (ExpressTURN UDP Ready)! Friends join with Code ${code}`;
+              ? `Room [${code}] LIVE Online (ExpressTURN Ready)! Share HTML + Code ${code}`
+              : `Room [${code}] LIVE Online (ExpressTURN Ready)! Friends join with Code ${code}`;
             setMpConnStatus("ready", hostNote);
           });
 
           peer.on("connection", (conn) => {
-            if (conn.label === "fast-state") {
-              const bindFast = () => {
-                mpState.fastConns.set(conn.peer, conn);
-              };
-              if (conn.open) bindFast();
-              else conn.on("open", bindFast);
-              conn.on("data", (data) => {
-                if (data && data.senderId) conn._playerId = data.senderId;
-                mpState.bytesRecv =
-                  (mpState.bytesRecv || 0) + estimatePacketBytes(data);
-                mpHandlePacket(data);
-              });
-              conn.on("close", () => {
-                mpState.fastConns.delete(conn.peer);
-              });
-              return;
-            }
-
             attachIceDiagnostics(conn, "host", code);
+            attachFastDataChannelOnHost(conn);
             const bindConn = () => {
               mpState.conns.set(conn.peer, conn);
               setMpConnStatus(
@@ -6499,7 +6574,7 @@
             });
             conn.on("close", () => {
               mpState.conns.delete(conn.peer);
-              mpState.fastConns.delete(conn.peer);
+              mpState.fastDataChannels.delete(conn.peer);
               if (conn._playerId) {
                 mpState.players.delete(conn._playerId);
                 mpState.peerPings.delete(conn._playerId);
@@ -6608,10 +6683,10 @@
             } catch (e) {}
           }
           mpState.conns.clear();
-          mpState.fastConns.clear();
+          mpState.fastDataChannels.clear();
           setMpConnStatus(
             "connecting",
-            `Connecting via ExpressTURN UDP for [${code}] (Attempt ${attempt}/3)...`,
+            `Connecting to Room [${code}] via ExpressTURN (Attempt ${attempt}/3)...`,
           );
           const peer = new Peer(getMpPeerOptions(attempt >= 2));
           mpState.peer = peer;
@@ -6630,13 +6705,13 @@
             if (attempt < 3) {
               setMpConnStatus(
                 "connecting",
-                `${reason} — retrying with TCP fallback (${attempt + 1}/3)...`,
+                `${reason} — retrying with backup relay (${attempt + 1}/3)...`,
               );
               setTimeout(() => setupPeerGuest(code, attempt + 1), 1800);
             } else {
               setMpConnStatus(
                 "error",
-                `Could not reach Room [${code}] (${reason}). Check Host is online & code matches.`,
+                `Could not reach Room [${code}] (${reason}). Ensure both players use v74.`,
               );
             }
           };
@@ -6644,45 +6719,22 @@
           peer.on("open", () => {
             setMpConnStatus(
               "connecting",
-              `Negotiating Dual-Channel WebRTC with [${code}]...`,
+              `Negotiating WebRTC & TURN Relay with [${code}]...`,
             );
-            const hostPeerId = `dota3d-sov-v68-${code}`;
-            // Channel 1: Ordered Reliable channel for commands, lobby, and keyframes
-            const conn = peer.connect(hostPeerId, {
+            const conn = peer.connect(`dota3d-sov-v68-${code}`, {
               reliable: true,
-              label: "reliable-ctrl",
               serialization: "json",
             });
             mpState.conns.set("host", conn);
             attachIceDiagnostics(conn, "guest", code);
 
-            // Channel 2: Unordered Unreliable channel for delta snapshots & zero-stall ping
-            const openFastChannel = () => {
-              try {
-                const fastConn = peer.connect(hostPeerId, {
-                  reliable: false,
-                  label: "fast-state",
-                  serialization: "json",
-                });
-                mpState.fastConns.set("host", fastConn);
-                fastConn.on("data", (data) => {
-                  mpState.bytesRecv =
-                    (mpState.bytesRecv || 0) + estimatePacketBytes(data);
-                  mpHandlePacket(data);
-                });
-                fastConn.on("close", () => {
-                  mpState.fastConns.delete("host");
-                });
-              } catch (e) {}
-            };
-
             conn.on("open", () => {
               connected = true;
-              openFastChannel();
+              createFastDataChannelOnGuest(conn);
               const via = mpState.iceModeLabel || "STUN/TURN";
               setMpConnStatus(
                 "connected",
-                `Connected to Host Room [${code}] (${via} • Dual-Channel)!`,
+                `Connected to Host Room [${code}] (${via})! Waiting for Host...`,
               );
               mpSendOverConn(conn, {
                 type: "JOIN_REQ",
@@ -6701,7 +6753,7 @@
               mpHandlePacket(data);
             });
             conn.on("close", () => {
-              mpState.fastConns.delete("host");
+              mpState.fastDataChannels.delete("host");
               if (mpState.role === "guest") {
                 setMpConnStatus("error", "Disconnected from Host Room");
               }
@@ -6710,8 +6762,7 @@
               scheduleRetry("DataChannel error");
             });
 
-            // Fast 8.5s UDP handshake on attempt 1; 14s on retry attempts with TCP fallback
-            const handshakeTimeout = attempt === 1 ? 8500 : 14000;
+            const handshakeTimeout = attempt === 1 ? 9000 : 14000;
             setTimeout(() => {
               if (
                 !connected &&
@@ -6850,7 +6901,7 @@
         mpState.roomCode = "";
         mpState.players.clear();
         mpState.conns.clear();
-        mpState.fastConns.clear();
+        mpState.fastDataChannels.clear();
         mpState.pingMs = null;
         mpState.peerPings.clear();
         if (mpState.peer) {
@@ -7288,27 +7339,20 @@
             rtt: msg.lastRtt ?? null,
           };
           if (mpState.role === "guest") {
-            const fastHost = mpState.fastConns.get("host");
-            const relHost = mpState.conns.get("host");
-            mpSendOverConn(
-              fastHost && fastHost.open ? fastHost : relHost,
-              reply,
-              null,
-              96,
-            );
+            const fastDc = mpState.fastDataChannels.get("host");
+            if (!fastDc || !mpSendNativeFastDc(fastDc, reply, 96)) {
+              mpSendOverConn(mpState.conns.get("host"), reply, null, 96);
+            }
           } else if (mpState.role === "host") {
             if (typeof msg.lastRtt === "number")
               mpState.peerPings.set(msg.senderId, msg.lastRtt);
             let replied = false;
             mpState.conns.forEach((conn, peerKey) => {
               if (conn._playerId === msg.senderId) {
-                const fConn = mpState.fastConns.get(peerKey);
-                mpSendOverConn(
-                  fConn && fConn.open ? fConn : conn,
-                  reply,
-                  null,
-                  96,
-                );
+                const fastDc = mpState.fastDataChannels.get(peerKey);
+                if (!fastDc || !mpSendNativeFastDc(fastDc, reply, 96)) {
+                  mpSendOverConn(conn, reply, null, 96);
+                }
                 replied = true;
               }
             });
@@ -8619,10 +8663,11 @@
             // Check DataChannel buffer congestion BEFORE mutating lastEntitySig so deltas are never silently lost
             let congested = false;
             mpState.conns.forEach((conn, key) => {
-              const fConn = mpState.fastConns.get(key);
-              const activeConn = fConn && fConn.open ? fConn : conn;
+              const fastDc = mpState.fastDataChannels.get(key);
               const dc =
-                activeConn && (activeConn.dataChannel || activeConn._dc);
+                fastDc && fastDc.readyState === "open"
+                  ? fastDc
+                  : conn.dataChannel || conn._dc;
               if (dc && dc.bufferedAmount > 16384) congested = true;
             });
             if (!congested) {
