@@ -10,7 +10,7 @@
     <meta name="mobile-web-app-capable" content="yes" />
     <title>
       Defense of the Ancients 3D • Grandmaster Sovereign Multiplayer Edition
-      (v67)
+      (v68)
     </title>
     <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
     <script src="https://cdn.tailwindcss.com"></script>
@@ -1251,10 +1251,10 @@
             class="intro-badge-float inline-flex items-center gap-1.5 px-2.5 sm:px-3.5 py-0.5 rounded-full bg-amber-500/15 border border-amber-400/50 text-amber-300 text-[9px] sm:text-[11px] font-cinzel font-bold tracking-wider sm:tracking-widest uppercase shadow-[0_0_20px_rgba(250,204,21,0.22)] truncate"
           >
             <i class="fa-solid fa-crown shrink-0"></i>
-            <span class="sm:hidden">DOTA 3D • MULTIPLAYER EDITION (V67)</span>
+            <span class="sm:hidden">DOTA 3D • MULTIPLAYER EDITION (V68)</span>
             <span class="hidden sm:inline"
               >Defense of the Ancients 3D • Grandmaster Sovereign Multiplayer
-              Edition (v67)</span
+              Edition (v68)</span
             >
           </div>
           <button
@@ -5708,25 +5708,6 @@
       function mpSendOverConn(conn, packet, preSerializedRaw = null) {
         if (!conn || !conn.open) return;
         try {
-          const dc = conn.dataChannel || conn._dc;
-          if (
-            packet.type === "WORLD_SNAP" &&
-            !(packet.snap && packet.snap.kf)
-          ) {
-            const buf =
-              dc && typeof dc.bufferedAmount === "number"
-                ? dc.bufferedAmount
-                : 0;
-            if (buf > 8192) {
-              conn._congestedSkip = true;
-              return;
-            }
-            if (conn._congestedSkip && buf > 2048) {
-              conn._congestedSkip = false;
-              return;
-            }
-            conn._congestedSkip = false;
-          }
           const raw =
             preSerializedRaw !== null
               ? preSerializedRaw
@@ -6153,7 +6134,7 @@
             "connecting",
             `Registering Room [${code}] on Global Signaling + Metered TURN Relay...`,
           );
-          const peer = new Peer(`dota3d-sov-v67-${code}`, getMpPeerOptions());
+          const peer = new Peer(`dota3d-sov-v68-${code}`, getMpPeerOptions());
           mpState.peer = peer;
 
           peer.on("open", () => {
@@ -6311,10 +6292,9 @@
               "connecting",
               `Negotiating P2P / Metered TURN Relay with Room [${code}]...`,
             );
-            const conn = peer.connect(`dota3d-sov-v67-${code}`, {
-              reliable: false,
+            const conn = peer.connect(`dota3d-sov-v68-${code}`, {
+              reliable: true,
               serialization: "json",
-              _dcInit: { ordered: false, maxRetransmits: 0 },
             });
             mpState.conns.set("host", conn);
 
@@ -6963,7 +6943,7 @@
         return {
           seq: mpState.snapSeq,
           kf: isKeyframe ? 1 : 0,
-          t: Math.round(matchTime * 10) / 10,
+          t: Math.round(matchTime * 100) / 100,
           rk: radiantKills,
           dk: direKills,
           et: escalationTier,
@@ -6989,17 +6969,11 @@
           mpState.lastRecvSeq = snap.seq;
         }
         const nowMs = performance.now();
-        const snapDt =
-          mpState.lastSnapApplyTime > 0
-            ? THREE.MathUtils.clamp(
-                (nowMs - mpState.lastSnapApplyTime) / 1000,
-                0.025,
-                0.25,
-              )
-            : 0.065;
         mpState.lastSnapApplyTime = nowMs;
 
-        matchTime = snap.t;
+        if (typeof snap.t === "number" && Math.abs(snap.t - matchTime) > 0.3) {
+          matchTime = snap.t;
+        }
         radiantKills = snap.rk;
         direKills = snap.dk;
         if (snap.et && snap.et !== escalationTier) {
@@ -7017,13 +6991,6 @@
           const dx = nx - prevNetX;
           const dz = nz - prevNetZ;
           u._netMoving = Math.hypot(dx, dz) > 0.03;
-          u._netVx = u._netMoving
-            ? THREE.MathUtils.clamp(dx / snapDt, -26, 26)
-            : 0;
-          u._netVz = u._netMoving
-            ? THREE.MathUtils.clamp(dz / snapDt, -26, 26)
-            : 0;
-          u._netExtrap = 0;
           u._netX = nx;
           u._netZ = nz;
           u._netYaw = nyaw;
@@ -7031,11 +6998,17 @@
         };
 
         const applyFlagsAndVis = (u, flags, wasDead, nx, nz, nyaw) => {
+          const prevFlags = u._prevNetFlags || 0;
+          u._prevNetFlags = flags;
           u.dead = !!(flags & 1);
-          u.stunTimer = flags & 2 ? 0.2 : 0;
-          u.slowTimer = flags & 4 ? 0.2 : 0;
-          u.swingAnim = flags & 8 ? 0.25 : 0;
-          u.castAnim = flags & 16 ? 0.25 : 0;
+          u.stunTimer = flags & 2 ? Math.max(u.stunTimer, 0.14) : 0;
+          u.slowTimer = flags & 4 ? Math.max(u.slowTimer, 0.14) : 0;
+          if (flags & 8 && !(prevFlags & 8) && u.swingAnim <= 0.05) {
+            u.swingAnim = 0.34;
+          }
+          if (flags & 16 && !(prevFlags & 16) && u.castAnim <= 0.05) {
+            u.castAnim = 0.45;
+          }
           u.mesh.visible = !u.dead;
           if (u.bar && u.bar.el)
             u.bar.el.style.display = u.dead ? "none" : "flex";
@@ -7049,8 +7022,6 @@
             u.mesh.position.z = nz;
             u.mesh.position.y = getTerrainHeightAt(nx, nz);
             u.mesh.rotation.y = nyaw;
-            u._netVx = 0;
-            u._netVz = 0;
             if (u.isPlayer) {
               u.targetPos = null;
               u.targetUnit = null;
@@ -7472,19 +7443,43 @@
             }
           }
 
-          // Smooth server reconciliation for Guest hero without rubber-banding
-          if (playerHero._netHasPos) {
-            const reconcileRate = localHeroMoving ? 3.2 : 11.0;
-            const alpha = Math.min(1, dt * reconcileRate);
-            playerHero.mesh.position.x +=
-              (playerHero._netX - playerHero.mesh.position.x) * alpha;
-            playerHero.mesh.position.z +=
-              (playerHero._netZ - playerHero.mesh.position.z) * alpha;
-            playerHero.mesh.position.y = getTerrainHeightAt(
-              playerHero.mesh.position.x,
-              playerHero.mesh.position.z,
+          // Latency-aware dead-zone reconciliation so local movement never fights Host's past coordinates
+          if (localHeroMoving) {
+            playerHero._stopGraceTimer = 0.18;
+          } else if ((playerHero._stopGraceTimer || 0) > 0) {
+            playerHero._stopGraceTimer = Math.max(
+              0,
+              playerHero._stopGraceTimer - dt,
             );
-            if (!localHeroMoving) {
+          }
+
+          if (playerHero._netHasPos) {
+            const errX = playerHero._netX - playerHero.mesh.position.x;
+            const errZ = playerHero._netZ - playerHero.mesh.position.z;
+            const errDist = Math.hypot(errX, errZ);
+            if (localHeroMoving) {
+              if (errDist > 3.8) {
+                const alpha = Math.min(1, dt * 6.0);
+                playerHero.mesh.position.x += errX * alpha;
+                playerHero.mesh.position.z += errZ * alpha;
+                playerHero.mesh.position.y = getTerrainHeightAt(
+                  playerHero.mesh.position.x,
+                  playerHero.mesh.position.z,
+                );
+              }
+            } else if (
+              (playerHero._stopGraceTimer || 0) <= 0 &&
+              errDist > 0.35
+            ) {
+              const alpha = 1 - Math.exp(-9.0 * dt);
+              playerHero.mesh.position.x += errX * alpha;
+              playerHero.mesh.position.z += errZ * alpha;
+              playerHero.mesh.position.y = getTerrainHeightAt(
+                playerHero.mesh.position.x,
+                playerHero.mesh.position.z,
+              );
+            }
+            if (!localHeroMoving && (playerHero._stopGraceTimer || 0) <= 0) {
               let diff = playerHero._netYaw - playerHero.mesh.rotation.y;
               while (diff > Math.PI) diff -= Math.PI * 2;
               while (diff < -Math.PI) diff += Math.PI * 2;
@@ -7493,34 +7488,40 @@
           }
         }
 
-        // 3. Smooth 60 FPS interpolation & skeletal animations for all units
-        const interpAlpha = Math.min(1, dt * 16.0);
+        if (playerHero) {
+          ["Q", "W", "E", "R"].forEach((k) => {
+            if (playerHero.cooldowns[k] > 0)
+              playerHero.cooldowns[k] = Math.max(
+                0,
+                playerHero.cooldowns[k] - dt,
+              );
+          });
+          for (const ik in playerHero.itemCooldowns) {
+            if (playerHero.itemCooldowns[ik] > 0)
+              playerHero.itemCooldowns[ik] = Math.max(
+                0,
+                playerHero.itemCooldowns[ik] - dt,
+              );
+          }
+        }
+
+        // 3. Smooth 60 FPS critical-damped interpolation & skeletal animations for all units
+        const interpAlpha = 1 - Math.exp(-18.0 * dt);
         for (let i = 0; i < units.length; i++) {
           const u = units[i];
           if (u.swingAnim > 0) u.swingAnim = Math.max(0, u.swingAnim - dt);
           if (u.castAnim > 0) u.castAnim = Math.max(0, u.castAnim - dt);
+          if (u.stunTimer > 0) u.stunTimer = Math.max(0, u.stunTimer - dt);
+          if (u.slowTimer > 0) u.slowTimer = Math.max(0, u.slowTimer - dt);
           if (u.dead) continue;
 
           let isMoving = false;
           if (u.isPlayer) {
-            isMoving = localHeroMoving || !!u._netMoving;
+            isMoving = localHeroMoving;
           } else if (u._netHasPos) {
-            if (u._netMoving && (u._netExtrap || 0) < 0.14) {
-              u._netExtrap = (u._netExtrap || 0) + dt;
-              u._netX = THREE.MathUtils.clamp(
-                u._netX + (u._netVx || 0) * dt,
-                -MAP_HALF + 3,
-                MAP_HALF - 3,
-              );
-              u._netZ = THREE.MathUtils.clamp(
-                u._netZ + (u._netVz || 0) * dt,
-                -MAP_HALF + 3,
-                MAP_HALF - 3,
-              );
-            }
             const dx = u._netX - u.mesh.position.x;
             const dz = u._netZ - u.mesh.position.z;
-            isMoving = dx * dx + dz * dz > 0.004 || !!u._netMoving;
+            isMoving = dx * dx + dz * dz > 0.008 || !!u._netMoving;
             u.mesh.position.x += dx * interpAlpha;
             u.mesh.position.z += dz * interpAlpha;
             u.mesh.position.y = getTerrainHeightAt(
@@ -7530,7 +7531,7 @@
             let diff = u._netYaw - u.mesh.rotation.y;
             while (diff > Math.PI) diff -= Math.PI * 2;
             while (diff < -Math.PI) diff += Math.PI * 2;
-            u.mesh.rotation.y += diff * Math.min(1, dt * 15.0);
+            u.mesh.rotation.y += diff * Math.min(1, dt * 16.0);
           }
 
           const onScreen =
@@ -24865,6 +24866,25 @@ diffuseColor.rgb *= mix(0.58, 1.04, groundAO) * canopyShade;`,
         }
         const sk = playerHero.heroCfg.skills[key];
         if (sk.targetType === "self") {
+          if (mpState.active && mpState.role === "guest") {
+            if (
+              playerHero.cooldowns[key] <= 0 &&
+              playerHero.mana >= sk.mana &&
+              playerHero.stunTimer <= 0
+            ) {
+              mpSendToHost({
+                type: "CMD",
+                cmd: "CAST",
+                key,
+                x: playerHero.mesh.position.x,
+                z: playerHero.mesh.position.z,
+              });
+              playerHero.cooldowns[key] = sk.cd * playerHero.cdrMult;
+              playerHero.mana = Math.max(0, playerHero.mana - sk.mana);
+              playerHero.castAnim = 0.45;
+            }
+            return;
+          }
           castHeroAbility(playerHero, key, playerHero.mesh.position);
         } else if (primedSkill === key) {
           // Tapping a primed skill button a second time quick-casts at nearest enemy or forward facing direction!
@@ -24886,6 +24906,31 @@ diffuseColor.rgb *= mix(0.58, 1.04, groundAO) * canopyShade;`,
               playerHero.mesh.position.z +
                 Math.cos(yaw) * Math.min(sk.range * 0.85, 14),
             );
+          }
+          if (mpState.active && mpState.role === "guest") {
+            if (
+              playerHero.cooldowns[key] <= 0 &&
+              playerHero.mana >= sk.mana &&
+              playerHero.stunTimer <= 0
+            ) {
+              mpSendToHost({
+                type: "CMD",
+                cmd: "CAST",
+                key,
+                x: aimPt.x,
+                z: aimPt.z,
+              });
+              playerHero.cooldowns[key] = sk.cd * playerHero.cdrMult;
+              playerHero.mana = Math.max(0, playerHero.mana - sk.mana);
+              playerHero.castAnim = 0.45;
+              playerHero.mesh.rotation.y = Math.atan2(
+                aimPt.x - playerHero.mesh.position.x,
+                aimPt.z - playerHero.mesh.position.z,
+              );
+            }
+            primedSkill = null;
+            updatePrimedState();
+            return;
           }
           castHeroAbility(playerHero, key, aimPt);
         } else {
@@ -30400,6 +30445,8 @@ diffuseColor.rgb *= mix(0.58, 1.04, groundAO) * canopyShade;`,
               playerHero.targetUnit = null;
               playerHero.attackMovePos = null;
               playerHero.targetPos = new THREE.Vector3(s.x, 0, s.z + 4);
+              if (mpState.active && mpState.role === "guest")
+                mpSendToHost({ type: "CMD", cmd: "MOVE", x: s.x, z: s.z + 4 });
               triggerMoveWaypoint(s.x, s.z + 4, 0xfacc15);
               sfx.play("move");
               return;
@@ -30879,6 +30926,8 @@ diffuseColor.rgb *= mix(0.58, 1.04, groundAO) * canopyShade;`,
           playerHero.targetUnit = null;
           playerHero.attackMovePos = null;
           playerHero.targetPos = new THREE.Vector3(wx, 0, wz);
+          if (mpState.active && mpState.role === "guest")
+            mpSendToHost({ type: "CMD", cmd: "MOVE", x: wx, z: wz });
           triggerMoveWaypoint(wx, wz, 0x22c55e);
         } else {
           cameraLocked = false;
@@ -30932,6 +30981,8 @@ diffuseColor.rgb *= mix(0.58, 1.04, groundAO) * canopyShade;`,
           playerHero.targetUnit = null;
           playerHero.attackMovePos = null;
           playerHero.targetPos = new THREE.Vector3(wx, 0, wz);
+          if (mpState.active && mpState.role === "guest")
+            mpSendToHost({ type: "CMD", cmd: "MOVE", x: wx, z: wz });
           triggerMoveWaypoint(wx, wz, 0x22c55e);
           sfx.play("move");
         }
