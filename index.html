@@ -10,7 +10,7 @@
     <meta name="mobile-web-app-capable" content="yes" />
     <title>
       Defense of the Ancients 3D • Grandmaster Sovereign Multiplayer Edition
-      (v69)
+      (v71)
     </title>
     <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
     <script src="https://cdn.tailwindcss.com"></script>
@@ -1251,10 +1251,10 @@
             class="intro-badge-float inline-flex items-center gap-1.5 px-2.5 sm:px-3.5 py-0.5 rounded-full bg-amber-500/15 border border-amber-400/50 text-amber-300 text-[9px] sm:text-[11px] font-cinzel font-bold tracking-wider sm:tracking-widest uppercase shadow-[0_0_20px_rgba(250,204,21,0.22)] truncate"
           >
             <i class="fa-solid fa-crown shrink-0"></i>
-            <span class="sm:hidden">DOTA 3D • MULTIPLAYER EDITION (V69)</span>
+            <span class="sm:hidden">DOTA 3D • MULTIPLAYER EDITION (V71)</span>
             <span class="hidden sm:inline"
               >Defense of the Ancients 3D • Grandmaster Sovereign Multiplayer
-              Edition (v69)</span
+              Edition (v71)</span
             >
           </div>
           <button
@@ -3776,48 +3776,82 @@
                 <span
                   id="mp-conn-status-text"
                   class="text-slate-200 font-medium truncate"
-                  >Ready • STUN + TURN NAT-Traversal Enabled for Cross-Network
-                  Play</span
+                  >Ready • Metered TURN Relay Active (Quota-Saver Mode • 15s
+                  Handshake)</span
                 >
               </div>
-              <button
-                type="button"
-                onclick="
-                  document
-                    .getElementById('mp-advanced-ice')
-                    .classList.toggle('hidden')
-                "
-                class="text-[10px] text-cyan-300 hover:text-cyan-200 underline shrink-0"
-              >
-                Relay Config
-              </button>
+              <div class="flex items-center gap-2 shrink-0">
+                <span
+                  id="mp-relay-usage-pill"
+                  class="hidden sm:inline-block font-mono text-[10px] text-emerald-300 bg-emerald-950/70 border border-emerald-500/35 px-1.5 py-0.5 rounded"
+                  title="Session WebRTC / TURN Data Sent & Received (Optimized for 500 MB/mo limit)"
+                  >0.00 MB</span
+                >
+                <button
+                  type="button"
+                  onclick="
+                    document
+                      .getElementById('mp-advanced-ice')
+                      .classList.toggle('hidden')
+                  "
+                  class="text-[10px] text-cyan-300 hover:text-cyan-200 underline"
+                >
+                  Relay Config
+                </button>
+              </div>
             </div>
 
             <div
               id="mp-advanced-ice"
-              class="hidden bg-slate-900/80 border border-slate-700 rounded-lg p-2.5 space-y-1.5 text-[10px]"
+              class="hidden bg-slate-900/80 border border-slate-700 rounded-lg p-2.5 space-y-2 text-[10px]"
             >
-              <div class="text-amber-300 font-bold">
-                Optional Custom TURN Relay (for strict corporate/campus
-                symmetric NATs):
+              <div class="flex flex-wrap items-center justify-between gap-2">
+                <span class="text-amber-300 font-bold"
+                  >TURN Relay Controls & Optional Override (Metered 500 MB/mo
+                  Default Active):</span
+                >
+                <div class="flex items-center gap-2">
+                  <label
+                    class="flex items-center gap-1.5 text-cyan-200 font-semibold cursor-pointer"
+                    title="Forces all WebRTC packets through the TURN relay (bypasses strict CGNAT/Symmetric NAT)"
+                  >
+                    <input
+                      id="mp-force-relay"
+                      type="checkbox"
+                      onchange="window.saveMpTurnPrefs()"
+                      class="w-3.5 h-3.5 accent-cyan-400 rounded cursor-pointer"
+                    />
+                    <span>Force TURN Relay</span>
+                  </label>
+                  <button
+                    type="button"
+                    onclick="window.testTurnRelayAllocation()"
+                    class="px-2 py-0.5 rounded bg-cyan-950 hover:bg-cyan-800 border border-cyan-400/50 text-cyan-200 font-bold transition"
+                  >
+                    <i class="fa-solid fa-satellite-dish mr-1"></i>Test TURN
+                  </button>
+                </div>
               </div>
               <div class="grid grid-cols-1 sm:grid-cols-3 gap-1.5">
                 <input
                   id="mp-custom-turn-url"
                   type="text"
-                  placeholder="turn:relay.example.com:3478"
+                  oninput="window.saveMpTurnPrefs()"
+                  placeholder="turn:global.relay.metered.ca:80"
                   class="bg-slate-950 border border-slate-700 rounded px-2 py-1 text-slate-200 font-mono"
                 />
                 <input
                   id="mp-custom-turn-user"
                   type="text"
-                  placeholder="TURN Username"
+                  oninput="window.saveMpTurnPrefs()"
+                  placeholder="Custom TURN Username"
                   class="bg-slate-950 border border-slate-700 rounded px-2 py-1 text-slate-200 font-mono"
                 />
                 <input
                   id="mp-custom-turn-pass"
                   type="password"
-                  placeholder="TURN Credential"
+                  oninput="window.saveMpTurnPrefs()"
+                  placeholder="Custom TURN Credential"
                   class="bg-slate-950 border border-slate-700 rounded px-2 py-1 text-slate-200 font-mono"
                 />
               </div>
@@ -5653,6 +5687,11 @@
         cmdSeq: 0,
         lastCmdSentAt: 0,
         staggerCursor: 0,
+        staggerSkip: 0,
+        heartbeatAccum: 0,
+        bytesSent: 0,
+        bytesRecv: 0,
+        iceModeLabel: "",
         fxEventQueue: [],
       };
 
@@ -5708,6 +5747,14 @@
         };
       }
 
+      function updateMpRelayUsageDisplay() {
+        const pill = document.getElementById("mp-relay-usage-pill");
+        if (!pill) return;
+        const totalMb =
+          ((mpState.bytesSent || 0) + (mpState.bytesRecv || 0)) / (1024 * 1024);
+        pill.textContent = `${totalMb.toFixed(2)} MB`;
+      }
+
       function mpSendOverConn(conn, packet, preSerializedRaw = null) {
         if (!conn || !conn.open) return;
         // Drop routine delta snapshots or pings when WebRTC send buffer is congested so latency never snowballs
@@ -5725,6 +5772,7 @@
             preSerializedRaw !== null
               ? preSerializedRaw
               : JSON.stringify(packet);
+          mpState.bytesSent = (mpState.bytesSent || 0) + raw.length;
           const MAX_CHUNK = 11000;
           if (raw.length <= MAX_CHUNK) {
             conn.send(packet);
@@ -5752,17 +5800,19 @@
           senderId: mpState.myId,
           roomCode: mpState.roomCode,
         };
-        if (mpState.bc) {
-          try {
-            mpState.bc.postMessage(packet);
-          } catch (e) {}
-        } else if (mpState.transport === "lan") {
-          try {
-            localStorage.setItem(
-              "dota3d_sovereign_mp_pkt_v60",
-              JSON.stringify({ nonce: Math.random(), payload: packet }),
-            );
-          } catch (e) {}
+        if (mpState.transport === "lan") {
+          if (mpState.bc) {
+            try {
+              mpState.bc.postMessage(packet);
+            } catch (e) {}
+          } else {
+            try {
+              localStorage.setItem(
+                "dota3d_sovereign_mp_pkt_v60",
+                JSON.stringify({ nonce: Math.random(), payload: packet }),
+              );
+            } catch (e) {}
+          }
         }
         if (mpState.conns.size > 0) {
           const raw = JSON.stringify(packet);
@@ -6083,6 +6133,41 @@
         }
       }
 
+      window.saveMpTurnPrefs = function () {
+        try {
+          const cUrl = document.getElementById("mp-custom-turn-url");
+          const cUser = document.getElementById("mp-custom-turn-user");
+          const cPass = document.getElementById("mp-custom-turn-pass");
+          const fRelay = document.getElementById("mp-force-relay");
+          localStorage.setItem(
+            "dota3d_turn_prefs_v71",
+            JSON.stringify({
+              url: cUrl ? cUrl.value.trim() : "",
+              user: cUser ? cUser.value.trim() : "",
+              pass: cPass ? cPass.value.trim() : "",
+              forceRelay: fRelay ? fRelay.checked : false,
+            }),
+          );
+        } catch (e) {}
+      };
+
+      (function restoreMpTurnPrefs() {
+        try {
+          const raw = localStorage.getItem("dota3d_turn_prefs_v71");
+          if (!raw) return;
+          const prefs = JSON.parse(raw);
+          const cUrl = document.getElementById("mp-custom-turn-url");
+          const cUser = document.getElementById("mp-custom-turn-user");
+          const cPass = document.getElementById("mp-custom-turn-pass");
+          const fRelay = document.getElementById("mp-force-relay");
+          if (cUrl && prefs.url) cUrl.value = prefs.url;
+          if (cUser && prefs.user) cUser.value = prefs.user;
+          if (cPass && prefs.pass) cPass.value = prefs.pass;
+          if (fRelay && typeof prefs.forceRelay === "boolean")
+            fRelay.checked = prefs.forceRelay;
+        } catch (e) {}
+      })();
+
       function getMpPeerOptions() {
         const iceServers = [
           { urls: "stun:stun.l.google.com:19302" },
@@ -6112,6 +6197,7 @@
         const cUrl = document.getElementById("mp-custom-turn-url");
         const cUser = document.getElementById("mp-custom-turn-user");
         const cPass = document.getElementById("mp-custom-turn-pass");
+        const fRelay = document.getElementById("mp-force-relay");
         if (cUrl && cUrl.value.trim()) {
           iceServers.unshift({
             urls: cUrl.value.trim(),
@@ -6119,16 +6205,153 @@
             credential: cPass ? cPass.value.trim() : "",
           });
         }
+        const rtcConfig = {
+          iceServers,
+          iceCandidatePoolSize: 4,
+        };
+        if (fRelay && fRelay.checked) {
+          rtcConfig.iceTransportPolicy = "relay";
+        }
         return {
           debug: 1,
-          config: {
-            iceServers,
-            iceCandidatePoolSize: 4,
-          },
+          secure: true,
+          pingInterval: 4000,
+          config: rtcConfig,
         };
       }
 
-      function setupPeerHost(code) {
+      window.testTurnRelayAllocation = function () {
+        const opts = getMpPeerOptions();
+        setMpConnStatus(
+          "connecting",
+          "Testing Metered TURN Relay candidate allocation...",
+        );
+        try {
+          const pc = new RTCPeerConnection({
+            iceServers: opts.config.iceServers,
+            iceTransportPolicy: "relay",
+          });
+          pc.createDataChannel("turn-probe");
+          let gotRelay = false;
+          const finish = (ok, detail) => {
+            if (pc._done) return;
+            pc._done = true;
+            try {
+              pc.close();
+            } catch (e) {}
+            if (ok)
+              setMpConnStatus(
+                "ready",
+                `TURN Relay Verified (${detail}) • Ready for Online P2P!`,
+              );
+            else
+              setMpConnStatus(
+                "error",
+                `TURN Probe Failed (${detail}) • Check internet/firewall or custom TURN`,
+              );
+          };
+          pc.onicecandidate = (ev) => {
+            if (ev.candidate && ev.candidate.candidate) {
+              const c = ev.candidate.candidate;
+              if (c.includes("typ relay")) {
+                gotRelay = true;
+                const proto = c.includes(" tcp ") ? "TCP/TLS" : "UDP";
+                finish(true, `${proto} Relay Allocated`);
+              }
+            } else if (!ev.candidate && !gotRelay) {
+              finish(false, "No relay candidate returned");
+            }
+          };
+          pc.createOffer()
+            .then((offer) => pc.setLocalDescription(offer))
+            .catch((err) => finish(false, err.message || "Offer error"));
+          setTimeout(() => {
+            if (!pc._done)
+              finish(
+                gotRelay,
+                gotRelay ? "Relay Allocated" : "Timed out after 7s",
+              );
+          }, 7000);
+        } catch (e) {
+          setMpConnStatus("error", "WebRTC not supported in this browser");
+        }
+      };
+
+      function attachIceDiagnostics(conn, roleLabel, code) {
+        const pc = conn && conn.peerConnection;
+        if (!pc || pc._diagAttached) return;
+        pc._diagAttached = true;
+        pc._sawRelay = false;
+
+        pc.addEventListener("icecandidate", (ev) => {
+          if (
+            ev.candidate &&
+            ev.candidate.candidate &&
+            ev.candidate.candidate.includes("typ relay")
+          ) {
+            pc._sawRelay = true;
+          }
+        });
+
+        pc.addEventListener("iceconnectionstatechange", () => {
+          const st = pc.iceConnectionState;
+          if (st === "checking" && !conn.open) {
+            setMpConnStatus(
+              "connecting",
+              `ICE Checking (${pc._sawRelay ? "TURN Relay Ready" : "STUN/TURN"}) for Room [${code}]...`,
+            );
+          } else if (st === "failed") {
+            setMpConnStatus(
+              "connecting",
+              "ICE Path Stalled — Restarting ICE via TURN Relay...",
+            );
+            try {
+              if (typeof pc.restartIce === "function") pc.restartIce();
+            } catch (e) {}
+          } else if (
+            (st === "connected" || st === "completed") &&
+            typeof pc.getStats === "function"
+          ) {
+            pc.getStats()
+              .then((stats) => {
+                let pairType = pc._sawRelay ? "TURN Relay" : "Direct P2P";
+                stats.forEach((rep) => {
+                  if (
+                    rep.type === "candidate-pair" &&
+                    rep.state === "succeeded" &&
+                    rep.nominated
+                  ) {
+                    const loc = stats.get(rep.localCandidateId);
+                    const rem = stats.get(rep.remoteCandidateId);
+                    if (
+                      (loc && loc.candidateType === "relay") ||
+                      (rem && rem.candidateType === "relay")
+                    ) {
+                      pairType = "TURN Relay";
+                    } else if (loc && loc.candidateType === "srflx") {
+                      pairType = "STUN P2P";
+                    }
+                  }
+                });
+                mpState.iceModeLabel = pairType;
+                if (roleLabel === "host") {
+                  setMpConnStatus(
+                    "connected",
+                    `Connected (${pairType}) • ${mpState.conns.size}/3 Guests (${mpState.conns.size + 1}P Total)`,
+                  );
+                } else {
+                  setMpConnStatus(
+                    "connected",
+                    `Connected to Room [${code}] via ${pairType}! Waiting for Host...`,
+                  );
+                }
+              })
+              .catch(() => {});
+          }
+        });
+      }
+
+      function setupPeerHost(code, attempt = 1) {
         if (window.location.protocol === "content:") {
           setMpConnStatus(
             "error",
@@ -6151,22 +6374,25 @@
           }
           setMpConnStatus(
             "connecting",
-            `Registering Room [${code}] on Global Signaling + Metered TURN Relay...`,
+            `Registering Room [${code}] on Signaling + Metered TURN${attempt > 1 ? ` (Retry ${attempt}/3)` : ""}...`,
           );
           const peer = new Peer(`dota3d-sov-v68-${code}`, getMpPeerOptions());
           mpState.peer = peer;
+          let opened = false;
 
           peer.on("open", () => {
+            opened = true;
             const isLocalHost = /^localhost$|^127\.0\.0\.1$/i.test(
               window.location.hostname,
             );
             const hostNote = isLocalHost
-              ? `Room [${code}] LIVE Online! (Note: localhost URL is local-only; share the HTML file + Code ${code})`
-              : `Room [${code}] LIVE Online! Remote friends on any network can join with Code ${code}`;
+              ? `Room [${code}] LIVE Online (Metered TURN Ready)! Share HTML + Code ${code}`
+              : `Room [${code}] LIVE Online (Metered TURN Ready)! Friends join with Code ${code}`;
             setMpConnStatus("ready", hostNote);
           });
 
           peer.on("connection", (conn) => {
+            attachIceDiagnostics(conn, "host", code);
             const bindConn = () => {
               mpState.conns.set(conn.peer, conn);
               setMpConnStatus(
@@ -6203,6 +6429,9 @@
 
             conn.on("data", (data) => {
               if (data && data.senderId) conn._playerId = data.senderId;
+              mpState.bytesRecv =
+                (mpState.bytesRecv || 0) +
+                (typeof data === "string" ? data.length : 120);
               mpHandlePacket(data);
             });
             conn.on("close", () => {
@@ -6248,9 +6477,12 @@
                 "connecting",
                 "Signaling paused — reconnecting...",
               );
-              try {
-                mpState.peer.reconnect();
-              } catch (e) {}
+              setTimeout(() => {
+                try {
+                  if (mpState.peer && !mpState.peer.destroyed)
+                    mpState.peer.reconnect();
+                } catch (e) {}
+              }, 1200);
             }
           });
 
@@ -6264,7 +6496,20 @@
               mpState.roomCode = freshCode;
               const codeDisp = document.getElementById("mp-room-code-display");
               if (codeDisp) codeDisp.textContent = freshCode;
-              setupPeerHost(freshCode);
+              setupPeerHost(freshCode, 1);
+              return;
+            }
+            if (
+              !opened &&
+              attempt < 3 &&
+              mpState.role === "host" &&
+              mpState.roomCode === code
+            ) {
+              setMpConnStatus(
+                "connecting",
+                `Signaling busy (${err && err.type ? err.type : "network"}) — retrying (${attempt + 1}/3)...`,
+              );
+              setTimeout(() => setupPeerHost(code, attempt + 1), 2200);
               return;
             }
             setMpConnStatus(
@@ -6300,28 +6545,54 @@
           }
           setMpConnStatus(
             "connecting",
-            `Connecting to Host Room [${code}] (Attempt ${attempt}/3)...`,
+            `Connecting to Signaling & Metered TURN for [${code}] (Attempt ${attempt}/3)...`,
           );
           const peer = new Peer(getMpPeerOptions());
           mpState.peer = peer;
           let connected = false;
+          let retryScheduled = false;
+
+          const scheduleRetry = (reason) => {
+            if (
+              connected ||
+              retryScheduled ||
+              mpState.role !== "guest" ||
+              mpState.roomCode !== code
+            )
+              return;
+            retryScheduled = true;
+            if (attempt < 3) {
+              setMpConnStatus(
+                "connecting",
+                `${reason} — retrying (${attempt + 1}/3)...`,
+              );
+              setTimeout(() => setupPeerGuest(code, attempt + 1), 2500);
+            } else {
+              setMpConnStatus(
+                "error",
+                `Could not reach Room [${code}] (${reason}). Check Host is online & code matches.`,
+              );
+            }
+          };
 
           peer.on("open", () => {
             setMpConnStatus(
               "connecting",
-              `Negotiating P2P / Metered TURN Relay with Room [${code}]...`,
+              `Negotiating TURN Relay & WebRTC DataChannel with [${code}]...`,
             );
             const conn = peer.connect(`dota3d-sov-v68-${code}`, {
               reliable: true,
               serialization: "json",
             });
             mpState.conns.set("host", conn);
+            attachIceDiagnostics(conn, "guest", code);
 
             conn.on("open", () => {
               connected = true;
+              const via = mpState.iceModeLabel || "STUN/TURN";
               setMpConnStatus(
                 "connected",
-                `Connected to Host Room [${code}]! Waiting for Host to launch...`,
+                `Connected to Host Room [${code}] (${via})! Waiting for Host...`,
               );
               mpSendOverConn(conn, {
                 type: "JOIN_REQ",
@@ -6331,34 +6602,44 @@
               });
             });
 
-            conn.on("data", (data) => mpHandlePacket(data));
+            conn.on("data", (data) => {
+              mpState.bytesRecv =
+                (mpState.bytesRecv || 0) +
+                (typeof data === "string" ? data.length : 180);
+              mpHandlePacket(data);
+            });
             conn.on("close", () => {
               if (mpState.role === "guest") {
                 setMpConnStatus("error", "Disconnected from Host Room");
               }
             });
             conn.on("error", () => {
-              if (!connected && attempt < 3 && mpState.role === "guest") {
-                setTimeout(() => setupPeerGuest(code, attempt + 1), 1500);
-              }
+              scheduleRetry("DataChannel error");
             });
 
+            // Allow 15 seconds for TLS/TCP TURN relay allocation & ICE handshake across mobile/ISP NATs
             setTimeout(() => {
               if (
                 !connected &&
                 mpState.role === "guest" &&
                 mpState.roomCode === code
               ) {
-                if (attempt < 3) {
-                  setupPeerGuest(code, attempt + 1);
-                } else {
-                  setMpConnStatus(
-                    "error",
-                    `Could not reach Room [${code}]. Verify Host is online & code matches.`,
-                  );
-                }
+                scheduleRetry("TURN/ICE handshake timeout");
               }
-            }, 5500);
+            }, 15000);
+          });
+
+          peer.on("disconnected", () => {
+            if (
+              mpState.role === "guest" &&
+              mpState.peer &&
+              !mpState.peer.destroyed &&
+              !connected
+            ) {
+              try {
+                mpState.peer.reconnect();
+              } catch (e) {}
+            }
           });
 
           peer.on("error", (err) => {
@@ -6368,9 +6649,8 @@
                 `Room [${code}] not found! Ask Host to click "Host Room" first.`,
               );
             } else {
-              setMpConnStatus(
-                "error",
-                `Connection Error (${err && err.type ? err.type : "network"})`,
+              scheduleRetry(
+                `Signaling ${err && err.type ? err.type : "network"}`,
               );
             }
           });
@@ -6384,13 +6664,15 @@
         const code = mpGenerateRoomCode();
         mpState.role = "host";
         mpState.roomCode = code;
+        mpState.bytesSent = 0;
+        mpState.bytesRecv = 0;
         mpState.players.clear();
         mpState.players.set(mpState.myId, mpGetLocalPlayerRecord());
         const codeBox = document.getElementById("mp-host-code-box");
         const codeDisp = document.getElementById("mp-room-code-display");
         if (codeBox) codeBox.classList.remove("hidden");
         if (codeDisp) codeDisp.textContent = code;
-        setupPeerHost(code);
+        setupPeerHost(code, 1);
         mpBroadcast({
           type: "ROOM_ANNOUNCE",
           hostName: mpState.myName,
@@ -6451,8 +6733,15 @@
           return;
         }
         if (inp) inp.value = code;
+        if (mpState.discoveredRooms.has(code)) {
+          window.setMpTransport("lan");
+        } else if (mpState.transport === "local2p") {
+          window.setMpTransport("online");
+        }
         mpState.role = "guest";
         mpState.roomCode = code;
+        mpState.bytesSent = 0;
+        mpState.bytesRecv = 0;
         mpState.players.clear();
         const me = mpGetLocalPlayerRecord();
         mpState.players.set(mpState.myId, me);
@@ -6934,6 +7223,15 @@
         }
       }
 
+      function getActiveRuneMask() {
+        let mask = 0;
+        for (let i = 0; i < runes.length; i++) {
+          if (runes[i].kind === "bounty") mask |= 1;
+          else if (runes[i].kind === "arcane") mask |= 2;
+        }
+        return mask;
+      }
+
       function serializeFullUnitRow(u) {
         const flags =
           (u.dead ? 1 : 0) |
@@ -6941,7 +7239,9 @@
           (u.slowTimer > 0 ? 4 : 0) |
           (u.swingAnim > 0 ? 8 : 0) |
           (u.castAnim > 0 ? 16 : 0) |
-          (u.hasAegis ? 32 : 0);
+          (u.hasAegis ? 32 : 0) |
+          (u.celebrateTimer > 0 ? 64 : 0) |
+          (u.reincarnating ? 128 : 0);
         const isHero = u.type === "hero";
         return [
           u.netId, // 0
@@ -7003,13 +7303,15 @@
         if (!mpState.lastHeroExtras) mpState.lastHeroExtras = new Map();
         if (!mpState.pendingRemovals) mpState.pendingRemovals = new Set();
 
-        // Staggered round-robin refresh (2 units per tick) avoids multi-KB keyframe spikes over the internet
+        // Quota-saver staggered refresh (1 unit every 3rd tick = ~6.6 units/sec) keeps TURN bandwidth tiny
         const staggerIndices = new Set();
         if (!isFullKeyframe && units.length > 0) {
-          const base = (mpState.staggerCursor || 0) % units.length;
-          staggerIndices.add(base);
-          staggerIndices.add((base + 1) % units.length);
-          mpState.staggerCursor = (base + 2) % units.length;
+          mpState.staggerSkip = ((mpState.staggerSkip || 0) + 1) % 3;
+          if (mpState.staggerSkip === 0) {
+            const base = (mpState.staggerCursor || 0) % units.length;
+            staggerIndices.add(base);
+            mpState.staggerCursor = (base + 1) % units.length;
+          }
         }
 
         const activeIds = new Set();
@@ -7035,7 +7337,9 @@
             (u.slowTimer > 0 ? 4 : 0) |
             (u.swingAnim > 0 ? 8 : 0) |
             (u.castAnim > 0 ? 16 : 0) |
-            (u.hasAegis ? 32 : 0);
+            (u.hasAegis ? 32 : 0) |
+            (u.celebrateTimer > 0 ? 64 : 0) |
+            (u.reincarnating ? 128 : 0);
           const rx = Math.round(u.mesh.position.x * 100) / 100;
           const rz = Math.round(u.mesh.position.z * 100) / 100;
           const ry = Math.round(u.mesh.rotation.y * 100) / 100;
@@ -7140,6 +7444,7 @@
           dk: direKills,
           et: escalationTier,
           go: gameOver ? 1 : 0,
+          rn: getActiveRuneMask(),
           sp: spawnRows.length > 0 ? spawnRows : null,
           m: deltaMobs.length > 0 ? deltaMobs : null,
           h: deltaHeroes.length > 0 ? deltaHeroes : null,
@@ -7172,6 +7477,9 @@
           escalationTier = snap.et;
           const badge = document.getElementById("escalation-badge");
           if (badge) badge.textContent = `Tier ${escalationTier}`;
+        }
+        if (typeof snap.rn === "number") {
+          syncGuestRiverRunesFromMask(snap.rn);
         }
 
         const seenIds = new Set();
@@ -7221,15 +7529,63 @@
           u.stunTimer = flags & 2 ? Math.max(u.stunTimer, 0.14) : 0;
           u.slowTimer = flags & 4 ? Math.max(u.slowTimer, 0.14) : 0;
           u.hasAegis = !!(flags & 32);
+          u.reincarnating = !!(flags & 128);
+          if (flags & 64 && !(prevFlags & 64)) {
+            u.celebrateTimer = 1.45;
+          } else if (flags & 64) {
+            u.celebrateTimer = Math.max(u.celebrateTimer || 0, 0.3);
+          }
           if (flags & 8 && !(prevFlags & 8) && u.swingAnim <= 0.05) {
             u.swingAnim = 0.34;
           }
           if (flags & 16 && !(prevFlags & 16) && u.castAnim <= 0.05) {
             u.castAnim = 0.45;
           }
-          u.mesh.visible = !u.dead;
-          if (u.bar && u.bar.el)
-            u.bar.el.style.display = u.dead ? "none" : "flex";
+
+          if (!wasDead && u.dead) {
+            if (u.type === "hero") {
+              u.deathAnimTimer = 1.25;
+              u.mesh.visible = true;
+            } else {
+              u.mesh.visible = false;
+            }
+            if (u.bar && u.bar.el) u.bar.el.style.display = "none";
+          } else if (wasDead && !u.dead) {
+            u.deathAnimTimer = 0;
+            if (u.parts && u.parts.hips) {
+              u.parts.hips.position.y = 1.42;
+              u.parts.hips.rotation.set(0, 0, 0);
+            }
+            u.mesh.visible = true;
+            if (u.bar && u.bar.el) u.bar.el.style.display = "flex";
+            spawnShockwaveRing(
+              nx,
+              nz,
+              4.5,
+              u.team === "radiant" ? 0x34d399 : 0xf43f5e,
+              0.7,
+            );
+            if (
+              u.isPlayer &&
+              u.heroCfg &&
+              u.heroCfg.voice &&
+              u.heroCfg.voice.respawn
+            ) {
+              sfx.speakHeroLine(
+                u.heroCfg,
+                u.heroCfg.voice.respawn,
+                true,
+                "triumph",
+                { category: "respawn", minGapMs: 3000, catGapMs: 8000 },
+              );
+            }
+          } else if (u.dead) {
+            u.mesh.visible = u.type === "hero" && (u.deathAnimTimer || 0) > 0;
+            if (u.bar && u.bar.el) u.bar.el.style.display = "none";
+          } else {
+            u.mesh.visible = true;
+            if (u.bar && u.bar.el) u.bar.el.style.display = "flex";
+          }
 
           const errDist = Math.hypot(
             nx - u.mesh.position.x,
@@ -7554,6 +7910,85 @@
                 );
                 if (distCam < 55) sfx.play("gold");
               }
+            } else if (kind === "R") {
+              const picker = units.find((x) => x.netId === ev[4]);
+              spawnShockwaveRing(ev[1], ev[2], 4.2, ev[3] || 0xfacc15, 0.55);
+              if (picker && !picker.dead) {
+                spawnFloatText(
+                  picker.mesh.position,
+                  ev[5] || "RUNE ACTIVATED!",
+                  "#facc15",
+                  15,
+                );
+                if (picker.isPlayer) sfx.play("gold");
+              }
+            } else if (kind === "X") {
+              const gy = getTerrainHeightAt(ev[1], ev[2]);
+              const burstCol =
+                ev[3] === "radiant"
+                  ? 0x34d399
+                  : ev[3] === "neutral"
+                    ? 0xf59e0b
+                    : 0xf43f5e;
+              const isMajor = [
+                "hero",
+                "boss",
+                "dragon",
+                "kong",
+                "redman",
+                "tower",
+              ].includes(ev[4]);
+              spawnParticleBurst(
+                new THREE.Vector3(ev[1], gy, ev[2]),
+                burstCol,
+                isMajor ? 32 : 12,
+              );
+              if (ev[4] === "tower") {
+                spawnShockwaveRing(ev[1], ev[2], 9.0, 0xfacc15, 0.9);
+                triggerCameraShake(0.7);
+              }
+            } else if (kind === "B") {
+              const killer = units.find((x) => x.netId === ev[1]);
+              if (killer && !killer.dead) {
+                killer.celebrateTimer = 1.45;
+                spawnShockwaveRing(
+                  killer.mesh.position.x,
+                  killer.mesh.position.z,
+                  5.2,
+                  0xfacc15,
+                  0.65,
+                );
+                if (killer.isPlayer && killer.heroCfg && killer.heroCfg.voice) {
+                  sfx.speakHeroLine(
+                    killer.heroCfg,
+                    killer.heroCfg.voice.kill,
+                    true,
+                    "triumph",
+                    {
+                      category: "kill",
+                      chime: true,
+                      minGapMs: 2500,
+                      catGapMs: 4000,
+                    },
+                  );
+                }
+              }
+              if (ev[2]) sfx.announceSpree(ev[2], ev[3] || 1);
+            } else if (kind === "G") {
+              if (ev[3] === 0) {
+                sfx.play("aegis_reborn");
+                spawnOrbitalSkyBeam(ev[1], ev[2], 5.5, 0xfacc15, 2.2);
+                spawnShockwaveRing(ev[1], ev[2], 7.0, 0xfacc15, 1.5);
+              } else {
+                const gy = getTerrainHeightAt(ev[1], ev[2]);
+                spawnShockwaveRing(ev[1], ev[2], 8.0, 0xfacc15, 0.8);
+                spawnFloatText(
+                  new THREE.Vector3(ev[1], gy, ev[2]),
+                  "IMMORTAL REBIRTH!",
+                  "#facc15",
+                  20,
+                );
+              }
             } else if (kind === "W" && !gameOver) {
               endMatch(ev[1]);
             }
@@ -7750,9 +8185,26 @@
           const u = units[i];
           if (u.swingAnim > 0) u.swingAnim = Math.max(0, u.swingAnim - dt);
           if (u.castAnim > 0) u.castAnim = Math.max(0, u.castAnim - dt);
+          if (u.celebrateTimer > 0)
+            u.celebrateTimer = Math.max(0, u.celebrateTimer - dt);
           if (u.stunTimer > 0) u.stunTimer = Math.max(0, u.stunTimer - dt);
           if (u.slowTimer > 0) u.slowTimer = Math.max(0, u.slowTimer - dt);
-          if (u.dead) continue;
+          if (u.dead) {
+            if (u.type === "hero" && u.deathAnimTimer > 0) {
+              u.deathAnimTimer -= dt;
+              const prog = 1 - Math.max(0, u.deathAnimTimer / 1.25);
+              updateHeroSkeletalAnimation(
+                u.parts,
+                "DEATH",
+                matchTime,
+                dt,
+                false,
+                prog,
+              );
+              if (u.deathAnimTimer <= 0) u.mesh.visible = false;
+            }
+            continue;
+          }
 
           let isMoving = false;
           if (u.isPlayer) {
@@ -7798,13 +8250,15 @@
 
           if (u.type === "hero" && u.parts) {
             const pose =
-              u.castAnim > 0
-                ? "CAST"
-                : u.swingAnim > 0
-                  ? "ATTACK"
-                  : isMoving
-                    ? "RUN"
-                    : "IDLE";
+              u.celebrateTimer > 0
+                ? "CELEBRATE"
+                : u.castAnim > 0 || u.reincarnating
+                  ? "CAST"
+                  : u.swingAnim > 0
+                    ? "ATTACK"
+                    : isMoving
+                      ? "RUN"
+                      : "IDLE";
             const isRanged = u.heroCfg && u.heroCfg.rangeType === "Ranged";
             const atkProg = u.swingAnim > 0 ? 1 - u.swingAnim / 0.34 : 0;
             updateHeroSkeletalAnimation(
@@ -8011,29 +8465,36 @@
 
         if (mpState.role === "host") {
           const remoteCount = Math.max(1, mpState.conns.size);
-          const targetInterval = remoteCount >= 2 ? 0.062 : 0.05;
+          const targetInterval = remoteCount >= 2 ? 0.066 : 0.055;
           mpState.syncAccum += dt;
+          mpState.heartbeatAccum = (mpState.heartbeatAccum || 0) + dt;
           if (mpState.syncAccum >= targetInterval) {
             mpState.syncAccum = 0;
-            mpBroadcast({
-              type: "WORLD_SNAP",
-              snap: buildAuthoritativeSnapshot(),
-            });
+            const snap = buildAuthoritativeSnapshot();
+            const hasChanges = Boolean(
+              snap.sp || snap.m || snap.h || snap.rem || snap.ev || snap.full,
+            );
+            if (hasChanges || mpState.heartbeatAccum >= 1.0) {
+              mpState.heartbeatAccum = 0;
+              mpBroadcast({ type: "WORLD_SNAP", snap });
+            }
           }
           mpState.pingAccum += dt;
-          if (mpState.pingAccum >= 1.5 && mpState.conns.size > 0) {
+          if (mpState.pingAccum >= 3.0 && mpState.conns.size > 0) {
             mpState.pingAccum = 0;
             mpBroadcast({ type: "PING_REQ", ts: performance.now() });
+            updateMpRelayUsageDisplay();
           }
         } else if (mpState.role === "guest") {
           mpState.pingAccum += dt;
-          if (mpState.pingAccum >= 1.5) {
+          if (mpState.pingAccum >= 3.0) {
             mpState.pingAccum = 0;
             mpSendToHost({
               type: "PING_REQ",
               ts: performance.now(),
               lastRtt: mpState.pingMs,
             });
+            updateMpRelayUsageDisplay();
           }
         } else if (
           mpState.role === "local2p" &&
@@ -21228,6 +21689,14 @@ diffuseColor.rgb *= mix(0.58, 1.04, groundAO) * canopyShade;`,
                 0xfacc15,
                 1.5,
               );
+              if (mpState.active && mpState.role === "host") {
+                mpQueueFxEvent([
+                  "G",
+                  Math.round(this.mesh.position.x),
+                  Math.round(this.mesh.position.z),
+                  0,
+                ]);
+              }
               showBanner(
                 "AEGIS OF THE IMMORTAL!",
                 `${this.name} is being reborn by the Immortal Aegis!`,
@@ -21254,6 +21723,14 @@ diffuseColor.rgb *= mix(0.58, 1.04, groundAO) * canopyShade;`,
                     "#facc15",
                     20,
                   );
+                  if (mpState.active && mpState.role === "host") {
+                    mpQueueFxEvent([
+                      "G",
+                      Math.round(this.mesh.position.x),
+                      Math.round(this.mesh.position.z),
+                      1,
+                    ]);
+                  }
                 },
               });
               return;
@@ -21274,6 +21751,15 @@ diffuseColor.rgb *= mix(0.58, 1.04, groundAO) * canopyShade;`,
           this.spreeCount = 0;
           this.multiKillCount = 0;
           if (inspectedUnit === this) window.clearInspectedUnit();
+          if (mpState.active && mpState.role === "host") {
+            mpQueueFxEvent([
+              "X",
+              Math.round(this.mesh.position.x),
+              Math.round(this.mesh.position.z),
+              this.team,
+              this.type,
+            ]);
+          }
           spawnParticleBurst(
             this.mesh.position,
             this.team === "radiant"
@@ -21667,6 +22153,9 @@ diffuseColor.rgb *= mix(0.58, 1.04, groundAO) * canopyShade;`,
         }
 
         sfx.announceSpree(spoken, tier);
+        if (mpState.active && mpState.role === "host") {
+          mpQueueFxEvent(["B", killer.netId || killer.id, spoken, tier]);
+        }
         showBanner(
           headline,
           `${killer.name} claims +${bounty} Gold • Streak: ${killer.spreeCount}`,
@@ -25046,50 +25535,80 @@ diffuseColor.rgb *= mix(0.58, 1.04, groundAO) * canopyShade;`,
         });
       }
 
+      const RIVER_RUNE_DEFS = [
+        {
+          bit: 1,
+          x: -18,
+          z: -18,
+          kind: "bounty",
+          color: 0xfacc15,
+          text: "BOUNTY RUNE (+140g & +180 HP/MP)",
+        },
+        {
+          bit: 2,
+          x: 18,
+          z: 18,
+          kind: "arcane",
+          color: 0x34d399,
+          text: "ARCANE RUNE (+240 HP/MP & Haste)",
+        },
+      ];
+
+      function createSingleRiverRune(s) {
+        const g = new THREE.Group();
+        const gem = new THREE.Mesh(
+          new THREE.OctahedronGeometry(1.18, 0),
+          new THREE.MeshStandardMaterial({
+            color: s.color,
+            emissive: s.color,
+            emissiveIntensity: 1.5,
+          }),
+        );
+        gem.position.y = 1.5;
+        g.add(gem);
+        const ped = new THREE.Mesh(
+          new THREE.RingGeometry(1.4, 1.85, 24),
+          new THREE.MeshBasicMaterial({
+            color: s.color,
+            side: THREE.DoubleSide,
+          }),
+        );
+        ped.rotation.x = -Math.PI / 2;
+        ped.position.y = 0.12;
+        g.add(ped);
+        g.position.set(s.x, 0, s.z);
+        scene.add(g);
+        runes.push({ ...s, group: g, gem });
+      }
+
       function spawnRiverRunes() {
-        runes.forEach((r) => scene.remove(r.group));
-        runes = [];
-        [
-          {
-            x: -18,
-            z: -18,
-            kind: "bounty",
-            color: 0xfacc15,
-            text: "BOUNTY RUNE (+140g & +180 HP/MP)",
-          },
-          {
-            x: 18,
-            z: 18,
-            kind: "arcane",
-            color: 0x34d399,
-            text: "ARCANE RUNE (+240 HP/MP & Haste)",
-          },
-        ].forEach((s) => {
-          const g = new THREE.Group();
-          const gem = new THREE.Mesh(
-            new THREE.OctahedronGeometry(1.18, 0),
-            new THREE.MeshStandardMaterial({
-              color: s.color,
-              emissive: s.color,
-              emissiveIntensity: 1.5,
-            }),
-          );
-          gem.position.y = 1.5;
-          g.add(gem);
-          const ped = new THREE.Mesh(
-            new THREE.RingGeometry(1.4, 1.85, 24),
-            new THREE.MeshBasicMaterial({
-              color: s.color,
-              side: THREE.DoubleSide,
-            }),
-          );
-          ped.rotation.x = -Math.PI / 2;
-          ped.position.y = 0.12;
-          g.add(ped);
-          g.position.set(s.x, 0, s.z);
-          scene.add(g);
-          runes.push({ ...s, group: g, gem });
+        runes.forEach((r) => {
+          scene.remove(r.group);
+          disposeObject3D(r.group);
         });
+        runes = [];
+        RIVER_RUNE_DEFS.forEach((s) => createSingleRiverRune(s));
+      }
+
+      function syncGuestRiverRunesFromMask(mask) {
+        for (let i = runes.length - 1; i >= 0; i--) {
+          const r = runes[i];
+          const bit = r.kind === "bounty" ? 1 : 2;
+          if ((mask & bit) === 0) {
+            scene.remove(r.group);
+            disposeObject3D(r.group);
+            runes.splice(i, 1);
+          }
+        }
+        for (let i = 0; i < RIVER_RUNE_DEFS.length; i++) {
+          const def = RIVER_RUNE_DEFS[i];
+          if (
+            (mask & def.bit) !== 0 &&
+            !runes.some((r) => r.kind === def.kind)
+          ) {
+            createSingleRiverRune(def);
+          }
+        }
       }
 
       /***********************************************************************
@@ -27274,9 +27793,8 @@ diffuseColor.rgb *= mix(0.58, 1.04, groundAO) * canopyShade;`,
         }
 
         _heroLoopList.length = 0;
-        if (playerHero) _heroLoopList.push(playerHero);
-        for (let i = 0; i < aiHeroes.length; i++) {
-          if (aiHeroes[i]) _heroLoopList.push(aiHeroes[i]);
+        for (let i = 0; i < units.length; i++) {
+          if (units[i].type === "hero") _heroLoopList.push(units[i]);
         }
 
         runeCountdown -= dt;
@@ -27293,7 +27811,7 @@ diffuseColor.rgb *= mix(0.58, 1.04, groundAO) * canopyShade;`,
             if (
               h &&
               !h.dead &&
-              h.mesh.position.distanceToSquared(r.group.position) < 8.41
+              h.mesh.position.distanceToSquared(r.group.position) < 9.61
             ) {
               h.hp = Math.min(h.maxHp, h.hp + 220);
               h.mana = Math.min(h.maxMana, h.mana + 180);
@@ -27302,6 +27820,16 @@ diffuseColor.rgb *= mix(0.58, 1.04, groundAO) * canopyShade;`,
               if (h.isPlayer) {
                 sfx.play("gold");
                 spawnFloatText(h.mesh.position, r.text, "#facc15", 15);
+              }
+              if (mpState.active && mpState.role === "host") {
+                mpQueueFxEvent([
+                  "R",
+                  Math.round(r.x),
+                  Math.round(r.z),
+                  r.color,
+                  h.netId || h.id,
+                  r.text,
+                ]);
               }
               spawnShockwaveRing(r.x, r.z, 4.0, r.color, 0.5);
               scene.remove(r.group);
@@ -32437,6 +32965,7 @@ diffuseColor.rgb *= mix(0.58, 1.04, groundAO) * canopyShade;`,
           const params = new URLSearchParams(window.location.search);
           const autoRoom = (params.get("room") || "").trim().toUpperCase();
           if (autoRoom) {
+            window.setMpTransport("online");
             window.openMultiplayerModal();
             window.joinMultiplayerRoom(autoRoom);
           }
