@@ -10,7 +10,7 @@
     <meta name="mobile-web-app-capable" content="yes" />
     <title>
       Defense of the Ancients 3D • Grandmaster Sovereign Multiplayer Edition
-      (v68)
+      (v69)
     </title>
     <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
     <script src="https://cdn.tailwindcss.com"></script>
@@ -1251,10 +1251,10 @@
             class="intro-badge-float inline-flex items-center gap-1.5 px-2.5 sm:px-3.5 py-0.5 rounded-full bg-amber-500/15 border border-amber-400/50 text-amber-300 text-[9px] sm:text-[11px] font-cinzel font-bold tracking-wider sm:tracking-widest uppercase shadow-[0_0_20px_rgba(250,204,21,0.22)] truncate"
           >
             <i class="fa-solid fa-crown shrink-0"></i>
-            <span class="sm:hidden">DOTA 3D • MULTIPLAYER EDITION (V68)</span>
+            <span class="sm:hidden">DOTA 3D • MULTIPLAYER EDITION (V69)</span>
             <span class="hidden sm:inline"
               >Defense of the Ancients 3D • Grandmaster Sovereign Multiplayer
-              Edition (v68)</span
+              Edition (v69)</span
             >
           </div>
           <button
@@ -5650,6 +5650,9 @@
         pendingRemovals: new Set(),
         lastSyncReqTime: 0,
         lastSnapApplyTime: 0,
+        cmdSeq: 0,
+        lastCmdSentAt: 0,
+        staggerCursor: 0,
         fxEventQueue: [],
       };
 
@@ -5707,6 +5710,16 @@
 
       function mpSendOverConn(conn, packet, preSerializedRaw = null) {
         if (!conn || !conn.open) return;
+        // Drop routine delta snapshots or pings when WebRTC send buffer is congested so latency never snowballs
+        if (
+          packet &&
+          ((packet.type === "WORLD_SNAP" &&
+            (!packet.snap || !packet.snap.full)) ||
+            packet.type === "PING_REQ")
+        ) {
+          const dc = conn.dataChannel || conn._dc;
+          if (dc && dc.bufferedAmount > 48000) return;
+        }
         try {
           const raw =
             preSerializedRaw !== null
@@ -5739,13 +5752,11 @@
           senderId: mpState.myId,
           roomCode: mpState.roomCode,
         };
-        const raw = JSON.stringify(packet);
         if (mpState.bc) {
           try {
             mpState.bc.postMessage(packet);
           } catch (e) {}
-        }
-        if (mpState.transport === "lan") {
+        } else if (mpState.transport === "lan") {
           try {
             localStorage.setItem(
               "dota3d_sovereign_mp_pkt_v60",
@@ -5753,13 +5764,21 @@
             );
           } catch (e) {}
         }
-        mpState.conns.forEach((conn) => {
-          mpSendOverConn(conn, packet, raw);
-        });
+        if (mpState.conns.size > 0) {
+          const raw = JSON.stringify(packet);
+          mpState.conns.forEach((conn) => {
+            mpSendOverConn(conn, packet, raw);
+          });
+        }
       }
 
       function mpSendToHost(msg) {
         if (mpState.role !== "guest") return;
+        if (msg && msg.type === "CMD") {
+          mpState.cmdSeq = (mpState.cmdSeq || 0) + 1;
+          mpState.lastCmdSentAt = performance.now();
+          msg = { ...msg, cmdSeq: mpState.cmdSeq };
+        }
         mpBroadcast(msg);
       }
 
@@ -6532,11 +6551,8 @@
         }
 
         if (msg.type === "JOIN_REQ" && mpState.role === "host") {
-          mpState.players.set(msg.senderId, {
-            ...msg.player,
-            id: msg.senderId,
-            isHost: false,
-          });
+          const pRec = { ...msg.player, id: msg.senderId, isHost: false };
+          mpState.players.set(msg.senderId, pRec);
           mpBroadcast({
             type: "LOBBY_SYNC",
             players: Array.from(mpState.players.entries()),
@@ -6544,6 +6560,61 @@
             fillBots: mpState.fillBots,
           });
           renderMpRoster();
+          if (!inHeroSelect && mpState.active) {
+            let existing = units.find(
+              (u) => u.type === "hero" && u.ownerPeerId === msg.senderId,
+            );
+            if (!existing) {
+              const hCfg = HERO_ROSTER[pRec.heroId] || HERO_ROSTER.aurelius;
+              const team = pRec.team === "dire" ? "dire" : "radiant";
+              const sx = team === "radiant" ? -70 : 70;
+              const sz = team === "radiant" ? 78 : -78;
+              existing = new MobaEntity({
+                name: `${hCfg.name} (${pRec.name})`,
+                team,
+                type: "hero",
+                isPlayer: false,
+                heroCfg: hCfg,
+                x: sx,
+                z: sz,
+                ...hCfg.stats,
+                radius: 1.4,
+                gold: 650,
+                tpCharges: 1,
+                goldBounty: [260, 320],
+                xpBounty: 260,
+              });
+              existing.ownerPeerId = pRec.id;
+              existing.isRemoteHuman = true;
+              existing.abilityLevels.Q = 1;
+              existing.skillPoints = 0;
+              units.push(existing);
+            }
+            const targetConn = Array.from(mpState.conns.values()).find(
+              (c) => c._playerId === msg.senderId,
+            );
+            const startPkt = {
+              type: "START_MATCH",
+              senderId: mpState.myId,
+              roomCode: mpState.roomCode,
+              players: Array.from(mpState.players.entries()),
+              aiDifficulty,
+              fillBots: mpState.fillBots,
+            };
+            const kfPkt = {
+              type: "WORLD_SNAP",
+              senderId: mpState.myId,
+              roomCode: mpState.roomCode,
+              snap: buildAuthoritativeSnapshot(true),
+            };
+            if (targetConn) {
+              mpSendOverConn(targetConn, startPkt);
+              mpSendOverConn(targetConn, kfPkt);
+            } else {
+              mpBroadcast(startPkt);
+              mpBroadcast(kfPkt);
+            }
+          }
         } else if (msg.type === "PLAYER_UPDATE" && mpState.role === "host") {
           if (mpState.players.has(msg.senderId)) {
             mpState.players.set(msg.senderId, {
@@ -6587,6 +6658,7 @@
           mpState.active = true;
           mpState.lastRecvSeq = 0;
           mpState.lastSnapApplyTime = 0;
+          mpState.cmdSeq = 0;
           mpState.players = new Map(msg.players);
           if (msg.aiDifficulty) aiDifficulty = msg.aiDifficulty;
           if (typeof msg.fillBots === "boolean")
@@ -6612,6 +6684,12 @@
             (u) => u.type === "hero" && u.ownerPeerId === msg.senderId,
           );
           if (!actor || gameOver) return;
+          if (typeof msg.cmdSeq === "number") {
+            actor.lastProcessedCmdSeq = Math.max(
+              actor.lastProcessedCmdSeq || 0,
+              msg.cmdSeq,
+            );
+          }
           if (msg.cmd === "MOVE" && !actor.dead) {
             if (actor.tpChannel) actor.tpChannel = null;
             actor.targetUnit = null;
@@ -6656,6 +6734,8 @@
           ) {
             actor.abilityLevels[msg.key]++;
             actor.skillPoints--;
+            if (mpState.lastHeroExtras)
+              mpState.lastHeroExtras.delete(actor.netId);
           } else if (
             msg.cmd === "LEVEL_ATTR" &&
             actor.skillPoints > 0 &&
@@ -6688,11 +6768,18 @@
           } else if (msg.cmd === "BUY_ITEM") {
             const item = SHOP_ITEMS.find((it) => it.id === msg.itemId);
             if (item && actor.gold >= item.cost) {
+              if (isConsumableItem(item)) {
+                const cState = getConsumableUsageState(actor, item);
+                if (cState.exhausted) return;
+              }
               if (item.isTpScroll || item.id === "tp_scroll") {
                 actor.gold -= item.cost;
                 actor.tpCharges = (actor.tpCharges || 0) + 1;
               } else if (item.consumeOnBuy) {
                 actor.gold -= item.cost;
+                if (!actor.consumableUsedCount) actor.consumableUsedCount = {};
+                actor.consumableUsedCount[item.id] =
+                  (actor.consumableUsedCount[item.id] || 0) + 1;
                 applyItemStatsToHero(actor, item);
               } else {
                 const emptyIdx = actor.inventory.findIndex((s) => s === null);
@@ -6700,8 +6787,96 @@
                   actor.gold -= item.cost;
                   actor.inventory[emptyIdx] = item;
                   applyItemStatsToHero(actor, item);
+                  if (mpState.lastHeroExtras)
+                    mpState.lastHeroExtras.delete(actor.netId);
                 }
               }
+            }
+          } else if (msg.cmd === "USE_ITEM" && !actor.dead) {
+            executeHeroInventoryItem(
+              actor,
+              msg.slotIdx,
+              new THREE.Vector3(
+                msg.x || actor.mesh.position.x,
+                0,
+                msg.z || actor.mesh.position.z,
+              ),
+            );
+            if (mpState.lastHeroExtras)
+              mpState.lastHeroExtras.delete(actor.netId);
+          } else if (msg.cmd === "SWAP_ITEM") {
+            const idxA = msg.idxA;
+            const idxB = msg.idxB;
+            if (
+              idxA >= 0 &&
+              idxA <= 5 &&
+              idxB >= 0 &&
+              idxB <= 5 &&
+              idxA !== idxB
+            ) {
+              const tmp = actor.inventory[idxA];
+              actor.inventory[idxA] = actor.inventory[idxB];
+              actor.inventory[idxB] = tmp;
+              if (mpState.lastHeroExtras)
+                mpState.lastHeroExtras.delete(actor.netId);
+            }
+          } else if (msg.cmd === "SELL_ITEM") {
+            const slotIdx = msg.slotIdx;
+            const it =
+              slotIdx >= 0 && slotIdx <= 5 ? actor.inventory[slotIdx] : null;
+            if (it) {
+              const refund = Math.max(50, Math.round((it.cost || 400) * 0.6));
+              actor.gold += refund;
+              const st = it.stats || {};
+              if (st.str) actor.str = Math.max(10, actor.str - st.str);
+              if (st.agi) actor.agi = Math.max(10, actor.agi - st.agi);
+              if (st.int) actor.int = Math.max(10, actor.int - st.int);
+              if (st.moveSpeed)
+                actor.moveSpeed = Math.max(8, actor.moveSpeed - st.moveSpeed);
+              if (st.atkSpeedMult)
+                actor.atkSpeedMult = Math.max(
+                  0.5,
+                  actor.atkSpeedMult - st.atkSpeedMult,
+                );
+              if (st.atkDamage)
+                actor.atkDamage = Math.max(20, actor.atkDamage - st.atkDamage);
+              if (st.maxHp) {
+                actor.maxHp = Math.max(300, actor.maxHp - st.maxHp);
+                actor.hp = Math.min(actor.hp, actor.maxHp);
+              }
+              if (st.hpRegen)
+                actor.hpRegen = Math.max(1, actor.hpRegen - st.hpRegen);
+              if (st.armor) actor.armor = Math.max(0, actor.armor - st.armor);
+              if (st.maxMana) {
+                actor.maxMana = Math.max(150, actor.maxMana - st.maxMana);
+                actor.mana = Math.min(actor.mana, actor.maxMana);
+              }
+              if (st.manaRegen)
+                actor.manaRegen = Math.max(1, actor.manaRegen - st.manaRegen);
+              if (st.lifesteal)
+                actor.lifesteal = Math.max(0, actor.lifesteal - st.lifesteal);
+              if (st.spellAmpBonus)
+                actor.spellAmpBonus = Math.max(
+                  0,
+                  actor.spellAmpBonus - st.spellAmpBonus,
+                );
+              if (st.critChance)
+                actor.critChance = Math.max(
+                  0,
+                  actor.critChance - st.critChance,
+                );
+              actor.inventory[slotIdx] = null;
+              actor.hasRadiance = actor.inventory.some(
+                (x) => x && x.stats && x.stats.hasRadiance,
+              );
+              actor.hasSkadi = actor.inventory.some(
+                (x) => x && x.stats && x.stats.hasSkadi,
+              );
+              actor.hasTravelBoots = actor.inventory.some(
+                (x) => x && x.stats && x.stats.hasTravelBoots,
+              );
+              if (mpState.lastHeroExtras)
+                mpState.lastHeroExtras.delete(actor.netId);
             }
           } else if (msg.cmd === "TP_DEST" && !actor.dead) {
             const dests = getValidTeleportDestinations(actor.team);
@@ -6765,7 +6940,8 @@
           (u.stunTimer > 0 ? 2 : 0) |
           (u.slowTimer > 0 ? 4 : 0) |
           (u.swingAnim > 0 ? 8 : 0) |
-          (u.castAnim > 0 ? 16 : 0);
+          (u.castAnim > 0 ? 16 : 0) |
+          (u.hasAegis ? 32 : 0);
         const isHero = u.type === "hero";
         return [
           u.netId, // 0
@@ -6815,16 +6991,26 @@
           Math.round((u.respawnTimer || 0) * 10) / 10, // 30
           u.tpCharges || 0, // 31
           isHero ? u.inventory.map((it) => (it ? it.id : null)) : null, // 32
+          isHero ? u.lastProcessedCmdSeq || 0 : 0, // 33
         ];
       }
 
       function buildAuthoritativeSnapshot(forceKeyframe = false) {
         mpState.snapSeq = (mpState.snapSeq || 0) + 1;
-        const isKeyframe = forceKeyframe || mpState.snapSeq % 40 === 1;
+        const isFullKeyframe = Boolean(forceKeyframe);
         if (!mpState.knownNetIds) mpState.knownNetIds = new Set();
         if (!mpState.lastEntitySig) mpState.lastEntitySig = new Map();
         if (!mpState.lastHeroExtras) mpState.lastHeroExtras = new Map();
         if (!mpState.pendingRemovals) mpState.pendingRemovals = new Set();
+
+        // Staggered round-robin refresh (2 units per tick) avoids multi-KB keyframe spikes over the internet
+        const staggerIndices = new Set();
+        if (!isFullKeyframe && units.length > 0) {
+          const base = (mpState.staggerCursor || 0) % units.length;
+          staggerIndices.add(base);
+          staggerIndices.add((base + 1) % units.length);
+          mpState.staggerCursor = (base + 2) % units.length;
+        }
 
         const activeIds = new Set();
         const spawnRows = [];
@@ -6837,7 +7023,7 @@
           activeIds.add(u.netId);
 
           const isNew = !mpState.knownNetIds.has(u.netId);
-          if (isKeyframe || isNew) {
+          if (isFullKeyframe || isNew) {
             mpState.knownNetIds.add(u.netId);
             spawnRows.push(serializeFullUnitRow(u));
             continue;
@@ -6848,17 +7034,20 @@
             (u.stunTimer > 0 ? 2 : 0) |
             (u.slowTimer > 0 ? 4 : 0) |
             (u.swingAnim > 0 ? 8 : 0) |
-            (u.castAnim > 0 ? 16 : 0);
+            (u.castAnim > 0 ? 16 : 0) |
+            (u.hasAegis ? 32 : 0);
           const rx = Math.round(u.mesh.position.x * 100) / 100;
           const rz = Math.round(u.mesh.position.z * 100) / 100;
           const ry = Math.round(u.mesh.rotation.y * 100) / 100;
           const rHp = Math.round(u.hp);
           const rMaxHp = Math.round(u.maxHp);
           const rSpd = Math.round(u.moveSpeed * 10) / 10;
+          const forceRow = staggerIndices.has(i);
 
           if (u.type !== "hero") {
             const sig = `${rx},${rz},${ry},${rHp},${rMaxHp},${flags}`;
-            if (mpState.lastEntitySig.get(u.netId) === sig) continue;
+            if (!forceRow && mpState.lastEntitySig.get(u.netId) === sig)
+              continue;
             mpState.lastEntitySig.set(u.netId, sig);
             deltaMobs.push([u.netId, rx, rz, ry, rHp, rMaxHp, rSpd, flags]);
           } else {
@@ -6870,6 +7059,7 @@
             const rXp = Math.round(u.xp);
             const rGold = Math.floor(u.gold);
             const rResp = Math.round((u.respawnTimer || 0) * 10) / 10;
+            const ackSeq = u.lastProcessedCmdSeq || 0;
             const abArr = [
               u.abilityLevels.Q,
               u.abilityLevels.W,
@@ -6887,11 +7077,12 @@
 
             const extraSig = `${abArr.join(",")}|${kdaArr.join(",")}|${invArr.join(",")}`;
             const prevExtra = mpState.lastHeroExtras.get(u.netId);
-            const sendExtras = prevExtra !== extraSig;
+            const sendExtras = forceRow || prevExtra !== extraSig;
             if (sendExtras) mpState.lastHeroExtras.set(u.netId, extraSig);
 
-            const heroSig = `${rx},${rz},${ry},${rHp},${rMana},${rShield},${u.level},${rGold},${flags},${cdArr.join(",")},${extraSig}`;
-            if (mpState.lastEntitySig.get(u.netId) === heroSig) continue;
+            const heroSig = `${rx},${rz},${ry},${rHp},${rMana},${rShield},${u.level},${rGold},${flags},${ackSeq},${cdArr.join(",")},${extraSig}`;
+            if (!forceRow && mpState.lastEntitySig.get(u.netId) === heroSig)
+              continue;
             mpState.lastEntitySig.set(u.netId, heroSig);
 
             deltaHeroes.push([
@@ -6919,6 +7110,7 @@
               rResp,
               u.tpCharges || 0,
               sendExtras ? invArr : null,
+              ackSeq,
             ]);
           }
         }
@@ -6942,7 +7134,7 @@
 
         return {
           seq: mpState.snapSeq,
-          kf: isKeyframe ? 1 : 0,
+          full: isFullKeyframe ? 1 : 0,
           t: Math.round(matchTime * 100) / 100,
           rk: radiantKills,
           dk: direKills,
@@ -6986,14 +7178,39 @@
         let missingEntity = false;
 
         const updateNetTarget = (u, nx, nz, nyaw) => {
-          const prevNetX = u._netHasPos ? u._netX : nx;
-          const prevNetZ = u._netHasPos ? u._netZ : nz;
-          const dx = nx - prevNetX;
-          const dz = nz - prevNetZ;
-          u._netMoving = Math.hypot(dx, dz) > 0.03;
+          const now = performance.now();
+          if (u._netHasPos && u._netTs) {
+            const dtSnap = Math.max(
+              0.025,
+              Math.min(0.25, (now - u._netTs) / 1000),
+            );
+            const dx = nx - u._netRawX;
+            const dz = nz - u._netRawZ;
+            const dist = Math.hypot(dx, dz);
+            u._netMoving = dist > 0.03;
+            if (dist > 0.02 && dist < 14.0) {
+              const maxSpd = Math.max(12, (u.moveSpeed || 12) * 1.25);
+              const rawVx = dx / dtSnap;
+              const rawVz = dz / dtSnap;
+              const spd = Math.hypot(rawVx, rawVz);
+              const scale = spd > maxSpd ? maxSpd / spd : 1;
+              u._netVx = rawVx * scale;
+              u._netVz = rawVz * scale;
+            } else {
+              u._netVx = 0;
+              u._netVz = 0;
+            }
+          } else {
+            u._netVx = 0;
+            u._netVz = 0;
+            u._netMoving = false;
+          }
+          u._netRawX = nx;
+          u._netRawZ = nz;
           u._netX = nx;
           u._netZ = nz;
           u._netYaw = nyaw;
+          u._netTs = now;
           u._netHasPos = true;
         };
 
@@ -7003,6 +7220,7 @@
           u.dead = !!(flags & 1);
           u.stunTimer = flags & 2 ? Math.max(u.stunTimer, 0.14) : 0;
           u.slowTimer = flags & 4 ? Math.max(u.slowTimer, 0.14) : 0;
+          u.hasAegis = !!(flags & 32);
           if (flags & 8 && !(prevFlags & 8) && u.swingAnim <= 0.05) {
             u.swingAnim = 0.34;
           }
@@ -7061,11 +7279,14 @@
               });
               u.netId = id;
               u.ownerPeerId = su[7] || null;
+              u._netRawX = su[8];
+              u._netRawZ = su[9];
               u._netX = su[8];
               u._netZ = su[9];
               u._netYaw = su[10];
               u._netVx = 0;
               u._netVz = 0;
+              u._netTs = nowMs;
               u._netHasPos = true;
               units.push(u);
               if (isMe && cfg) {
@@ -7120,8 +7341,11 @@
             }
             u.respawnTimer = su[30];
             u.tpCharges = su[31];
+            if (typeof su[33] === "number") {
+              u._ackCmdSeq = Math.max(u._ackCmdSeq || 0, su[33]);
+            }
 
-            if (u.isPlayer && Array.isArray(su[32])) {
+            if (Array.isArray(su[32])) {
               let changed = false;
               for (let s = 0; s < 6; s++) {
                 const curId = u.inventory[s] ? u.inventory[s].id : null;
@@ -7132,9 +7356,12 @@
                   changed = true;
                 }
               }
-              if (changed) refreshInventoryGrid();
-              updateAbilityUpgradeButtons();
+              if (changed) {
+                if (u.isPlayer) refreshInventoryGrid();
+                if (inspectedUnit === u) renderInspectedHeroInventory(u);
+              }
             }
+            if (u.isPlayer) updateAbilityUpgradeButtons();
 
             applyFlagsAndVis(u, su[29] || 0, wasDead, su[8], su[9], su[10]);
           }
@@ -7204,27 +7431,31 @@
             }
             u.respawnTimer = dh[21];
             u.tpCharges = dh[22];
-            if (u.isPlayer) {
-              if (Array.isArray(dh[23])) {
-                let changed = false;
-                for (let s = 0; s < 6; s++) {
-                  const curId = u.inventory[s] ? u.inventory[s].id : null;
-                  if (curId !== dh[23][s]) {
-                    u.inventory[s] = dh[23][s]
-                      ? SHOP_ITEMS.find((it) => it.id === dh[23][s]) || null
-                      : null;
-                    changed = true;
-                  }
-                }
-                if (changed) refreshInventoryGrid();
-              }
-              updateAbilityUpgradeButtons();
+            if (typeof dh[24] === "number") {
+              u._ackCmdSeq = Math.max(u._ackCmdSeq || 0, dh[24]);
             }
+            if (Array.isArray(dh[23])) {
+              let changed = false;
+              for (let s = 0; s < 6; s++) {
+                const curId = u.inventory[s] ? u.inventory[s].id : null;
+                if (curId !== dh[23][s]) {
+                  u.inventory[s] = dh[23][s]
+                    ? SHOP_ITEMS.find((it) => it.id === dh[23][s]) || null
+                    : null;
+                  changed = true;
+                }
+              }
+              if (changed) {
+                if (u.isPlayer) refreshInventoryGrid();
+                if (inspectedUnit === u) renderInspectedHeroInventory(u);
+              }
+            }
+            if (u.isPlayer) updateAbilityUpgradeButtons();
             applyFlagsAndVis(u, dh[20] || 0, wasDead, dh[1], dh[2], dh[3]);
           }
         }
 
-        // 4. Process explicit despawns & keyframe reconciliation
+        // 4. Process explicit despawns & full-keyframe reconciliation
         if (Array.isArray(snap.rem) && snap.rem.length > 0) {
           const remSet = new Set(snap.rem);
           for (let i = units.length - 1; i >= 0; i--) {
@@ -7237,7 +7468,7 @@
             }
           }
         }
-        if (snap.kf === 1) {
+        if (snap.full === 1) {
           for (let i = units.length - 1; i >= 0; i--) {
             const u = units[i];
             if (u.netId && !seenIds.has(u.netId)) {
@@ -7404,7 +7635,11 @@
           }
 
           // 2. Client-side movement prediction for Guest's own hero
-          if (playerHero.targetUnit) {
+          if (playerHero.stunTimer > 0) {
+            playerHero.targetUnit = null;
+            playerHero.targetPos = null;
+            playerHero.attackMovePos = null;
+          } else if (playerHero.targetUnit) {
             if (playerHero.targetUnit.dead) {
               playerHero.targetUnit = null;
             } else {
@@ -7443,9 +7678,13 @@
             }
           }
 
-          // Latency-aware dead-zone reconciliation so local movement never fights Host's past coordinates
-          if (localHeroMoving) {
-            playerHero._stopGraceTimer = 0.18;
+          // Command-ACK-aware reconciliation so reversing direction never yanks Guest backward toward pre-ACK Host coords
+          const awaitingAck =
+            (mpState.cmdSeq || 0) > (playerHero._ackCmdSeq || 0) &&
+            performance.now() - (mpState.lastCmdSentAt || 0) < 1200;
+
+          if (localHeroMoving || awaitingAck) {
+            playerHero._stopGraceTimer = 0.22;
           } else if ((playerHero._stopGraceTimer || 0) > 0) {
             playerHero._stopGraceTimer = Math.max(
               0,
@@ -7453,13 +7692,13 @@
             );
           }
 
-          if (playerHero._netHasPos) {
+          if (playerHero._netHasPos && !awaitingAck) {
             const errX = playerHero._netX - playerHero.mesh.position.x;
             const errZ = playerHero._netZ - playerHero.mesh.position.z;
             const errDist = Math.hypot(errX, errZ);
             if (localHeroMoving) {
-              if (errDist > 3.8) {
-                const alpha = Math.min(1, dt * 6.0);
+              if (errDist > 5.0) {
+                const alpha = Math.min(1, dt * 4.5);
                 playerHero.mesh.position.x += errX * alpha;
                 playerHero.mesh.position.z += errZ * alpha;
                 playerHero.mesh.position.y = getTerrainHeightAt(
@@ -7469,9 +7708,9 @@
               }
             } else if (
               (playerHero._stopGraceTimer || 0) <= 0 &&
-              errDist > 0.35
+              errDist > 0.5
             ) {
-              const alpha = 1 - Math.exp(-9.0 * dt);
+              const alpha = 1 - Math.exp(-8.5 * dt);
               playerHero.mesh.position.x += errX * alpha;
               playerHero.mesh.position.z += errZ * alpha;
               playerHero.mesh.position.y = getTerrainHeightAt(
@@ -7519,9 +7758,24 @@
           if (u.isPlayer) {
             isMoving = localHeroMoving;
           } else if (u._netHasPos) {
+            const ageSec = u._netTs ? (performance.now() - u._netTs) / 1000 : 1;
+            if (ageSec > 0.14) u._netMoving = false;
+            const netSpd = Math.hypot(u._netVx || 0, u._netVz || 0);
+            if (ageSec < 0.14 && netSpd > 1.5) {
+              u._netX = THREE.MathUtils.clamp(
+                u._netX + u._netVx * dt,
+                -MAP_HALF + 3,
+                MAP_HALF - 3,
+              );
+              u._netZ = THREE.MathUtils.clamp(
+                u._netZ + u._netVz * dt,
+                -MAP_HALF + 3,
+                MAP_HALF - 3,
+              );
+            }
             const dx = u._netX - u.mesh.position.x;
             const dz = u._netZ - u.mesh.position.z;
-            isMoving = dx * dx + dz * dz > 0.008 || !!u._netMoving;
+            isMoving = dx * dx + dz * dz > 0.012 || !!u._netMoving;
             u.mesh.position.x += dx * interpAlpha;
             u.mesh.position.z += dz * interpAlpha;
             u.mesh.position.y = getTerrainHeightAt(
@@ -21144,7 +21398,10 @@ diffuseColor.rgb *= mix(0.58, 1.04, groundAO) * canopyShade;`,
               slayer.spellAmpBonus += 0.28;
               slayer.hasRadiance = true;
               const emptyIdx = slayer.inventory.findIndex((s) => s === null);
-              if (emptyIdx !== -1 && slayer.isPlayer) {
+              if (
+                emptyIdx !== -1 &&
+                (slayer.isPlayer || slayer.isRemoteHuman)
+              ) {
                 slayer.inventory[emptyIdx] = {
                   id: "dragon_soul",
                   name: "Elder Dragon's Soul",
@@ -21202,7 +21459,10 @@ diffuseColor.rgb *= mix(0.58, 1.04, groundAO) * canopyShade;`,
               const emptyIdx = beneficiary.inventory.findIndex(
                 (s) => s === null,
               );
-              if (emptyIdx !== -1 && beneficiary.isPlayer) {
+              if (
+                emptyIdx !== -1 &&
+                (beneficiary.isPlayer || beneficiary.isRemoteHuman)
+              ) {
                 beneficiary.inventory[emptyIdx] = {
                   id: "divine_cheese",
                   name: "Divine Refresher Cheese",
@@ -24711,72 +24971,78 @@ diffuseColor.rgb *= mix(0.58, 1.04, groundAO) * canopyShade;`,
           const isR = f.sub === "ranged";
 
           const radMegaMult = radiantMegaCreeps ? 2.15 : 1.0;
-          units.push(
-            new MobaEntity({
-              name: radiantMegaCreeps
-                ? isR
-                  ? "Radiant Mega Arcanist"
-                  : "Radiant Mega Centurion"
-                : isR
-                  ? "Radiant Arcanist"
-                  : "Radiant Footman",
-              team: "radiant",
-              type: "creep",
-              subType: f.sub,
-              isMega: radiantMegaCreeps,
-              x: -74 + f.dx,
-              z: 74 + f.dz,
-              maxHp: Math.round((isR ? 350 : 490) * m.hp * radMegaMult),
-              atkDamage: Math.round((isR ? 38 : 30) * m.dmg * radMegaMult),
-              atkRange: isR ? 9.5 : 2.8,
-              atkCooldown: 1.1,
-              moveSpeed: radiantMegaCreeps ? 10.4 : 9.4,
-              armor: Math.round(
-                (isR ? 2 : 3) + m.armor + (radiantMegaCreeps ? 6 : 0),
-              ),
-              radius: radiantMegaCreeps ? 1.25 : 0.9,
-              goldBounty: [
-                Math.round((isR ? 48 : 38) * m.bounty),
-                Math.round((isR ? 58 : 48) * m.bounty),
-              ],
-              xpBounty: Math.round((isR ? 65 : 52) * m.bounty),
-              waypoints: radPath,
-            }),
+          const radCreep = new MobaEntity({
+            name: radiantMegaCreeps
+              ? isR
+                ? "Radiant Mega Arcanist"
+                : "Radiant Mega Centurion"
+              : isR
+                ? "Radiant Arcanist"
+                : "Radiant Footman",
+            team: "radiant",
+            type: "creep",
+            subType: f.sub,
+            isMega: radiantMegaCreeps,
+            x: -74 + f.dx,
+            z: 74 + f.dz,
+            maxHp: Math.round((isR ? 350 : 490) * m.hp * radMegaMult),
+            atkDamage: Math.round((isR ? 38 : 30) * m.dmg * radMegaMult),
+            atkRange: isR ? 9.5 : 2.8,
+            atkCooldown: 1.1,
+            moveSpeed: radiantMegaCreeps ? 10.4 : 9.4,
+            armor: Math.round(
+              (isR ? 2 : 3) + m.armor + (radiantMegaCreeps ? 6 : 0),
+            ),
+            radius: radiantMegaCreeps ? 1.25 : 0.9,
+            goldBounty: [
+              Math.round((isR ? 48 : 38) * m.bounty),
+              Math.round((isR ? 58 : 48) * m.bounty),
+            ],
+            xpBounty: Math.round((isR ? 65 : 52) * m.bounty),
+            waypoints: radPath,
+          });
+          radCreep.mesh.rotation.y = Math.atan2(
+            radPath[0].x - radCreep.mesh.position.x,
+            radPath[0].z - radCreep.mesh.position.z,
           );
+          units.push(radCreep);
 
           const direMegaMult = direMegaCreeps ? 2.15 : 1.0;
-          units.push(
-            new MobaEntity({
-              name: direMegaCreeps
-                ? isR
-                  ? "Dire Mega Warlock"
-                  : "Dire Mega Behemoth"
-                : isR
-                  ? "Dire Warlock"
-                  : "Dire Ghoul",
-              team: "dire",
-              type: "creep",
-              subType: f.sub,
-              isMega: direMegaCreeps,
-              x: 74 - f.dx,
-              z: -74 - f.dz,
-              maxHp: Math.round((isR ? 350 : 490) * m.hp * direMegaMult),
-              atkDamage: Math.round((isR ? 38 : 30) * m.dmg * direMegaMult),
-              atkRange: isR ? 9.5 : 2.8,
-              atkCooldown: 1.1,
-              moveSpeed: direMegaCreeps ? 10.4 : 9.4,
-              armor: Math.round(
-                (isR ? 2 : 3) + m.armor + (direMegaCreeps ? 6 : 0),
-              ),
-              radius: direMegaCreeps ? 1.25 : 0.9,
-              goldBounty: [
-                Math.round((isR ? 48 : 38) * m.bounty),
-                Math.round((isR ? 58 : 48) * m.bounty),
-              ],
-              xpBounty: Math.round((isR ? 65 : 52) * m.bounty),
-              waypoints: direPath,
-            }),
+          const direCreep = new MobaEntity({
+            name: direMegaCreeps
+              ? isR
+                ? "Dire Mega Warlock"
+                : "Dire Mega Behemoth"
+              : isR
+                ? "Dire Warlock"
+                : "Dire Ghoul",
+            team: "dire",
+            type: "creep",
+            subType: f.sub,
+            isMega: direMegaCreeps,
+            x: 74 - f.dx,
+            z: -74 - f.dz,
+            maxHp: Math.round((isR ? 350 : 490) * m.hp * direMegaMult),
+            atkDamage: Math.round((isR ? 38 : 30) * m.dmg * direMegaMult),
+            atkRange: isR ? 9.5 : 2.8,
+            atkCooldown: 1.1,
+            moveSpeed: direMegaCreeps ? 10.4 : 9.4,
+            armor: Math.round(
+              (isR ? 2 : 3) + m.armor + (direMegaCreeps ? 6 : 0),
+            ),
+            radius: direMegaCreeps ? 1.25 : 0.9,
+            goldBounty: [
+              Math.round((isR ? 48 : 38) * m.bounty),
+              Math.round((isR ? 58 : 48) * m.bounty),
+            ],
+            xpBounty: Math.round((isR ? 65 : 52) * m.bounty),
+            waypoints: direPath,
+          });
+          direCreep.mesh.rotation.y = Math.atan2(
+            direPath[0].x - direCreep.mesh.position.x,
+            direPath[0].z - direCreep.mesh.position.z,
           );
+          units.push(direCreep);
         });
       }
 
@@ -27428,16 +27694,28 @@ diffuseColor.rgb *= mix(0.58, 1.04, groundAO) * canopyShade;`,
           }
 
           if (u.type === "creep") {
+            // Advance past any waypoint reached or overshot during combat/knockback so creeps never march backward
+            while (u.waypoints.length > 1) {
+              const wp0 = u.waypoints[0];
+              const wp1 = u.waypoints[1];
+              const distSq = u.mesh.position.distanceToSquared(wp0);
+              const segX = wp1.x - wp0.x;
+              const segZ = wp1.z - wp0.z;
+              const passedPlane =
+                (u.mesh.position.x - wp0.x) * segX +
+                  (u.mesh.position.z - wp0.z) * segZ >
+                0;
+              if (distSq < 30.25 || passedPlane) {
+                u.waypoints.shift();
+              } else {
+                break;
+              }
+            }
             const foe = findNearestTarget(u, 11.5, false, false);
             if (foe) u.targetUnit = foe;
             else {
               u.targetUnit = null;
               if (u.waypoints.length > 0) {
-                if (
-                  u.mesh.position.distanceToSquared(u.waypoints[0]) < 11.56 &&
-                  u.waypoints.length > 1
-                )
-                  u.waypoints.shift();
                 u.targetPos = u.waypoints[0];
               }
             }
@@ -28794,6 +29072,9 @@ diffuseColor.rgb *= mix(0.58, 1.04, groundAO) * canopyShade;`,
         playerHero.inventory[idxA] = playerHero.inventory[idxB];
         playerHero.inventory[idxB] = temp;
         swapSourceSlot = null;
+        if (mpState.active && mpState.role === "guest") {
+          mpSendToHost({ type: "CMD", cmd: "SWAP_ITEM", idxA, idxB });
+        }
         sfx.play("move");
         refreshInventoryGrid();
         spawnFloatText(
@@ -28808,6 +29089,22 @@ diffuseColor.rgb *= mix(0.58, 1.04, groundAO) * canopyShade;`,
         if (!playerHero || gameOver) return;
         const it = playerHero.inventory[slotIdx];
         if (!it) return;
+
+        if (mpState.active && mpState.role === "guest") {
+          playerHero.inventory[slotIdx] = null;
+          if (swapSourceSlot === slotIdx) swapSourceSlot = null;
+          mpSendToHost({ type: "CMD", cmd: "SELL_ITEM", slotIdx });
+          sfx.play("gold");
+          refreshInventoryGrid();
+          const refundEst = Math.max(50, Math.round((it.cost || 400) * 0.6));
+          spawnFloatText(
+            playerHero.mesh.position,
+            `Sold ${it.name} (+${refundEst}g)`,
+            "#facc15",
+            15,
+          );
+          return;
+        }
 
         const refund = Math.max(50, Math.round((it.cost || 400) * 0.6));
         playerHero.gold += refund;
@@ -29593,34 +29890,30 @@ diffuseColor.rgb *= mix(0.58, 1.04, groundAO) * canopyShade;`,
         updatePrimedState();
       };
 
-      function useInventorySlot(slotIdx) {
-        if (
-          !playerHero ||
-          playerHero.dead ||
-          playerHero.reincarnating ||
-          gameOver
-        )
-          return;
-        const it = playerHero.inventory[slotIdx];
+      function executeHeroInventoryItem(hero, slotIdx, aimPos) {
+        if (!hero || hero.dead || hero.reincarnating || gameOver) return;
+        const it = hero.inventory[slotIdx];
         if (!it || !it.active) return;
 
-        const cdLeft = playerHero.itemCooldowns[it.active] || 0;
+        const cdLeft = hero.itemCooldowns[it.active] || 0;
         if (cdLeft > 0) {
-          spawnFloatText(
-            playerHero.mesh.position,
-            `${it.name} CD: ${cdLeft.toFixed(1)}s`,
-            "#94a3b8",
-            13,
-          );
+          if (hero.isPlayer)
+            spawnFloatText(
+              hero.mesh.position,
+              `${it.name} CD: ${cdLeft.toFixed(1)}s`,
+              "#94a3b8",
+              13,
+            );
           return;
         }
 
-        const p = playerHero.mesh.position;
+        const p = hero.mesh.position;
+        const aim = aimPos || p;
         if (it.active === "blink") {
-          playerHero.itemCooldowns.blink = 10.0;
-          sfx.play("spell_blink");
+          hero.itemCooldowns.blink = 10.0;
+          if (hero.isPlayer) sfx.play("spell_blink");
           spawnParticleBurst(p, 0x38bdf8, 16);
-          const delta = new THREE.Vector3().subVectors(worldCursor, p);
+          const delta = new THREE.Vector3().subVectors(aim, p);
           delta.y = 0;
           const d = Math.min(delta.length(), 24);
           if (delta.lengthSq() > 0.001) delta.normalize();
@@ -29634,49 +29927,47 @@ diffuseColor.rgb *= mix(0.58, 1.04, groundAO) * canopyShade;`,
             -MAP_HALF + 4,
             MAP_HALF - 4,
           );
-          playerHero.mesh.position.set(nx, getTerrainHeightAt(nx, nz), nz);
-          playerHero.targetPos = null;
-          playerHero.attackMovePos = null;
+          hero.mesh.position.set(nx, getTerrainHeightAt(nx, nz), nz);
+          hero.targetPos = null;
+          hero.attackMovePos = null;
           spawnShockwaveRing(nx, nz, 4.0, 0x38bdf8, 0.45);
         } else if (it.active === "blademail") {
-          playerHero.itemCooldowns.blademail = 12.0;
-          playerHero.bladeMailTimer = 4.5;
-          sfx.play("spell_shield_nova");
+          hero.itemCooldowns.blademail = 12.0;
+          hero.bladeMailTimer = 4.5;
+          if (hero.isPlayer) sfx.play("spell_shield_nova");
           spawnShockwaveRing(p.x, p.z, 3.8, 0xf97316, 0.45);
           spawnFloatText(p, "SPIKED CARAPACE!", "#fb923c", 14);
         } else if (it.active === "satanic") {
-          playerHero.itemCooldowns.satanic = 14.0;
-          playerHero.hp = Math.min(
-            playerHero.maxHp,
-            playerHero.hp + playerHero.maxHp * 0.45,
-          );
-          sfx.play("spell_shadow_coil");
+          hero.itemCooldowns.satanic = 14.0;
+          hero.hp = Math.min(hero.maxHp, hero.hp + hero.maxHp * 0.45);
+          if (hero.isPlayer) sfx.play("spell_shadow_coil");
           spawnShockwaveRing(p.x, p.z, 4.2, 0xf43f5e, 0.5);
           spawnFloatText(p, "UNHOLY RAGE HEAL!", "#fb7185", 15);
         } else if (it.active === "shiva") {
-          playerHero.itemCooldowns.shiva = 12.0;
-          sfx.play("spell_frost_volley");
+          hero.itemCooldowns.shiva = 12.0;
+          if (hero.isPlayer) sfx.play("spell_frost_volley");
           spawnShockwaveRing(p.x, p.z, 11.0, 0x38bdf8, 0.65);
           units.forEach((u) => {
             if (
               !u.dead &&
-              u.team !== playerHero.team &&
+              u.team !== hero.team &&
               u.type !== "ancient" &&
               u.mesh.position.distanceTo(p) <= 11.0 + u.radius
             ) {
-              u.takeDamage(210, playerHero);
+              u.takeDamage(210, hero);
               u.slowTimer = 4.0;
               u.slowFactor = 0.45;
             }
           });
         } else if (it.active === "hex") {
-          const target = findNearestTarget(playerHero, 18.0, false, true);
+          const target = findNearestTarget(hero, 18.0, false, true);
           if (!target) {
-            spawnFloatText(p, "No target in range!", "#94a3b8", 13);
+            if (hero.isPlayer)
+              spawnFloatText(p, "No target in range!", "#94a3b8", 13);
             return;
           }
-          playerHero.itemCooldowns.hex = 13.0;
-          sfx.play("spell_shadow_coil");
+          hero.itemCooldowns.hex = 13.0;
+          if (hero.isPlayer) sfx.play("spell_shadow_coil");
           target.stunTimer = 2.4;
           spawnOrbitalSkyBeam(
             target.mesh.position.x,
@@ -29689,42 +29980,40 @@ diffuseColor.rgb *= mix(0.58, 1.04, groundAO) * canopyShade;`,
         } else if (it.active === "vitality_elixir") {
           const limit = getModeConsumableLimit();
           const usedSoFar =
-            (playerHero.consumableUsedCount &&
-              playerHero.consumableUsedCount[it.id]) ||
-            0;
+            (hero.consumableUsedCount && hero.consumableUsedCount[it.id]) || 0;
           if (usedSoFar >= limit) {
             const prof =
               AI_DIFFICULTY_PROFILES[aiDifficulty] ||
               AI_DIFFICULTY_PROFILES.veteran;
-            spawnFloatText(
-              p,
-              `${prof.label.toUpperCase()} LIMIT (${usedSoFar}/${limit} USED)!`,
-              "#fb7185",
-              14,
-            );
+            if (hero.isPlayer)
+              spawnFloatText(
+                p,
+                `${prof.label.toUpperCase()} LIMIT (${usedSoFar}/${limit} USED)!`,
+                "#fb7185",
+                14,
+              );
             return;
           }
-          if (!playerHero.consumableUsedCount)
-            playerHero.consumableUsedCount = {};
-          playerHero.consumableUsedCount[it.id] = usedSoFar + 1;
-          playerHero.inventory[slotIdx] = null;
-          playerHero.hp = Math.min(playerHero.maxHp, playerHero.hp + 450);
-          playerHero.mana = Math.min(playerHero.maxMana, playerHero.mana + 280);
-          playerHero.str += 10;
-          playerHero.agi += 10;
-          playerHero.int += 10;
-          playerHero.moveSpeed += 2.6;
+          if (!hero.consumableUsedCount) hero.consumableUsedCount = {};
+          hero.consumableUsedCount[it.id] = usedSoFar + 1;
+          hero.inventory[slotIdx] = null;
+          hero.hp = Math.min(hero.maxHp, hero.hp + 450);
+          hero.mana = Math.min(hero.maxMana, hero.mana + 280);
+          hero.str += 10;
+          hero.agi += 10;
+          hero.int += 10;
+          hero.moveSpeed += 2.6;
           scheduledEvents.push({
             delay: 16.0,
             fn: () => {
-              if (!playerHero) return;
-              playerHero.str = Math.max(10, playerHero.str - 10);
-              playerHero.agi = Math.max(10, playerHero.agi - 10);
-              playerHero.int = Math.max(10, playerHero.int - 10);
-              playerHero.moveSpeed = Math.max(8, playerHero.moveSpeed - 2.6);
+              if (!hero) return;
+              hero.str = Math.max(10, hero.str - 10);
+              hero.agi = Math.max(10, hero.agi - 10);
+              hero.int = Math.max(10, hero.int - 10);
+              hero.moveSpeed = Math.max(8, hero.moveSpeed - 2.6);
             },
           });
-          sfx.play("buy");
+          if (hero.isPlayer) sfx.play("buy");
           spawnShockwaveRing(p.x, p.z, 4.5, 0x34d399, 0.55);
           const remText =
             aiDifficulty === "immortal"
@@ -29736,34 +30025,37 @@ diffuseColor.rgb *= mix(0.58, 1.04, groundAO) * canopyShade;`,
             "#34d399",
             15,
           );
-          refreshInventoryGrid();
-          refreshActiveShopIfOpen();
+          if (hero.isPlayer) {
+            refreshInventoryGrid();
+            refreshActiveShopIfOpen();
+          }
         } else if (it.active === "bkb") {
-          playerHero.itemCooldowns.bkb = 16.0;
-          playerHero.bkbTimer = 6.0;
-          playerHero.stunTimer = 0;
-          playerHero.slowTimer = 0;
-          sfx.play("aegis_reborn");
+          hero.itemCooldowns.bkb = 16.0;
+          hero.bkbTimer = 6.0;
+          hero.stunTimer = 0;
+          hero.slowTimer = 0;
+          if (hero.isPlayer) sfx.play("aegis_reborn");
           spawnOrbitalSkyBeam(p.x, p.z, 3.8, 0xfacc15, 0.8);
           spawnFloatText(p, "AVATAR SPELL IMMUNITY (6s)!", "#facc15", 16);
         } else if (it.active === "manta") {
-          playerHero.itemCooldowns.manta = 13.0;
-          playerHero.stunTimer = 0;
-          playerHero.slowTimer = 0;
-          playerHero.blinkBuffTimer = Math.max(playerHero.blinkBuffTimer, 3.5);
-          sfx.play("spell_blink");
+          hero.itemCooldowns.manta = 13.0;
+          hero.stunTimer = 0;
+          hero.slowTimer = 0;
+          hero.blinkBuffTimer = Math.max(hero.blinkBuffTimer, 3.5);
+          if (hero.isPlayer) sfx.play("spell_blink");
           spawnShockwaveRing(p.x, p.z, 4.5, 0x38bdf8, 0.45);
           spawnFloatText(p, "MIRROR CLEANSE & HASTE!", "#38bdf8", 15);
         } else if (it.active === "abyssal") {
-          const target = findNearestTarget(playerHero, 8.5, false, true);
+          const target = findNearestTarget(hero, 8.5, false, true);
           if (!target) {
-            spawnFloatText(p, "No target in range!", "#94a3b8", 13);
+            if (hero.isPlayer)
+              spawnFloatText(p, "No target in range!", "#94a3b8", 13);
             return;
           }
-          playerHero.itemCooldowns.abyssal = 14.0;
+          hero.itemCooldowns.abyssal = 14.0;
           target.stunTimer = 2.0;
-          target.takeDamage(220, playerHero, true);
-          sfx.play("crit");
+          target.takeDamage(220, hero, true);
+          if (hero.isPlayer) sfx.play("crit");
           spawnOrbitalSkyBeam(
             target.mesh.position.x,
             target.mesh.position.z,
@@ -29778,36 +30070,94 @@ diffuseColor.rgb *= mix(0.58, 1.04, groundAO) * canopyShade;`,
             16,
           );
         } else if (it.active === "bloodstone") {
-          playerHero.itemCooldowns.bloodstone = 15.0;
-          playerHero.hp = Math.min(playerHero.maxHp, playerHero.hp + 500);
-          playerHero.mana = Math.min(playerHero.maxMana, playerHero.mana + 500);
-          sfx.play("spell_shadow_coil");
+          hero.itemCooldowns.bloodstone = 15.0;
+          hero.hp = Math.min(hero.maxHp, hero.hp + 500);
+          hero.mana = Math.min(hero.maxMana, hero.mana + 500);
+          if (hero.isPlayer) sfx.play("spell_shadow_coil");
           spawnShockwaveRing(p.x, p.z, 5.0, 0xf43f5e, 0.55);
           spawnFloatText(p, "BLOODPACT (+500 HP & MANA)!", "#fb7185", 16);
         } else if (it.active === "refresher") {
-          playerHero.itemCooldowns.refresher = 28.0;
+          hero.itemCooldowns.refresher = 28.0;
           ["Q", "W", "E", "R"].forEach((k) => {
-            playerHero.cooldowns[k] = 0;
+            hero.cooldowns[k] = 0;
           });
-          sfx.play("aegis_reborn");
+          if (hero.isPlayer) sfx.play("aegis_reborn");
           spawnOrbitalSkyBeam(p.x, p.z, 4.4, 0x34d399, 0.85);
           spawnFloatText(p, "ALL ABILITIES REFRESHED!", "#34d399", 17);
         } else if (it.active === "cheese") {
-          if (!playerHero.consumableUsedCount)
-            playerHero.consumableUsedCount = {};
-          playerHero.consumableUsedCount.divine_cheese =
-            (playerHero.consumableUsedCount.divine_cheese || 0) + 1;
-          playerHero.inventory[slotIdx] = null;
-          playerHero.hp = playerHero.maxHp;
-          playerHero.mana = playerHero.maxMana;
+          if (!hero.consumableUsedCount) hero.consumableUsedCount = {};
+          hero.consumableUsedCount.divine_cheese =
+            (hero.consumableUsedCount.divine_cheese || 0) + 1;
+          hero.inventory[slotIdx] = null;
+          hero.hp = hero.maxHp;
+          hero.mana = hero.maxMana;
           ["Q", "W", "E", "R"].forEach((k) => {
-            playerHero.cooldowns[k] = 0;
+            hero.cooldowns[k] = 0;
           });
-          sfx.play("aegis_reborn");
+          if (hero.isPlayer) sfx.play("aegis_reborn");
           spawnOrbitalSkyBeam(p.x, p.z, 4.5, 0xfacc15, 0.9);
           spawnFloatText(p, "DIVINE REFRESH!", "#facc15", 18);
-          refreshInventoryGrid();
+          if (hero.isPlayer) refreshInventoryGrid();
         }
+      }
+
+      function useInventorySlot(slotIdx) {
+        if (
+          !playerHero ||
+          playerHero.dead ||
+          playerHero.reincarnating ||
+          gameOver
+        )
+          return;
+        const it = playerHero.inventory[slotIdx];
+        if (!it || !it.active) return;
+
+        if (mpState.active && mpState.role === "guest") {
+          const cdLeft = playerHero.itemCooldowns[it.active] || 0;
+          if (cdLeft > 0) {
+            spawnFloatText(
+              playerHero.mesh.position,
+              `${it.name} CD: ${cdLeft.toFixed(1)}s`,
+              "#94a3b8",
+              13,
+            );
+            return;
+          }
+          mpSendToHost({
+            type: "CMD",
+            cmd: "USE_ITEM",
+            slotIdx,
+            x: worldCursor.x,
+            z: worldCursor.z,
+          });
+          const cdMap = {
+            blink: 10.0,
+            blademail: 12.0,
+            satanic: 14.0,
+            shiva: 12.0,
+            hex: 13.0,
+            bkb: 16.0,
+            manta: 13.0,
+            abyssal: 14.0,
+            bloodstone: 15.0,
+            refresher: 28.0,
+          };
+          if (cdMap[it.active])
+            playerHero.itemCooldowns[it.active] = cdMap[it.active];
+          if (it.active === "vitality_elixir" || it.active === "cheese") {
+            playerHero.inventory[slotIdx] = null;
+            refreshInventoryGrid();
+          }
+          spawnFloatText(
+            playerHero.mesh.position,
+            `Activated ${it.name}!`,
+            "#38bdf8",
+            14,
+          );
+          return;
+        }
+
+        executeHeroInventoryItem(playerHero, slotIdx, worldCursor);
       }
 
       let currentShopTab = "all";
