@@ -10,7 +10,7 @@
     <meta name="mobile-web-app-capable" content="yes" />
     <title>
       Defense of the Ancients 3D • Grandmaster Sovereign Multiplayer Edition
-      (v64)
+      (v65)
     </title>
     <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
     <script src="https://cdn.tailwindcss.com"></script>
@@ -1251,10 +1251,10 @@
             class="intro-badge-float inline-flex items-center gap-1.5 px-2.5 sm:px-3.5 py-0.5 rounded-full bg-amber-500/15 border border-amber-400/50 text-amber-300 text-[9px] sm:text-[11px] font-cinzel font-bold tracking-wider sm:tracking-widest uppercase shadow-[0_0_20px_rgba(250,204,21,0.22)] truncate"
           >
             <i class="fa-solid fa-crown shrink-0"></i>
-            <span class="sm:hidden">DOTA 3D • MULTIPLAYER EDITION (V64)</span>
+            <span class="sm:hidden">DOTA 3D • MULTIPLAYER EDITION (V65)</span>
             <span class="hidden sm:inline"
               >Defense of the Ancients 3D • Grandmaster Sovereign Multiplayer
-              Edition (v64)</span
+              Edition (v65)</span
             >
           </div>
           <button
@@ -1775,15 +1775,24 @@
                   >0</span
                 >
               </div>
-              <div class="h-4 w-[1px] bg-slate-700/80 hidden sm:block"></div>
+              <div class="h-4 w-[1px] bg-slate-700/80"></div>
               <div
-                class="hidden sm:flex items-center gap-1"
-                title="Real-Time Frame Rate (120 FPS High-Refresh Engine)"
+                class="flex items-center gap-1.5"
+                title="Real-Time Frame Rate & Network Ping (RTT)"
               >
                 <span
                   id="hud-fps"
-                  class="font-mono font-bold text-cyan-300 text-[11px]"
+                  class="font-mono font-bold text-cyan-300 text-[10px] sm:text-[11px]"
                   >120 FPS</span
+                >
+                <span id="hud-ping-sep" class="text-slate-600 text-[10px]"
+                  >•</span
+                >
+                <span
+                  id="hud-ping"
+                  class="font-mono font-bold text-emerald-400 text-[10px] sm:text-[11px]"
+                  title="Multiplayer Round-Trip Latency (Ping)"
+                  >LOCAL</span
                 >
               </div>
             </div>
@@ -5621,6 +5630,9 @@
         syncAccum: 0,
         announceAccum: 0,
         joySendAccum: 0,
+        pingAccum: 0,
+        pingMs: null,
+        peerPings: new Map(),
       };
       let localP2Hero = null;
       const p2MoveKeys = { up: false, down: false, left: false, right: false };
@@ -5668,7 +5680,7 @@
         };
       }
 
-      function mpSendOverConn(conn, packet) {
+      function mpSendOverConn(conn, packet, preSerializedRaw = null) {
         if (!conn || !conn.open) return;
         try {
           const dc = conn.dataChannel || conn._dc;
@@ -5676,11 +5688,14 @@
             packet.type === "WORLD_SNAP" &&
             dc &&
             typeof dc.bufferedAmount === "number" &&
-            dc.bufferedAmount > 12288
+            dc.bufferedAmount > 10240
           ) {
             return;
           }
-          const raw = JSON.stringify(packet);
+          const raw =
+            preSerializedRaw !== null
+              ? preSerializedRaw
+              : JSON.stringify(packet);
           const MAX_CHUNK = 11000;
           if (raw.length <= MAX_CHUNK) {
             conn.send(packet);
@@ -5708,6 +5723,7 @@
           senderId: mpState.myId,
           roomCode: mpState.roomCode,
         };
+        const raw = JSON.stringify(packet);
         if (mpState.bc) {
           try {
             mpState.bc.postMessage(packet);
@@ -5720,7 +5736,7 @@
           );
         } catch (e) {}
         mpState.conns.forEach((conn) => {
-          mpSendOverConn(conn, packet);
+          mpSendOverConn(conn, packet, raw);
         });
       }
 
@@ -5899,6 +5915,22 @@
                     </div>
                     <span class="uppercase font-cinzel font-black text-[10px] px-2 py-0.5 rounded ${p.team === "radiant" ? "bg-emerald-500/20 text-emerald-300" : "bg-rose-500/20 text-rose-300"}">${p.team}</span>
                 `;
+          const pPing =
+            p.id === mpState.myId
+              ? mpState.pingMs
+              : mpState.peerPings.get(p.id);
+          if (typeof pPing === "number") {
+            const pingSpan = document.createElement("span");
+            const pCls =
+              pPing < 85
+                ? "text-emerald-300"
+                : pPing < 165
+                  ? "text-amber-300"
+                  : "text-rose-400";
+            pingSpan.className = `font-mono text-[10px] font-bold ml-2 ${pCls}`;
+            pingSpan.textContent = `${Math.round(pPing)} ms`;
+            el.querySelector("div").appendChild(pingSpan);
+          }
           list.appendChild(el);
         });
       }
@@ -6048,7 +6080,7 @@
             "connecting",
             `Registering Room [${code}] on Global Signaling + Metered TURN Relay...`,
           );
-          const peer = new Peer(`dota3d-sov-v64-${code}`, getMpPeerOptions());
+          const peer = new Peer(`dota3d-sov-v65-${code}`, getMpPeerOptions());
           mpState.peer = peer;
 
           peer.on("open", () => {
@@ -6175,7 +6207,7 @@
               "connecting",
               `Negotiating P2P / Metered TURN Relay with Room [${code}]...`,
             );
-            const conn = peer.connect(`dota3d-sov-v64-${code}`, {
+            const conn = peer.connect(`dota3d-sov-v65-${code}`, {
               reliable: false,
               serialization: "json",
               _dcInit: { ordered: false, maxRetransmits: 0 },
@@ -6332,6 +6364,8 @@
         mpState.roomCode = "";
         mpState.players.clear();
         mpState.conns.clear();
+        mpState.pingMs = null;
+        mpState.peerPings.clear();
         if (mpState.peer) {
           try {
             mpState.peer.destroy();
@@ -6584,6 +6618,38 @@
               };
             }
           }
+        } else if (msg.type === "PING_REQ") {
+          const reply = {
+            type: "PING_PONG",
+            ts: msg.ts,
+            rtt: msg.lastRtt ?? null,
+          };
+          if (mpState.role === "guest") mpSendToHost(reply);
+          else if (mpState.role === "host") {
+            if (typeof msg.lastRtt === "number")
+              mpState.peerPings.set(msg.senderId, msg.lastRtt);
+            mpBroadcast(reply);
+          }
+        } else if (msg.type === "PING_PONG") {
+          if (typeof msg.ts === "number") {
+            const rtt = Math.max(
+              1,
+              Math.min(999, Math.round(performance.now() - msg.ts)),
+            );
+            if (mpState.role === "guest") {
+              mpState.pingMs =
+                mpState.pingMs === null
+                  ? rtt
+                  : Math.round(mpState.pingMs * 0.65 + rtt * 0.35);
+            } else if (mpState.role === "host") {
+              mpState.peerPings.set(msg.senderId, rtt);
+              let worst = 0;
+              mpState.peerPings.forEach((v) => {
+                if (v > worst) worst = v;
+              });
+              mpState.pingMs = worst > 0 ? worst : null;
+            }
+          }
         } else if (msg.type === "WORLD_SNAP" && mpState.role === "guest") {
           applyAuthoritativeSnapshot(msg.snap);
         }
@@ -6599,12 +6665,22 @@
           const u = units[i];
           if (!u.netId) u.netId = u.id;
           const isStatic = u.type === "tower" || u.type === "ancient";
+          const isIdleNeutral =
+            u.type === "neutral" && !u.targetUnit && !u.targetPos && !u.dead;
           const roundedHp = Math.round(u.hp);
-          if (isStatic && !isFull) {
-            const prevHp = mpState.lastStaticHp.get(u.netId);
-            if (prevHp === roundedHp) continue;
+          if ((isStatic || isIdleNeutral) && !isFull) {
+            const sig = `${roundedHp}:${Math.round(u.mesh.position.x * 10)}:${Math.round(u.mesh.position.z * 10)}`;
+            const prevSig = mpState.lastStaticHp.get(u.netId);
+            if (prevSig === sig) continue;
           }
-          if (isStatic) mpState.lastStaticHp.set(u.netId, roundedHp);
+          if (isStatic || isIdleNeutral) {
+            mpState.lastStaticHp.set(
+              u.netId,
+              `${roundedHp}:${Math.round(u.mesh.position.x * 10)}:${Math.round(u.mesh.position.z * 10)}`,
+            );
+          } else {
+            mpState.lastStaticHp.delete(u.netId);
+          }
 
           const flags =
             (u.dead ? 1 : 0) |
@@ -7090,12 +7166,29 @@
         if (!mpState.active) return;
 
         if (mpState.role === "host") {
+          const remoteCount = Math.max(1, mpState.conns.size);
+          const targetInterval = remoteCount >= 2 ? 0.072 : 0.05;
           mpState.syncAccum += dt;
-          if (mpState.syncAccum >= 0.05) {
+          if (mpState.syncAccum >= targetInterval) {
             mpState.syncAccum = 0;
             mpBroadcast({
               type: "WORLD_SNAP",
               snap: buildAuthoritativeSnapshot(),
+            });
+          }
+          mpState.pingAccum += dt;
+          if (mpState.pingAccum >= 1.5 && mpState.conns.size > 0) {
+            mpState.pingAccum = 0;
+            mpBroadcast({ type: "PING_REQ", ts: performance.now() });
+          }
+        } else if (mpState.role === "guest") {
+          mpState.pingAccum += dt;
+          if (mpState.pingAccum >= 1.5) {
+            mpState.pingAccum = 0;
+            mpSendToHost({
+              type: "PING_REQ",
+              ts: performance.now(),
+              lastRtt: mpState.pingMs,
             });
           }
         } else if (
@@ -27340,6 +27433,32 @@ diffuseColor.rgb *= mix(0.58, 1.04, groundAO) * canopyShade;`,
         };
 
         setTxt("hud-fps", `${Math.round(_fpsSmooth)} FPS`);
+        const pingEl = getHudEl("hud-ping");
+        if (pingEl) {
+          let pText = "LOCAL";
+          let pColor = "#34d399";
+          if (
+            mpState.active &&
+            (mpState.role === "host" || mpState.role === "guest")
+          ) {
+            if (typeof mpState.pingMs === "number") {
+              const ms = Math.round(mpState.pingMs);
+              pText = `${ms} ms`;
+              pColor = ms < 85 ? "#34d399" : ms < 165 ? "#fbbf24" : "#fb7185";
+            } else {
+              pText = mpState.role === "host" ? "HOST" : "... ms";
+              pColor = "#38bdf8";
+            }
+          }
+          if (pingEl._t !== pText) {
+            pingEl.textContent = pText;
+            pingEl._t = pText;
+          }
+          if (pingEl._c !== pColor) {
+            pingEl.style.color = pColor;
+            pingEl._c = pColor;
+          }
+        }
 
         if (inspectedUnit) {
           if (inspectedUnit.dead || inspectedUnit.isPlayer)
