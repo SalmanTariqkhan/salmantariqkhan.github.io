@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="mobile-web-app-capable" content="yes">
-    <title>Defense of the Ancients 3D • Grandmaster Sovereign Multiplayer Edition (v62)</title>
+    <title>Defense of the Ancients 3D • Grandmaster Sovereign Multiplayer Edition (v63)</title>
     <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@600;700;900&family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
@@ -978,8 +978,8 @@
             <div class="w-full flex items-center justify-between lg:justify-center gap-2 mb-1">
                 <div class="intro-badge-float inline-flex items-center gap-1.5 px-2.5 sm:px-3.5 py-0.5 rounded-full bg-amber-500/15 border border-amber-400/50 text-amber-300 text-[9px] sm:text-[11px] font-cinzel font-bold tracking-wider sm:tracking-widest uppercase shadow-[0_0_20px_rgba(250,204,21,0.22)] truncate">
                     <i class="fa-solid fa-crown shrink-0"></i>
-                    <span class="sm:hidden">DOTA 3D • MULTIPLAYER EDITION (V62)</span>
-                    <span class="hidden sm:inline">Defense of the Ancients 3D • Grandmaster Sovereign Multiplayer Edition (v62)</span>
+                    <span class="sm:hidden">DOTA 3D • MULTIPLAYER EDITION (V63)</span>
+                    <span class="hidden sm:inline">Defense of the Ancients 3D • Grandmaster Sovereign Multiplayer Edition (v63)</span>
                 </div>
                 <button onclick="window.openSettingsModal()" class="lg:absolute lg:right-0 lg:top-0 dota-stone-panel px-2.5 sm:px-3 py-1 sm:py-1.5 rounded-xl text-[11px] sm:text-xs font-semibold text-amber-200 hover:bg-slate-800 flex items-center gap-1.5 border border-amber-400/50 shadow-lg transition shrink-0" title="Open Settings (Audio, Voice, Music, Themes & Graphics)">
                     <i class="fa-solid fa-gear text-amber-300"></i>
@@ -2835,6 +2835,31 @@
             };
         }
 
+        function mpSendOverConn(conn, packet) {
+            if (!conn || !conn.open) return;
+            try {
+                const raw = JSON.stringify(packet);
+                const MAX_CHUNK = 11000;
+                if (raw.length <= MAX_CHUNK) {
+                    conn.send(packet);
+                    return;
+                }
+                const cid = Math.random().toString(36).slice(2, 9);
+                const tot = Math.ceil(raw.length / MAX_CHUNK);
+                for (let idx = 0; idx < tot; idx++) {
+                    conn.send({
+                        type: 'CHUNK',
+                        senderId: mpState.myId,
+                        roomCode: mpState.roomCode,
+                        cid,
+                        idx,
+                        tot,
+                        data: raw.slice(idx * MAX_CHUNK, (idx + 1) * MAX_CHUNK)
+                    });
+                }
+            } catch (e) {}
+        }
+
         function mpBroadcast(msg) {
             const packet = { ...msg, senderId: mpState.myId, roomCode: mpState.roomCode };
             if (mpState.bc) {
@@ -2844,9 +2869,7 @@
                 localStorage.setItem('dota3d_sovereign_mp_pkt_v60', JSON.stringify({ nonce: Math.random(), payload: packet }));
             } catch (e) {}
             mpState.conns.forEach((conn) => {
-                if (conn && conn.open) {
-                    try { conn.send(packet); } catch (e) {}
-                }
+                mpSendOverConn(conn, packet);
             });
         }
 
@@ -3067,29 +3090,27 @@
         function getMpPeerOptions() {
             const iceServers = [
                 { urls: 'stun:stun.l.google.com:19302' },
-                { urls: 'stun:stun1.l.google.com:19302' },
-                { urls: 'stun:stun2.l.google.com:19302' },
                 { urls: 'stun:stun.cloudflare.com:3478' },
-                { urls: 'stun:global.stun.twilio.com:3478' },
+                { urls: 'stun:stun.relay.metered.ca:80' },
                 {
-                    urls: 'turn:openrelay.metered.ca:80',
-                    username: 'openrelayproject',
-                    credential: 'openrelayproject'
+                    urls: 'turn:global.relay.metered.ca:80',
+                    username: '411fc0a2ffc61a5ad7d64b54',
+                    credential: 'pPjyQknn9vnGzG1d'
                 },
                 {
-                    urls: 'turn:openrelay.metered.ca:443',
-                    username: 'openrelayproject',
-                    credential: 'openrelayproject'
+                    urls: 'turn:global.relay.metered.ca:80?transport=tcp',
+                    username: '411fc0a2ffc61a5ad7d64b54',
+                    credential: 'pPjyQknn9vnGzG1d'
                 },
                 {
-                    urls: 'turns:openrelay.metered.ca:443?transport=tcp',
-                    username: 'openrelayproject',
-                    credential: 'openrelayproject'
+                    urls: 'turn:global.relay.metered.ca:443',
+                    username: '411fc0a2ffc61a5ad7d64b54',
+                    credential: 'pPjyQknn9vnGzG1d'
                 },
                 {
-                    urls: 'turn:a.relay.metered.ca:443?transport=tcp',
-                    username: 'openrelayproject',
-                    credential: 'openrelayproject'
+                    urls: 'turns:global.relay.metered.ca:443?transport=tcp',
+                    username: '411fc0a2ffc61a5ad7d64b54',
+                    credential: 'pPjyQknn9vnGzG1d'
                 }
             ];
             const cUrl = document.getElementById('mp-custom-turn-url');
@@ -3112,14 +3133,18 @@
         }
 
         function setupPeerHost(code) {
+            if (window.location.protocol === 'content:') {
+                setMpConnStatus('error', 'Opened in WhatsApp viewer (content://) — save HTML to Downloads and open in Chrome/Safari!');
+                return;
+            }
             if (typeof Peer === 'undefined') {
                 setMpConnStatus('error', 'Online P2P script unavailable (check internet) • Local LAN still works');
                 return;
             }
             try {
                 if (mpState.peer) { try { mpState.peer.destroy(); } catch (e) {} }
-                setMpConnStatus('connecting', `Registering Room [${code}] on Global Signaling + TURN Relay...`);
-                const peer = new Peer(`dota3d-sov-v62-${code}`, getMpPeerOptions());
+                setMpConnStatus('connecting', `Registering Room [${code}] on Global Signaling + Metered TURN Relay...`);
+                const peer = new Peer(`dota3d-sov-v63-${code}`, getMpPeerOptions());
                 mpState.peer = peer;
 
                 peer.on('open', () => {
@@ -3134,7 +3159,7 @@
                     const bindConn = () => {
                         mpState.conns.set(conn.peer, conn);
                         setMpConnStatus('connected', `Remote Player Connected via P2P/TURN! (${mpState.conns.size} remote)`);
-                        conn.send({
+                        mpSendOverConn(conn, {
                             type: 'LOBBY_SYNC',
                             senderId: mpState.myId,
                             roomCode: code,
@@ -3143,7 +3168,7 @@
                             fillBots: mpState.fillBots
                         });
                         if (!inHeroSelect && mpState.active) {
-                            conn.send({
+                            mpSendOverConn(conn, {
                                 type: 'START_MATCH',
                                 senderId: mpState.myId,
                                 roomCode: code,
@@ -3189,6 +3214,10 @@
         }
 
         function setupPeerGuest(code, attempt = 1) {
+            if (window.location.protocol === 'content:') {
+                setMpConnStatus('error', 'Opened in WhatsApp viewer (content://) — save HTML to Downloads and open in Chrome/Safari!');
+                return;
+            }
             if (typeof Peer === 'undefined') {
                 setMpConnStatus('error', 'Online P2P script unavailable (check internet)');
                 return;
@@ -3201,14 +3230,14 @@
                 let connected = false;
 
                 peer.on('open', () => {
-                    setMpConnStatus('connecting', `Negotiating P2P / TURN Relay with Room [${code}]...`);
-                    const conn = peer.connect(`dota3d-sov-v62-${code}`, { reliable: true, serialization: 'json' });
+                    setMpConnStatus('connecting', `Negotiating P2P / Metered TURN Relay with Room [${code}]...`);
+                    const conn = peer.connect(`dota3d-sov-v63-${code}`, { reliable: false, serialization: 'json' });
                     mpState.conns.set('host', conn);
 
                     conn.on('open', () => {
                         connected = true;
                         setMpConnStatus('connected', `Connected to Host Room [${code}]! Waiting for Host to launch...`);
-                        conn.send({
+                        mpSendOverConn(conn, {
                             type: 'JOIN_REQ',
                             senderId: mpState.myId,
                             roomCode: code,
@@ -3366,6 +3395,32 @@
 
             if (msg.roomCode !== mpState.roomCode) return;
 
+            if (msg.type === 'CHUNK' && msg.cid) {
+                if (!mpState.chunkBuffers) mpState.chunkBuffers = new Map();
+                const now = performance.now();
+                for (const [k, v] of mpState.chunkBuffers.entries()) {
+                    if (now - v.ts > 4000) mpState.chunkBuffers.delete(k);
+                }
+                const key = `${msg.senderId}:${msg.cid}`;
+                let entry = mpState.chunkBuffers.get(key);
+                if (!entry) {
+                    entry = { parts: new Array(msg.tot), got: 0, ts: now };
+                    mpState.chunkBuffers.set(key, entry);
+                }
+                if (typeof entry.parts[msg.idx] !== 'string') {
+                    entry.parts[msg.idx] = msg.data;
+                    entry.got++;
+                }
+                if (entry.got >= msg.tot) {
+                    mpState.chunkBuffers.delete(key);
+                    try {
+                        const fullMsg = JSON.parse(entry.parts.join(''));
+                        mpHandlePacket(fullMsg);
+                    } catch (e) {}
+                }
+                return;
+            }
+
             if (msg.type === 'JOIN_REQ' && mpState.role === 'host') {
                 mpState.players.set(msg.senderId, { ...msg.player, id: msg.senderId, isHost: false });
                 mpBroadcast({ type: 'LOBBY_SYNC', players: Array.from(mpState.players.entries()), aiDifficulty, fillBots: mpState.fillBots });
@@ -3479,103 +3534,105 @@
             for (let i = 0; i < units.length; i++) {
                 const u = units[i];
                 if (!u.netId) u.netId = u.id;
-                snapUnits.push({
-                    id: u.netId,
-                    name: u.name,
-                    team: u.team,
-                    type: u.type,
-                    subType: u.subType,
-                    isMega: u.isMega,
-                    heroId: u.heroCfg ? u.heroCfg.id : null,
-                    ownerPeerId: u.ownerPeerId || null,
-                    x: Math.round(u.mesh.position.x * 100) / 100,
-                    z: Math.round(u.mesh.position.z * 100) / 100,
-                    yaw: Math.round(u.mesh.rotation.y * 100) / 100,
-                    hp: Math.round(u.hp),
-                    maxHp: Math.round(u.maxHp),
-                    mana: Math.round(u.mana),
-                    maxMana: Math.round(u.maxMana),
-                    shield: Math.round(u.shield || 0),
-                    atkDamage: Math.round(u.atkDamage),
-                    atkRange: u.atkRange,
-                    moveSpeed: u.moveSpeed,
-                    armor: Math.round(u.armor),
-                    radius: u.radius,
-                    level: u.level,
-                    xp: Math.round(u.xp),
-                    xpToNext: Math.round(u.xpToNext),
-                    skillPoints: u.skillPoints,
-                    abilityLevels: { ...u.abilityLevels },
-                    cooldowns: {
-                        Q: Math.round((u.cooldowns.Q || 0) * 10) / 10,
-                        W: Math.round((u.cooldowns.W || 0) * 10) / 10,
-                        E: Math.round((u.cooldowns.E || 0) * 10) / 10,
-                        R: Math.round((u.cooldowns.R || 0) * 10) / 10
-                    },
-                    gold: Math.floor(u.gold),
-                    kills: u.kills,
-                    deaths: u.deaths,
-                    assists: u.assists,
-                    lastHits: u.lastHits,
-                    dead: u.dead,
-                    respawnTimer: Math.round((u.respawnTimer || 0) * 10) / 10,
-                    stunTimer: u.stunTimer || 0,
-                    slowTimer: u.slowTimer || 0,
-                    swingAnim: u.swingAnim || 0,
-                    castAnim: u.castAnim || 0,
-                    tpCharges: u.tpCharges || 0,
-                    invIds: u.inventory.map((it) => (it ? it.id : null))
-                });
+                const flags =
+                    (u.dead ? 1 : 0) |
+                    (u.stunTimer > 0 ? 2 : 0) |
+                    (u.slowTimer > 0 ? 4 : 0) |
+                    (u.swingAnim > 0 ? 8 : 0) |
+                    (u.castAnim > 0 ? 16 : 0);
+                const isHero = u.type === 'hero';
+                snapUnits.push([
+                    u.netId,                                            // 0
+                    u.name,                                             // 1
+                    u.team,                                             // 2
+                    u.type,                                             // 3
+                    u.subType || 'melee',                               // 4
+                    u.isMega ? 1 : 0,                                   // 5
+                    u.heroCfg ? u.heroCfg.id : null,                    // 6
+                    u.ownerPeerId || null,                              // 7
+                    Math.round(u.mesh.position.x * 100) / 100,          // 8
+                    Math.round(u.mesh.position.z * 100) / 100,          // 9
+                    Math.round(u.mesh.rotation.y * 100) / 100,          // 10
+                    Math.round(u.hp),                                   // 11
+                    Math.round(u.maxHp),                                // 12
+                    Math.round(u.mana),                                 // 13
+                    Math.round(u.maxMana),                              // 14
+                    Math.round(u.shield || 0),                          // 15
+                    Math.round(u.atkDamage),                            // 16
+                    u.atkRange,                                         // 17
+                    u.moveSpeed,                                        // 18
+                    Math.round(u.armor),                                // 19
+                    u.radius,                                           // 20
+                    u.level,                                            // 21
+                    Math.round(u.xp),                                   // 22
+                    Math.round(u.xpToNext),                             // 23
+                    u.skillPoints,                                      // 24
+                    isHero ? [u.abilityLevels.Q, u.abilityLevels.W, u.abilityLevels.E, u.abilityLevels.R] : null, // 25
+                    isHero ? [
+                        Math.round((u.cooldowns.Q || 0) * 10) / 10,
+                        Math.round((u.cooldowns.W || 0) * 10) / 10,
+                        Math.round((u.cooldowns.E || 0) * 10) / 10,
+                        Math.round((u.cooldowns.R || 0) * 10) / 10
+                    ] : null,                                           // 26
+                    isHero ? Math.floor(u.gold) : 0,                    // 27
+                    isHero ? [u.kills, u.deaths, u.assists, u.lastHits] : null, // 28
+                    flags,                                              // 29
+                    Math.round((u.respawnTimer || 0) * 10) / 10,        // 30
+                    u.tpCharges || 0,                                   // 31
+                    isHero ? u.inventory.map((it) => (it ? it.id : null)) : null // 32
+                ]);
             }
             return {
-                matchTime,
-                radiantKills,
-                direKills,
-                escalationTier,
-                gameOver,
-                units: snapUnits
+                t: Math.round(matchTime * 10) / 10,
+                rk: radiantKills,
+                dk: direKills,
+                et: escalationTier,
+                go: gameOver ? 1 : 0,
+                u: snapUnits
             };
         }
 
         function applyAuthoritativeSnapshot(snap) {
-            if (!snap) return;
-            matchTime = snap.matchTime;
-            radiantKills = snap.radiantKills;
-            direKills = snap.direKills;
-            if (snap.escalationTier && snap.escalationTier !== escalationTier) {
-                escalationTier = snap.escalationTier;
+            if (!snap || !Array.isArray(snap.u)) return;
+            matchTime = snap.t;
+            radiantKills = snap.rk;
+            direKills = snap.dk;
+            if (snap.et && snap.et !== escalationTier) {
+                escalationTier = snap.et;
                 const badge = document.getElementById('escalation-badge');
                 if (badge) badge.textContent = `Tier ${escalationTier}`;
             }
 
             const seenIds = new Set();
-            for (let i = 0; i < snap.units.length; i++) {
-                const su = snap.units[i];
-                seenIds.add(su.id);
-                let u = units.find((x) => x.netId === su.id);
+            for (let i = 0; i < snap.u.length; i++) {
+                const su = snap.u[i];
+                const id = su[0];
+                seenIds.add(id);
+                let u = units.find((x) => x.netId === id);
                 if (!u) {
-                    const cfg = su.heroId ? HERO_ROSTER[su.heroId] : null;
-                    const isMe = su.ownerPeerId === mpState.myId;
+                    const heroId = su[6];
+                    const cfg = heroId ? HERO_ROSTER[heroId] : null;
+                    const isMe = su[7] === mpState.myId;
                     u = new MobaEntity({
-                        name: su.name,
-                        team: su.team,
-                        type: su.type,
-                        subType: su.subType || 'melee',
-                        isMega: !!su.isMega,
+                        name: su[1],
+                        team: su[2],
+                        type: su[3],
+                        subType: su[4] || 'melee',
+                        isMega: !!su[5],
                         heroCfg: cfg,
                         isPlayer: isMe,
-                        x: su.x,
-                        z: su.z,
-                        maxHp: su.maxHp,
-                        maxMana: su.maxMana,
-                        atkDamage: su.atkDamage || 40,
-                        atkRange: su.atkRange || 3.5,
-                        moveSpeed: su.moveSpeed || 10,
-                        armor: su.armor || 4,
-                        radius: su.radius || 1.2
+                        x: su[8],
+                        z: su[9],
+                        maxHp: su[12],
+                        maxMana: su[14],
+                        atkDamage: su[16] || 40,
+                        atkRange: su[17] || 3.5,
+                        moveSpeed: su[18] || 10,
+                        armor: su[19] || 4,
+                        radius: su[20] || 1.2
                     });
-                    u.netId = su.id;
-                    u.ownerPeerId = su.ownerPeerId || null;
+                    u.netId = id;
+                    u.ownerPeerId = su[7] || null;
                     units.push(u);
                     if (isMe && cfg) {
                         playerHero = u;
@@ -3584,40 +3641,47 @@
                     }
                 }
 
-                const wasMoving = Math.hypot(su.x - u.mesh.position.x, su.z - u.mesh.position.z) > 0.08;
-                u.hp = su.hp;
-                u.maxHp = su.maxHp;
-                u.mana = su.mana;
-                u.maxMana = su.maxMana;
-                u.shield = su.shield;
-                u.atkDamage = su.atkDamage;
-                u.armor = su.armor;
-                u.moveSpeed = su.moveSpeed;
-                u.level = su.level;
-                u.xp = su.xp;
-                u.xpToNext = su.xpToNext;
-                u.skillPoints = su.skillPoints;
-                u.abilityLevels = { ...su.abilityLevels };
-                u.cooldowns = { ...su.cooldowns };
-                u.gold = su.gold;
-                u.kills = su.kills;
-                u.deaths = su.deaths;
-                u.assists = su.assists;
-                u.lastHits = su.lastHits;
-                u.dead = su.dead;
-                u.respawnTimer = su.respawnTimer;
-                u.stunTimer = su.stunTimer;
-                u.slowTimer = su.slowTimer;
-                u.swingAnim = su.swingAnim;
-                u.castAnim = su.castAnim;
-                u.tpCharges = su.tpCharges;
+                const wasMoving = Math.hypot(su[8] - u.mesh.position.x, su[9] - u.mesh.position.z) > 0.08;
+                u.hp = su[11];
+                u.maxHp = su[12];
+                u.mana = su[13];
+                u.maxMana = su[14];
+                u.shield = su[15];
+                u.atkDamage = su[16];
+                u.armor = su[19];
+                u.moveSpeed = su[18];
+                u.level = su[21];
+                u.xp = su[22];
+                u.xpToNext = su[23];
+                u.skillPoints = su[24];
+                if (su[25]) {
+                    u.abilityLevels = { Q: su[25][0], W: su[25][1], E: su[25][2], R: su[25][3] };
+                }
+                if (su[26]) {
+                    u.cooldowns = { Q: su[26][0], W: su[26][1], E: su[26][2], R: su[26][3] };
+                }
+                u.gold = su[27];
+                if (su[28]) {
+                    u.kills = su[28][0];
+                    u.deaths = su[28][1];
+                    u.assists = su[28][2];
+                    u.lastHits = su[28][3];
+                }
+                const flags = su[29] || 0;
+                u.dead = !!(flags & 1);
+                u.stunTimer = (flags & 2) ? 0.2 : 0;
+                u.slowTimer = (flags & 4) ? 0.2 : 0;
+                u.swingAnim = (flags & 8) ? 0.2 : 0;
+                u.castAnim = (flags & 16) ? 0.2 : 0;
+                u.respawnTimer = su[30];
+                u.tpCharges = su[31];
 
-                if (u.isPlayer && Array.isArray(su.invIds)) {
+                if (u.isPlayer && Array.isArray(su[32])) {
                     let changed = false;
                     for (let s = 0; s < 6; s++) {
                         const curId = u.inventory[s] ? u.inventory[s].id : null;
-                        if (curId !== su.invIds[s]) {
-                            u.inventory[s] = su.invIds[s] ? (SHOP_ITEMS.find((it) => it.id === su.invIds[s]) || null) : null;
+                        if (curId !== su[32][s]) {
+                            u.inventory[s] = su[32][s] ? (SHOP_ITEMS.find((it) => it.id === su[32][s]) || null) : null;
                             changed = true;
                         }
                     }
@@ -3625,17 +3689,17 @@
                     updateAbilityUpgradeButtons();
                 }
 
-                u.mesh.visible = !su.dead;
-                if (u.bar && u.bar.el) u.bar.el.style.display = su.dead ? 'none' : 'flex';
-                u.mesh.position.x += (su.x - u.mesh.position.x) * 0.55;
-                u.mesh.position.z += (su.z - u.mesh.position.z) * 0.55;
+                u.mesh.visible = !u.dead;
+                if (u.bar && u.bar.el) u.bar.el.style.display = u.dead ? 'none' : 'flex';
+                u.mesh.position.x += (su[8] - u.mesh.position.x) * 0.55;
+                u.mesh.position.z += (su[9] - u.mesh.position.z) * 0.55;
                 u.mesh.position.y = getTerrainHeightAt(u.mesh.position.x, u.mesh.position.z);
-                u.mesh.rotation.y = su.yaw;
+                u.mesh.rotation.y = su[10];
 
                 if (!u.dead && u.type === 'hero' && u.parts) {
                     const pose = u.castAnim > 0 ? 'CAST' : (u.swingAnim > 0 ? 'ATTACK' : (wasMoving ? 'RUN' : 'IDLE'));
                     const isRanged = u.heroCfg && u.heroCfg.rangeType === 'Ranged';
-                    updateHeroSkeletalAnimation(u.parts, pose, matchTime, 0.05, isRanged);
+                    updateHeroSkeletalAnimation(u.parts, pose, matchTime, 0.08, isRanged);
                 }
             }
 
@@ -3663,7 +3727,7 @@
 
             if (mpState.role === 'host') {
                 mpState.syncAccum += dt;
-                if (mpState.syncAccum >= 0.05) {
+                if (mpState.syncAccum >= 0.08) {
                     mpState.syncAccum = 0;
                     mpBroadcast({ type: 'WORLD_SNAP', snap: buildAuthoritativeSnapshot() });
                 }
