@@ -10,7 +10,7 @@
     <meta name="mobile-web-app-capable" content="yes" />
     <title>
       Defense of the Ancients 3D • Grandmaster Sovereign Multiplayer Edition
-      (v126)
+      (v127)
     </title>
     <link rel="preconnect" href="https://unpkg.com" crossorigin />
     <link rel="preconnect" href="https://cdn.tailwindcss.com" crossorigin />
@@ -11121,7 +11121,12 @@
             );
           }
 
-          if (playerHero._netHasPos && !awaitingAck) {
+          if (
+            playerHero._netHasPos &&
+            !awaitingAck &&
+            !playerHero.activeDash &&
+            (playerHero._dashLockTimer || 0) <= 0
+          ) {
             const errX = playerHero._netX - playerHero.mesh.position.x;
             const errZ = playerHero._netZ - playerHero.mesh.position.z;
             const errDist = Math.hypot(errX, errZ);
@@ -11181,7 +11186,7 @@
           }
         }
 
-        // 3. Smooth 60 FPS critical-damped interpolation & skeletal animations for all units
+        // 3. Smooth 60 FPS critical-damped interpolation, ongoing hero ability visuals & skeletal animations
         const interpAlpha = 1 - Math.exp(-18.0 * dt);
         for (let i = 0; i < units.length; i++) {
           const u = units[i];
@@ -11191,7 +11196,18 @@
             u.celebrateTimer = Math.max(0, u.celebrateTimer - dt);
           if (u.stunTimer > 0) u.stunTimer = Math.max(0, u.stunTimer - dt);
           if (u.slowTimer > 0) u.slowTimer = Math.max(0, u.slowTimer - dt);
+          if (u.blinkBuffTimer > 0)
+            u.blinkBuffTimer = Math.max(0, u.blinkBuffTimer - dt);
+          if (u._dashLockTimer > 0)
+            u._dashLockTimer = Math.max(0, u._dashLockTimer - dt);
+          if (u.fatalBondTimer > 0) {
+            u.fatalBondTimer = Math.max(0, u.fatalBondTimer - dt);
+            if (u.fatalBondTimer === 0) u.fatalBondGroup = null;
+          }
           if (u.dead) {
+            u.activeDash = null;
+            u.bladeFuryTimer = 0;
+            u.fireTrailTimer = 0;
             if (u.type === "hero" && u.deathAnimTimer > 0) {
               u.deathAnimTimer -= dt;
               const prog = 1 - Math.max(0, u.deathAnimTimer / 1.25);
@@ -11208,11 +11224,55 @@
             continue;
           }
 
+          if (u.type === "hero" && u.parts) {
+            if (u.parts.shieldBubble) {
+              u.parts.shieldBubble.visible =
+                (u.shield || 0) > 0 ||
+                (u.bladeMailTimer || 0) > 0 ||
+                (u.bkbTimer || 0) > 0;
+              u.parts.shieldBubble.rotation.y += 1.6 * dt;
+            }
+            if (u.parts.radAura) {
+              u.parts.radAura.visible = Boolean(u.hasRadiance);
+              u.parts.radAura.rotation.z += 0.8 * dt;
+            }
+          }
+
           let isMoving = false;
           let guestTurnRoll = 0;
-          if (u.isPlayer) {
+          if (u.activeDash) {
+            u.activeDash.t += dt;
+            const dp = Math.min(1, u.activeDash.t / u.activeDash.dur);
+            const ease = 1 - Math.pow(1 - dp, 2.2);
+            u.mesh.position.x = THREE.MathUtils.lerp(
+              u.activeDash.startX,
+              u.activeDash.endX,
+              ease,
+            );
+            u.mesh.position.z = THREE.MathUtils.lerp(
+              u.activeDash.startZ,
+              u.activeDash.endZ,
+              ease,
+            );
+            const gy = getTerrainHeightAt(u.mesh.position.x, u.mesh.position.z);
+            u.mesh.position.y =
+              gy + Math.sin(dp * Math.PI) * (u.activeDash.arcHeight || 1.8);
+            if (Math.random() < 0.55) {
+              spawnShockwaveRing(
+                u.mesh.position.x,
+                u.mesh.position.z,
+                1.8,
+                u.activeDash.colHex || 0xd946ef,
+                0.24,
+              );
+            }
+            if (dp >= 1) {
+              u.mesh.position.y = gy;
+              u.activeDash = null;
+            }
+          } else if (u.isPlayer) {
             isMoving = localHeroMoving;
-          } else if (u._netHasPos) {
+          } else if (u._netHasPos && (u._dashLockTimer || 0) <= 0) {
             const ageSec = u._netTs ? (performance.now() - u._netTs) / 1000 : 1;
             if (ageSec > 0.14) u._netMoving = false;
             const netSpd = Math.hypot(u._netVx || 0, u._netVz || 0);
@@ -11244,6 +11304,40 @@
             guestTurnRoll = THREE.MathUtils.clamp(-diff * 0.28, -0.26, 0.26);
           }
 
+          if (u.bladeFuryTimer > 0) {
+            u.bladeFuryTimer = Math.max(0, u.bladeFuryTimer - dt);
+            u.bladeFuryTick = (u.bladeFuryTick || 0) + dt;
+            if (u.bladeFuryTick >= 0.25) {
+              u.bladeFuryTick = 0;
+              spawnMeleeSlashArc(
+                u.mesh.position,
+                matchTime * 14,
+                5.8,
+                0xfb923c,
+                0.22,
+              );
+            }
+          }
+          if (u.fireTrailTimer > 0) {
+            u.fireTrailTimer = Math.max(0, u.fireTrailTimer - dt);
+            u.fireTrailTick = (u.fireTrailTick || 0) + dt;
+            if (u.fireTrailTick >= 0.32) {
+              u.fireTrailTick = 0;
+              spawnPersistentZone({
+                zoneType: "sunbeam",
+                owner: u,
+                team: u.team,
+                x: u.mesh.position.x,
+                z: u.mesh.position.z,
+                radius: 3.2,
+                duration: 2.2,
+                colorHex: 0xf97316,
+                secondaryHex: 0xfacc15,
+                tickDmg: 0,
+              });
+            }
+          }
+
           const onScreen =
             Math.abs(u.mesh.position.x - cameraFocus.x) <= 72 &&
             Math.abs(u.mesh.position.z - cameraFocus.z) <= 62;
@@ -11254,15 +11348,17 @@
 
           if (u.type === "hero" && u.parts) {
             const pose =
-              u.celebrateTimer > 0
-                ? "CELEBRATE"
-                : u.castAnim > 0 || u.reincarnating
-                  ? "CAST"
-                  : u.swingAnim > 0
-                    ? "ATTACK"
-                    : isMoving
-                      ? "RUN"
-                      : "IDLE";
+              u.bladeFuryTimer > 0
+                ? "WHIRLWIND"
+                : u.celebrateTimer > 0
+                  ? "CELEBRATE"
+                  : u.castAnim > 0 || u.reincarnating
+                    ? "CAST"
+                    : u.swingAnim > 0
+                      ? "ATTACK"
+                      : isMoving
+                        ? "RUN"
+                        : "IDLE";
             const isRanged = u.heroCfg && u.heroCfg.rangeType === "Ranged";
             const atkProg = u.swingAnim > 0 ? 1 - u.swingAnim / 0.34 : 0;
             const spdRatio = isMoving
@@ -11291,6 +11387,8 @@
             updatePPLabuAnimation(u, matchTime, animDt, isMoving);
           } else if (u.type === "redman") {
             updateRedManAnimation(u, matchTime, animDt, isMoving);
+          } else if (u.type === "sneakygolem") {
+            updateSneakyGolemAnimation(u, matchTime, animDt, isMoving);
           } else if (u.type === "dragon") {
             updateElderDragonAnimation(u, matchTime, dt);
           } else if (u.type === "boss") {
@@ -11306,7 +11404,7 @@
           }
         }
 
-        // 4. Step delayed spell impacts (meteors / Light Strike Array), visual projectiles, runes & FX on Guest
+        // 4. Step delayed spell impacts (meteors / Light Strike Array / Omnislash / Supernova)
         for (let i = scheduledEvents.length - 1; i >= 0; i--) {
           scheduledEvents[i].delay -= dt;
           if (scheduledEvents[i].delay <= 0) {
@@ -11317,9 +11415,152 @@
           }
         }
 
+        // 5. Step & clean up ALL visual projectiles on Guest (hook, homing, wave, boomerang, prismSplit, ricochet)
         for (let i = projectiles.length - 1; i >= 0; i--) {
           const p = projectiles[i];
-          if (p.kind === "homing") {
+          if (p.kind === "hook") {
+            const step = p.speed * dt;
+            const ownerPos =
+              p.owner && !p.owner.dead
+                ? p.owner.mesh.position
+                    .clone()
+                    .add(new THREE.Vector3(0, 1.55, 0))
+                : p.mesh.position.clone();
+
+            if (p.phase === "out") {
+              p.mesh.position.addScaledVector(p.dir, step);
+              p.distLeft -= step;
+              const px = p.mesh.position.x;
+              const pz = p.mesh.position.z;
+              for (let ui = 0; ui < units.length; ui++) {
+                const u = units[ui];
+                if (
+                  !u.dead &&
+                  u.team !== p.team &&
+                  u.type !== "ancient" &&
+                  u.type !== "tower"
+                ) {
+                  const rSum = 2.5 + u.radius;
+                  const dx = u.mesh.position.x - px;
+                  const dz = u.mesh.position.z - pz;
+                  if (dx * dx + dz * dz <= rSum * rSum) {
+                    p.hookedTarget = u;
+                    p.phase = "return";
+                    spawnParticleBurst(u.mesh.position, p.colorHex, 24);
+                    spawnFloatText(
+                      u.mesh.position,
+                      p.hookMode === "pull_caster"
+                        ? "ANCHOR LATCHED!"
+                        : "MEAT HOOKED!",
+                      "#10b981",
+                      16,
+                    );
+                    break;
+                  }
+                }
+              }
+              if (p.phase === "out" && p.distLeft <= 0) {
+                if (p.hookMode === "pull_caster" && p.owner && !p.owner.dead) {
+                  p.phase = "winch_caster";
+                  p.winchTime = 0;
+                } else {
+                  p.phase = "return";
+                }
+              }
+            } else if (p.phase === "winch_caster") {
+              p.winchTime = (p.winchTime || 0) + dt;
+              if (!p.owner || p.owner.dead || p.winchTime > 0.75) {
+                if (p.chainLinks)
+                  p.chainLinks.forEach((lk) => {
+                    scene.remove(lk);
+                    disposeObject3D(lk);
+                  });
+                scene.remove(p.mesh);
+                disposeObject3D(p.mesh);
+                projectiles.splice(i, 1);
+                continue;
+              }
+              const d = Math.hypot(
+                p.mesh.position.x - ownerPos.x,
+                p.mesh.position.z - ownerPos.z,
+              );
+              if (d <= 2.8) {
+                spawnParticleBurst(p.owner.mesh.position, p.colorHex, 24);
+                if (p.chainLinks)
+                  p.chainLinks.forEach((lk) => {
+                    scene.remove(lk);
+                    disposeObject3D(lk);
+                  });
+                scene.remove(p.mesh);
+                disposeObject3D(p.mesh);
+                projectiles.splice(i, 1);
+                continue;
+              }
+            } else {
+              const toOwner = new THREE.Vector3().subVectors(
+                ownerPos,
+                p.mesh.position,
+              );
+              toOwner.y = 0;
+              const d = toOwner.length();
+              if (d <= 2.6 || !p.owner || p.owner.dead) {
+                if (p.chainLinks)
+                  p.chainLinks.forEach((lk) => {
+                    scene.remove(lk);
+                    disposeObject3D(lk);
+                  });
+                scene.remove(p.mesh);
+                disposeObject3D(p.mesh);
+                projectiles.splice(i, 1);
+                continue;
+              }
+              toOwner.normalize();
+              if (
+                p.hookMode === "pull_caster" &&
+                p.hookedTarget &&
+                !p.hookedTarget.dead
+              ) {
+                const distOwnerVictim = Math.hypot(
+                  p.hookedTarget.mesh.position.x - p.owner.mesh.position.x,
+                  p.hookedTarget.mesh.position.z - p.owner.mesh.position.z,
+                );
+                if (distOwnerVictim <= 3.0) {
+                  if (p.chainLinks)
+                    p.chainLinks.forEach((lk) => {
+                      scene.remove(lk);
+                      disposeObject3D(lk);
+                    });
+                  scene.remove(p.mesh);
+                  disposeObject3D(p.mesh);
+                  projectiles.splice(i, 1);
+                  continue;
+                }
+                p.mesh.position
+                  .copy(p.hookedTarget.mesh.position)
+                  .add(new THREE.Vector3(0, 1.55, 0));
+              } else {
+                p.mesh.position.addScaledVector(toOwner, step * 1.18);
+              }
+            }
+
+            if (p.chainLinks) {
+              const curOwnerHand =
+                p.owner && !p.owner.dead
+                  ? p.owner.mesh.position
+                      .clone()
+                      .add(new THREE.Vector3(0, 1.55, 0))
+                  : p.mesh.position;
+              for (let li = 0; li < p.chainLinks.length; li++) {
+                const frac = (li + 1) / (p.chainLinks.length + 1);
+                p.chainLinks[li].position.lerpVectors(
+                  curOwnerHand,
+                  p.mesh.position,
+                  frac,
+                );
+                p.chainLinks[li].rotation.y = Math.atan2(p.dir.x, p.dir.z);
+              }
+            }
+          } else if (p.kind === "homing") {
             if (!p.target || p.target.dead) {
               scene.remove(p.mesh);
               disposeObject3D(p.mesh);
@@ -11349,17 +11590,79 @@
                   0.26,
                 );
               }
+              if (p.isUmaxHeroProj && p.owner && p.owner.heroCfg) {
+                spawnHeroAttackSparkles(
+                  p.target.mesh.position,
+                  p.owner.heroCfg.primaryHex,
+                  p.owner.heroCfg.secondaryHex,
+                  p.isCrit,
+                );
+              }
               scene.remove(p.mesh);
               disposeObject3D(p.mesh);
               projectiles.splice(i, 1);
             } else {
               _vScratch2.multiplyScalar(step / dist);
               p.mesh.position.add(_vScratch2);
+              if (p.arcHeight && p.totalDist > 0.5) {
+                const remDist = Math.hypot(
+                  p.target.mesh.position.x - p.mesh.position.x,
+                  p.target.mesh.position.z - p.mesh.position.z,
+                );
+                const frac = THREE.MathUtils.clamp(
+                  1 - remDist / p.totalDist,
+                  0,
+                  1,
+                );
+                const baseLineY = THREE.MathUtils.lerp(
+                  p.startPos.y,
+                  p.target.mesh.position.y + 1.6,
+                  frac,
+                );
+                p.mesh.position.y =
+                  baseLineY + Math.sin(frac * Math.PI) * p.arcHeight;
+              }
+              if (p.trailCol && Math.random() < 0.35) {
+                spawnShockwaveRing(
+                  p.mesh.position.x,
+                  p.mesh.position.z,
+                  0.75,
+                  p.trailCol,
+                  0.16,
+                );
+              }
             }
           } else if (p.kind === "wave") {
             const step = p.speed * dt;
-            p.mesh.position.addScaledVector(p.dir, step);
-            p.distLeft -= step;
+            if (p.boomerang && p.boomerangPhase === "return") {
+              if (p.owner && !p.owner.dead) {
+                const toOwner = new THREE.Vector3().subVectors(
+                  p.owner.mesh.position,
+                  p.mesh.position,
+                );
+                toOwner.y = 0;
+                const distBack = toOwner.length();
+                if (distBack <= 2.2) {
+                  p.distLeft = 0;
+                } else {
+                  toOwner.normalize();
+                  p.dir.lerp(toOwner, Math.min(1, dt * 10)).normalize();
+                  p.mesh.position.addScaledVector(p.dir, step * 1.12);
+                  p.distLeft -= step;
+                }
+              } else {
+                p.distLeft = 0;
+              }
+            } else {
+              if (p.boomerang && p.curveSign) {
+                p.dir.applyAxisAngle(
+                  new THREE.Vector3(0, 1, 0),
+                  p.curveSign * 0.95 * dt,
+                );
+              }
+              p.mesh.position.addScaledVector(p.dir, step);
+              p.distLeft -= step;
+            }
             if (p.spinMesh) p.mesh.rotation.y += 14 * dt;
             if (p.trailColor && Math.random() < 0.5) {
               spawnShockwaveRing(
@@ -11393,6 +11696,72 @@
                 const dz = u.mesh.position.z - pz;
                 if (dx * dx + dz * dz <= rSum * rSum) {
                   p.hitIds.add(u.id);
+                  if (p.prismSplit) {
+                    [-0.45, 0, 0.45].forEach((sAng) => {
+                      const spDir = p.dir
+                        .clone()
+                        .applyAxisAngle(new THREE.Vector3(0, 1, 0), sAng);
+                      const spMesh = new THREE.Mesh(
+                        new THREE.ConeGeometry(0.32, 2.6, 5),
+                        new THREE.MeshBasicMaterial({ color: 0x38bdf8 }),
+                      );
+                      spMesh.rotation.x = Math.PI / 2;
+                      spMesh.rotation.y = Math.atan2(spDir.x, spDir.z);
+                      spMesh.position.set(px, 1.5, pz);
+                      scene.add(spMesh);
+                      projectiles.push({
+                        kind: "wave",
+                        owner: p.owner,
+                        team: p.team,
+                        mesh: spMesh,
+                        trailColor: 0x38bdf8,
+                        dir: spDir,
+                        speed: 46,
+                        distLeft: 14,
+                        hitRadius: 2.2,
+                        damage: 0,
+                        hitIds: new Set([u.id]),
+                      });
+                    });
+                  }
+                  if (p.ricochetBounces && p.ricochetBounces > 0) {
+                    let nextTarget = null;
+                    let bestD = 14.0;
+                    for (let oi = 0; oi < units.length; oi++) {
+                      const cand = units[oi];
+                      if (
+                        !cand.dead &&
+                        cand.team !== p.team &&
+                        cand.type !== "ancient" &&
+                        !p.hitIds.has(cand.id)
+                      ) {
+                        const dCand = Math.hypot(
+                          cand.mesh.position.x - u.mesh.position.x,
+                          cand.mesh.position.z - u.mesh.position.z,
+                        );
+                        if (dCand < bestD) {
+                          bestD = dCand;
+                          nextTarget = cand;
+                        }
+                      }
+                    }
+                    if (nextTarget) {
+                      p.ricochetBounces--;
+                      p.dir
+                        .subVectors(nextTarget.mesh.position, p.mesh.position)
+                        .setY(0)
+                        .normalize();
+                      p.distLeft = Math.max(p.distLeft, bestD + 4.0);
+                      spawnLightningBolt3D(
+                        u.mesh.position,
+                        nextTarget.mesh.position,
+                        0xbef264,
+                        0x10b981,
+                        0.35,
+                      );
+                      break;
+                    }
+                  }
                   if (p.chainLightning) {
                     let hops = 0;
                     for (let oi = 0; oi < units.length; oi++) {
@@ -11425,14 +11794,88 @@
                     p.trailColor || 0x38bdf8,
                     12,
                   );
+                  if (p.stopOnFirstHit) {
+                    p.distLeft = 0;
+                    break;
+                  }
                 }
               }
             }
             if (p.distLeft <= 0) {
-              scene.remove(p.mesh);
-              disposeObject3D(p.mesh);
-              projectiles.splice(i, 1);
+              if (
+                p.boomerang &&
+                p.boomerangPhase === "out" &&
+                p.owner &&
+                !p.owner.dead
+              ) {
+                p.boomerangPhase = "return";
+                p.hitIds.clear();
+                p.distLeft = 36;
+              } else {
+                scene.remove(p.mesh);
+                disposeObject3D(p.mesh);
+                projectiles.splice(i, 1);
+              }
             }
+          }
+        }
+
+        // 6. Step & expire Persistent Zones on Guest (Chronosphere, Black Hole, Sunbeam, Banner, Trap, Smoke, Slag Pool)
+        for (let zi = activeZones.length - 1; zi >= 0; zi--) {
+          const z = activeZones[zi];
+          z.t += dt;
+          z.tickAccum += dt;
+          if (z.outerRing) z.outerRing.rotation.z += dt * 1.4;
+          if (z.zoneType === "trap" && z.tickAccum >= 0.25) {
+            z.tickAccum = 0;
+            for (let ui = 0; ui < units.length; ui++) {
+              const u = units[ui];
+              if (!u.dead && u.team !== z.team && u.type !== "ancient") {
+                const rSum = z.radius + u.radius;
+                const dx = u.mesh.position.x - z.x;
+                const dz = u.mesh.position.z - z.z;
+                if (dx * dx + dz * dz <= rSum * rSum) {
+                  spawnIceCrystalPrison3D(u, z.trapRootDur || 2.2);
+                  spawnFloatText(
+                    u.mesh.position,
+                    "FROST TRAP SNARED!",
+                    "#38bdf8",
+                    15,
+                  );
+                  z.t = z.duration + 1;
+                  break;
+                }
+              }
+            }
+          }
+          if (z.t >= z.duration) {
+            if (z.detonateDmg) {
+              spawnShockwaveRing(z.x, z.z, z.radius * 1.25, z.colorHex, 0.65);
+              spawnParticleBurst(
+                new THREE.Vector3(z.x, getTerrainHeightAt(z.x, z.z) + 1.2, z.z),
+                z.colorHex,
+                32,
+              );
+            }
+            if (z.mesh) {
+              scene.remove(z.mesh);
+              disposeObject3D(z.mesh);
+            }
+            activeZones.splice(zi, 1);
+          }
+        }
+
+        // 7. Step & expire Terrakor Granite Fissure Walls on Guest
+        for (let wi = fissureWalls.length - 1; wi >= 0; wi--) {
+          const w = fissureWalls[wi];
+          w.timer -= dt;
+          if (w.timer <= 0) {
+            if (w.pillars)
+              w.pillars.forEach((pm) => {
+                scene.remove(pm);
+                disposeObject3D(pm);
+              });
+            fissureWalls.splice(wi, 1);
           }
         }
 
@@ -20897,6 +21340,29 @@ diffuseColor.rgb *= mix(0.58, 1.04, groundAO) * canopyShade;`,
             });
         }
         fissureWalls = [];
+        for (let i = projectiles.length - 1; i >= 0; i--) {
+          const p = projectiles[i];
+          if (p.chainLinks)
+            p.chainLinks.forEach((lk) => {
+              scene.remove(lk);
+              disposeObject3D(lk);
+            });
+          if (p.mesh) {
+            scene.remove(p.mesh);
+            disposeObject3D(p.mesh);
+          }
+        }
+        projectiles = [];
+        for (let i = fxList.length - 1; i >= 0; i--) {
+          const fx = fxList[i];
+          if (fx.mesh) {
+            scene.remove(fx.mesh);
+            if (fx.pooledMat) releaseFxMat(fx.pooledMat);
+            else disposeObject3D(fx.mesh);
+          }
+        }
+        fxList = [];
+        scheduledEvents = [];
       }
 
       function spawnSummonedUnit(owner, cfg) {
@@ -37671,6 +38137,7 @@ diffuseColor.rgb *= mix(0.58, 1.04, groundAO) * canopyShade;`,
             if (isVisualReplay) {
               caster._netX = nx;
               caster._netZ = nz;
+              caster._dashLockTimer = 0.26;
             }
             caster.targetPos = null;
             caster.blinkBuffTimer = 4.8;
@@ -38237,6 +38704,11 @@ diffuseColor.rgb *= mix(0.58, 1.04, groundAO) * canopyShade;`,
                     ? hitTgt.mesh.position.z + (Math.random() - 0.5) * 2.2
                     : impactPos.z + (Math.random() - 0.5) * 4.0;
                   caster.mesh.position.set(sx, getTerrainHeightAt(sx, sz), sz);
+                  if (isVisualReplay) {
+                    caster._netX = sx;
+                    caster._netZ = sz;
+                    caster._dashLockTimer = 0.22;
+                  }
                   caster.swingAnim = 0.3;
                   spawnMeleeSlashArc(
                     caster.mesh.position,
