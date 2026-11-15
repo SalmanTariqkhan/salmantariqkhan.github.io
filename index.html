@@ -9,8 +9,7 @@
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="mobile-web-app-capable" content="yes" />
     <title>
-      Defense of the Ancients 3D • Grandmaster Sovereign Multiplayer Edition
-      (v127)
+      Infinite War • Grandmaster Sovereign Multiplayer Edition (v128)
     </title>
     <link rel="preconnect" href="https://unpkg.com" crossorigin />
     <link rel="preconnect" href="https://cdn.tailwindcss.com" crossorigin />
@@ -1524,7 +1523,7 @@
           class="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-slate-950/80 border border-amber-400/45 text-amber-300 text-[10px] sm:text-xs font-cinzel font-bold tracking-widest uppercase shadow-lg"
         >
           <i class="fa-solid fa-sparkles text-amber-400"></i>
-          <span>16 CHAMPIONS • RADIANT VS DIRE • LIVE 3D MOBA</span>
+          <span>16 CHAMPIONS • RADIANT VS DIRE • LIVE MOBA</span>
         </div>
         <div class="flex items-center gap-2">
           <button
@@ -1543,6 +1542,13 @@
             <i class="fa-solid fa-gear text-amber-300"></i>
             <span>Settings</span>
           </button>
+          <span
+            id="home-version-badge"
+            class="dota-stone-panel px-2.5 py-1.5 rounded-xl text-[11px] sm:text-xs font-mono font-black text-amber-300 border border-amber-400/65 shadow-lg tracking-wider"
+            title="Game Version"
+          >
+            v128
+          </span>
         </div>
       </div>
 
@@ -1576,10 +1582,10 @@
         <h1
           class="font-cinzel font-black text-3xl sm:text-6xl lg:text-7xl text-white tracking-wider leading-none drop-shadow-[0_6px_30px_rgba(0,0,0,0.98)]"
         >
-          DEFENSE OF THE
+          INFINITE
           <span
             class="block mt-1 bg-gradient-to-r from-amber-300 via-yellow-200 to-amber-400 bg-clip-text text-transparent"
-            >ANCIENTS 3D</span
+            >WAR</span
           >
         </h1>
         <p
@@ -1635,7 +1641,7 @@
             SKILLS
           </div>
           <div class="text-[9px] sm:text-[10px] text-slate-300 mt-0.5">
-            Custom 3D Spells &amp; Talents
+            Custom Spells &amp; Talents
           </div>
         </div>
         <div
@@ -2047,7 +2053,7 @@
                 id="mobile-skill-detail-line"
                 class="sm:hidden text-[9.5px] text-amber-200/90 truncate px-0.5"
               >
-                Tap any skill below to preview 3D FX
+                Tap any skill below to preview FX
               </div>
               <div
                 id="select-hero-skills-strip"
@@ -3562,7 +3568,8 @@
                 ANCIENT ARMORY & SECRET SHOP
               </h2>
               <p class="text-xs text-slate-300">
-                27 Relics, Legendary Artifacts & Permanent Stat Consumables
+                38 Unique Relics (1 Per Hero), Mythic Artifacts & Permanent Stat
+                Tomes
               </p>
             </div>
           </div>
@@ -3623,12 +3630,6 @@
             class="shop-tab-btn px-3 py-1.5 rounded-t-lg font-cinzel font-bold text-xs text-purple-300 hover:bg-slate-900"
           >
             <i class="fa-solid fa-crown mr-1"></i>Secret Relics
-          </button>
-          <button
-            id="btn-walk-secret"
-            class="ml-auto mb-1 bg-purple-950 hover:bg-purple-900 border border-purple-500/50 text-purple-200 px-2.5 py-1 rounded text-xs font-semibold flex items-center gap-1"
-          >
-            <i class="fa-solid fa-person-walking"></i> Walk to Secret Shop
           </button>
         </div>
 
@@ -4123,7 +4124,7 @@
                 <div
                   class="flex justify-between text-[11px] text-slate-300 mb-0.5"
                 >
-                  <span>3D Render Resolution Scale</span>
+                  <span>Render Resolution Scale</span>
                   <span id="set-res-scale-val" class="font-mono text-cyan-300"
                     >85%</span
                   >
@@ -4236,7 +4237,7 @@
               <label
                 class="flex items-center justify-between text-[11px] text-slate-200 cursor-pointer"
               >
-                <span>Live 3D HUD Hero Portraits</span>
+                <span>Live HUD Hero Portraits</span>
                 <input
                   id="set-portraits-3d"
                   type="checkbox"
@@ -9593,7 +9594,7 @@
         const isHttp =
           /^https?:$/i.test(window.location.protocol) &&
           !/^localhost$|^127\.0\.0\.1$/i.test(window.location.hostname);
-        let shareText = `Join my Defense of the Ancients 3D match! Room Code: ${mpState.roomCode}`;
+        let shareText = `Join my Infinite War match! Room Code: ${mpState.roomCode}`;
         if (isHttp) {
           const u = new URL(window.location.href);
           u.searchParams.set("room", mpState.roomCode);
@@ -9953,6 +9954,8 @@
           } else if (msg.cmd === "BUY_ITEM") {
             const item = SHOP_ITEMS.find((it) => it.id === msg.itemId);
             if (item && actor.gold >= item.cost) {
+              if (item.shop === "secret" && !isHeroNearSecretShop(actor))
+                return;
               if (isConsumableItem(item)) {
                 const cState = getConsumableUsageState(actor, item);
                 if (cState.exhausted) return;
@@ -9966,7 +9969,7 @@
                 actor.consumableUsedCount[item.id] =
                   (actor.consumableUsedCount[item.id] || 0) + 1;
                 applyItemStatsToHero(actor, item);
-              } else {
+              } else if (!isItemAlreadyOwned(actor, item)) {
                 const emptyIdx = actor.inventory.findIndex((s) => s === null);
                 if (emptyIdx !== -1) {
                   actor.gold -= item.cost;
@@ -10051,15 +10054,7 @@
                   actor.critChance - st.critChance,
                 );
               actor.inventory[slotIdx] = null;
-              actor.hasRadiance = actor.inventory.some(
-                (x) => x && x.stats && x.stats.hasRadiance,
-              );
-              actor.hasSkadi = actor.inventory.some(
-                (x) => x && x.stats && x.stats.hasSkadi,
-              );
-              actor.hasTravelBoots = actor.inventory.some(
-                (x) => x && x.stats && x.stats.hasTravelBoots,
-              );
+              syncHeroUniqueItemFlags(actor);
               if (mpState.lastHeroExtras)
                 mpState.lastHeroExtras.delete(actor.netId);
             }
@@ -15059,28 +15054,36 @@
         };
         const TARGET = 210000;
         // x, z, radius of every place turf must stay clear: neutral camps (mirrored), shops, boss pit
-        const CLEAR = [-34, -34, 13, -86, 102, 6.5, 86, -102, 6.5, 44, 16, 7];
+        const CLEAR = [
+          -50, -50, 14.5, -126, 148, 7.5, 126, -148, 7.5, 64, 24, 8.0, -64, -24,
+          8.0,
+        ];
         [
-          [-108, 38],
-          [-82, 32],
-          [-112, 6],
-          [-38, 108],
-          [-104, -24],
-          [-6, 112],
+          [-158, 56],
+          [-120, 46],
+          [-164, 10],
+          [-56, 158],
+          [-152, -36],
+          [-10, 164],
+          [-84, 22],
+          [-24, 86],
+          [-108, 66],
+          [-124, -6],
+          [-94, -64],
         ].forEach(([cx, cz]) => {
-          CLEAR.push(cx, cz, 8.5, -cx, -cz, 8.5);
+          CLEAR.push(cx, cz, 9.5, -cx, -cz, 9.5);
         });
         const c = new THREE.Color();
         let placed = 0;
         for (let tries = 0; tries < TARGET * 3 && placed < TARGET; tries++) {
-          const x = (rnd() - 0.5) * 232,
-            z = (rnd() - 0.5) * 232;
+          const x = (rnd() - 0.5) * 344,
+            z = (rnd() - 0.5) * 344;
           const dRiver = Math.abs(x - z) / Math.SQRT2,
             dLane = Math.abs(x + z) / Math.SQRT2;
           if (dLane < 8.7 || dRiver < 11.6) continue;
           if (
-            Math.hypot(x + 96, z - 96) < 29 ||
-            Math.hypot(x - 96, z + 96) < 29
+            Math.hypot(x + 140, z - 140) < 32 ||
+            Math.hypot(x - 140, z + 140) < 32
           )
             continue;
           let cleared = false;
@@ -16727,203 +16730,353 @@
        * 5. MULTI-CLASS SHOP CATALOG (16 ARTIFACTS FOR ALL ROLES)
        ***********************************************************************/
       const SHOP_ITEMS = [
+        // Core Mobility & Boots (Unique — 1 per hero)
         {
           id: "tp_scroll",
           cat: "all",
           shop: "base",
           name: "Town Portal Scroll",
           cost: 100,
+          cd: 35,
           icon: "fa-scroll",
           color: "text-sky-300",
           bg: "from-sky-950/90 to-indigo-950",
           isTpScroll: true,
-          desc: "Dedicated TP Slot [V] (Frees all 6 Inventory slots!): Channel 2.5s to teleport to any Allied Tower or Base Fountain! (35s CD)",
+          desc: "Dedicated TP Slot [V]: Channel 2.5s to teleport to any Allied Tower or Base Fountain! (35s CD)",
         },
         {
           id: "treads",
           cat: "all",
           shop: "base",
           name: "Power Treads",
-          cost: 450,
+          cost: 480,
           icon: "fa-shoe-prints",
           color: "text-amber-300",
           bg: "from-amber-950/80 to-slate-900",
-          desc: "+4.0 Move Speed, +22% Attack Speed & +6 All Stats.",
-          stats: { moveSpeed: 4.0, atkSpeedMult: 0.22, str: 6, agi: 6, int: 6 },
+          desc: "[Boots] +4.2 Move Speed, +24% Attack Speed & +7 All Stats.",
+          stats: { moveSpeed: 4.2, atkSpeedMult: 0.24, str: 7, agi: 7, int: 7 },
         },
         {
           id: "arcane_boots",
           cat: "int",
           shop: "base",
           name: "Arcane Boots",
-          cost: 480,
+          cost: 520,
           icon: "fa-bolt",
           color: "text-sky-300",
           bg: "from-sky-950/80 to-slate-900",
-          desc: "+3.5 Move Speed, +260 Max Mana & +4.5 Mana Regen/s.",
-          stats: { moveSpeed: 3.5, maxMana: 260, manaRegen: 4.5 },
+          desc: "[Boots] +3.8 Move Speed, +300 Max Mana & +5.0 Mana Regen/s.",
+          stats: { moveSpeed: 3.8, maxMana: 300, manaRegen: 5.0 },
+        },
+        {
+          id: "travel_boots",
+          cat: "all",
+          shop: "base",
+          name: "Boots of Travel",
+          cost: 1350,
+          icon: "fa-wind",
+          color: "text-cyan-300",
+          bg: "from-sky-950/80 to-slate-900",
+          desc: "[Apex Boots] +7.2 Move Speed, +14 All Stats & cuts TP Scroll cooldown by 50%!",
+          stats: {
+            moveSpeed: 7.2,
+            str: 14,
+            agi: 14,
+            int: 14,
+            hasTravelBoots: true,
+          },
         },
         {
           id: "blink",
           cat: "all",
           shop: "base",
           name: "Blink Dagger",
-          cost: 950,
+          cost: 1150,
+          cd: 10,
           icon: "fa-angles-right",
           color: "text-cyan-300",
           bg: "from-cyan-950/80 to-slate-900",
-          desc: "Active [1-6]: Teleport 24m (10s CD) +10 Agility.",
-          stats: { agi: 10, atkSpeedMult: 0.15 },
+          desc: "Active [1-6]: Instant 26m Spatial Blink (10s CD), +12 Agility & +15% Atk Spd.",
+          stats: { agi: 12, atkSpeedMult: 0.15 },
           active: "blink",
         },
 
+        // Strength / Vanguard / Tank Relics
         {
           id: "vanguard",
           cat: "str",
           shop: "base",
-          name: "Vanguard Plate",
-          cost: 650,
+          name: "Vanguard Bulwark",
+          cost: 750,
           icon: "fa-shield-halved",
           color: "text-rose-300",
           bg: "from-rose-950/80 to-slate-900",
-          desc: "[Tank] +320 Max HP, +8 Armor & +7 HP Regen/s.",
-          stats: { maxHp: 320, armor: 8, hpRegen: 7.0 },
+          desc: "[Tank] +380 Max HP, +9 Armor & +8 HP Regen/s.",
+          stats: { maxHp: 380, armor: 9, hpRegen: 8.0 },
         },
         {
           id: "blademail",
           cat: "str",
           shop: "base",
           name: "Blade Mail",
-          cost: 850,
+          cost: 1050,
+          cd: 12,
           icon: "fa-burst",
           color: "text-orange-300",
           bg: "from-orange-950/80 to-slate-900",
-          desc: "[Tank] +10 Armor, +28 ATK, +12 INT & Active Spiked Carapace.",
-          stats: { armor: 10, atkDamage: 28, int: 12 },
+          desc: "[Tank] +11 Armor, +30 ATK, +12 INT & Active [1-6]: Spiked Carapace for 4.5s (12s CD).",
+          stats: { armor: 11, atkDamage: 30, int: 12 },
           active: "blademail",
         },
         {
-          id: "heart",
+          id: "bkb",
           cat: "str",
-          shop: "secret",
-          name: "Heart of Tarrasque",
-          cost: 1850,
-          icon: "fa-heart-pulse",
-          color: "text-rose-400",
-          bg: "from-rose-950/90 to-slate-900",
-          desc: "[Secret Tank] +38 STR, +820 Max HP, +20 HP Regen/s.",
-          stats: { str: 38, maxHp: 820, hpRegen: 20.0, armor: 8 },
+          shop: "base",
+          name: "Black King Bar",
+          cost: 1950,
+          cd: 16,
+          icon: "fa-shield",
+          color: "text-amber-300",
+          bg: "from-amber-900/85 to-slate-900",
+          desc: "[Core] +26 STR, +38 ATK & Active [1-6]: Avatar Spell Immunity & +50% Dmg Reduction for 6s (16s CD)!",
+          stats: { str: 26, atkDamage: 38 },
+          active: "bkb",
+        },
+        {
+          id: "crimson_guard",
+          cat: "str",
+          shop: "base",
+          name: "Crimson Sovereign Guard",
+          cost: 2550,
+          cd: 15,
+          icon: "fa-fort-awesome",
+          color: "text-rose-300",
+          bg: "from-rose-950/90 to-amber-950",
+          desc: "[Aura Tank] +560 HP, +14 Armor, +14 HP/s & Active [1-6]: Grants +340 Barrier to nearby allies (15s CD)!",
+          stats: { maxHp: 560, armor: 14, hpRegen: 14.0 },
+          active: "crimson_guard",
         },
         {
           id: "radiance",
           cat: "str",
           shop: "secret",
           name: "Sacred Radiance",
-          cost: 1650,
+          cost: 2350,
           icon: "fa-sun",
           color: "text-yellow-300",
           bg: "from-yellow-900/80 to-slate-900",
-          desc: "[Secret Bruiser] +65 ATK & Solar Burn Aura (50 DPS).",
-          stats: { atkDamage: 65, hasRadiance: true },
+          desc: "[Secret Bruiser] +72 ATK, +250 HP & Solar Burn Aura (56 DPS to nearby foes).",
+          stats: { atkDamage: 72, maxHp: 250, hasRadiance: true },
+        },
+        {
+          id: "assault_cuirass",
+          cat: "str",
+          shop: "secret",
+          name: "Assault Cuirass",
+          cost: 3200,
+          icon: "fa-vest",
+          color: "text-amber-400",
+          bg: "from-amber-950/90 to-slate-900",
+          desc: "[Secret Tank] +26 STR, +26 Armor & +60% Attack Speed!",
+          stats: { str: 26, armor: 26, atkSpeedMult: 0.6 },
+        },
+        {
+          id: "heart",
+          cat: "str",
+          shop: "secret",
+          name: "Heart of Tarrasque",
+          cost: 4400,
+          icon: "fa-heart-pulse",
+          color: "text-rose-400",
+          bg: "from-rose-950/90 to-slate-900",
+          desc: "[Mythic Tank] +50 STR, +1,150 Max HP, +28 HP/s & Colossus Regen (+3% Max HP/s)!",
+          stats: {
+            str: 50,
+            maxHp: 1150,
+            hpRegen: 28.0,
+            armor: 10,
+            hasHeartRegen: true,
+          },
+        },
+        {
+          id: "abyssal_blade",
+          cat: "str",
+          shop: "secret",
+          name: "Abyssal Worldbreaker",
+          cost: 5100,
+          cd: 14,
+          icon: "fa-gavel",
+          color: "text-rose-400",
+          bg: "from-rose-950/90 to-purple-950",
+          desc: "[Mythic Bruiser] +42 STR, +88 ATK, +520 HP, 22% Passive Bash & Active [1-6]: 2.0s Overwhelm Stun (14s CD)!",
+          stats: { str: 42, atkDamage: 88, maxHp: 520, hasAbyssalBash: true },
+          active: "abyssal",
         },
 
+        // Agility / Carry / Assassin Relics
         {
           id: "desolator",
           cat: "agi",
           shop: "base",
-          name: "Desolator Scythe",
-          cost: 1050,
+          name: "Desolator Corruption",
+          cost: 1250,
           icon: "fa-khanda",
           color: "text-red-400",
           bg: "from-red-950/80 to-slate-900",
-          desc: "[Carry] +58 Attack Damage & +15% Lifesteal.",
-          stats: { atkDamage: 58, lifesteal: 0.15 },
+          desc: "[Carry] +64 ATK, +16% Lifesteal & Armor-Shred Strikes (-0.8 Armor per hit, up to -5)!",
+          stats: { atkDamage: 64, lifesteal: 0.16, hasDesolator: true },
         },
         {
-          id: "mkb",
+          id: "manta_style",
           cat: "agi",
           shop: "base",
-          name: "Monkey King Bar",
-          cost: 1150,
-          icon: "fa-staff-snake",
-          color: "text-amber-300",
-          bg: "from-amber-950/80 to-slate-900",
-          desc: "[Carry] +48 ATK, +35% Attack Speed & +15% Crit (1.8x).",
+          name: "Manta Style",
+          cost: 1850,
+          cd: 13,
+          icon: "fa-clone",
+          color: "text-sky-300",
+          bg: "from-indigo-950/85 to-slate-900",
+          desc: "[Carry] +28 AGI, +15 STR/INT, +32% Atk Spd, +3.2 Speed & Active [1-6]: Mirror Cleanse + Haste (13s CD)!",
+          stats: {
+            agi: 28,
+            str: 15,
+            int: 15,
+            atkSpeedMult: 0.32,
+            moveSpeed: 3.2,
+          },
+          active: "manta",
+        },
+        {
+          id: "mjollnir",
+          cat: "agi",
+          shop: "base",
+          name: "Mjollnir Storm-Hammer",
+          cost: 2850,
+          icon: "fa-bolt-lightning",
+          color: "text-cyan-300",
+          bg: "from-sky-950/90 to-indigo-950",
+          desc: "[Carry] +48 ATK, +62% Atk Spd, +24 AGI & Chain Lightning every 3rd hit (140 AoE Dmg)!",
           stats: {
             atkDamage: 48,
-            atkSpeedMult: 0.35,
-            critChance: 0.15,
-            critMult: 1.8,
+            atkSpeedMult: 0.62,
+            agi: 24,
+            hasMjollnir: true,
           },
         },
         {
           id: "butterfly",
           cat: "agi",
           shop: "secret",
-          name: "Butterfly Talisman",
-          cost: 1750,
+          name: "Butterfly Astral Talisman",
+          cost: 4300,
           icon: "fa-feather-pointed",
           color: "text-emerald-300",
           bg: "from-teal-950/80 to-slate-900",
-          desc: "[Secret Carry] +32 AGI, +48 ATK, +40% Atk Spd & +2.5 Speed.",
-          stats: { agi: 32, atkDamage: 48, atkSpeedMult: 0.4, moveSpeed: 2.5 },
+          desc: "[Mythic Carry] +46 AGI, +62 ATK, +55% Atk Spd, +3.5 Speed & +20% Crit!",
+          stats: {
+            agi: 46,
+            atkDamage: 62,
+            atkSpeedMult: 0.55,
+            moveSpeed: 3.5,
+            critChance: 0.2,
+            critMult: 2.1,
+          },
         },
         {
           id: "daedalus",
           cat: "agi",
           shop: "secret",
-          name: "Daedalus Grand Edge",
-          cost: 2050,
-          icon: "fa-bolt-lightning",
+          name: "Daedalus Doombringer",
+          cost: 4900,
+          icon: "fa-meteor",
           color: "text-amber-400",
           bg: "from-amber-950/90 to-slate-900",
-          desc: "[Secret Carry] +98 ATK & 35% Crit Strike (240% Dmg!).",
-          stats: { atkDamage: 98, critChance: 0.35, critMult: 2.4 },
+          desc: "[Mythic Carry] +128 ATK & 36% Devastating Critical Strike (265% Damage)!",
+          stats: { atkDamage: 128, critChance: 0.36, critMult: 2.65 },
+        },
+        {
+          id: "eye_of_skadi",
+          cat: "agi",
+          shop: "secret",
+          name: "Eye of Skadi Frost-Wyrm",
+          cost: 5200,
+          icon: "fa-eye",
+          color: "text-cyan-300",
+          bg: "from-cyan-950/90 to-blue-950",
+          desc: "[Mythic Carry] +38 All Stats, +600 HP, +450 MP, +20% Spell Amp & 45% Frost Slow Attacks!",
+          stats: {
+            str: 38,
+            agi: 38,
+            int: 38,
+            maxHp: 600,
+            maxMana: 450,
+            spellAmpBonus: 0.2,
+            hasSkadi: true,
+          },
         },
         {
           id: "satanic",
           cat: "agi",
           shop: "secret",
-          name: "Satanic Unholy Reaver",
-          cost: 1950,
+          name: "Satanic Blood-Reaver",
+          cost: 5300,
+          cd: 14,
           icon: "fa-droplet",
           color: "text-rose-500",
           bg: "from-rose-950/90 to-slate-900",
-          desc: "[Secret Carry] +28 STR, +45 ATK, +30% Lifesteal & Active Heal.",
-          stats: { str: 28, atkDamage: 45, lifesteal: 0.3 },
+          desc: "[Mythic Carry] +40 STR, +76 ATK, +38% Lifesteal & Active [1-6]: Unholy Rage +45% Max HP Heal (14s CD)!",
+          stats: { str: 40, atkDamage: 76, lifesteal: 0.38 },
           active: "satanic",
         },
+        {
+          id: "divine_rapier",
+          cat: "agi",
+          shop: "secret",
+          name: "Divine Sovereign Rapier",
+          cost: 6500,
+          icon: "fa-sword",
+          color: "text-yellow-300",
+          bg: "from-amber-700/80 via-rose-950 to-slate-950",
+          desc: "[God-Tier Weapon] +310 Attack Damage, +35% Atk Spd & +30% True Critical Strike (2.6x)!",
+          stats: {
+            atkDamage: 310,
+            atkSpeedMult: 0.35,
+            critChance: 0.3,
+            critMult: 2.6,
+          },
+        },
 
+        // Intelligence / Archmage / Caster Relics
         {
           id: "kaya_sange",
           cat: "int",
           shop: "base",
           name: "Kaya & Sange",
-          cost: 980,
+          cost: 1180,
           icon: "fa-fire-flame-curved",
           color: "text-purple-300",
           bg: "from-purple-950/80 to-slate-900",
-          desc: "[Mage] +22 INT, +18 STR, +20% Spell Amp & +320 HP.",
-          stats: { int: 22, str: 18, spellAmpBonus: 0.2, maxHp: 320 },
+          desc: "[Mage] +24 INT, +20 STR, +22% Spell Amp & +340 HP.",
+          stats: { int: 24, str: 20, spellAmpBonus: 0.22, maxHp: 340 },
         },
         {
           id: "aghanim",
           cat: "int",
           shop: "base",
-          name: "Aghanim's Scepter",
-          cost: 1350,
+          name: "Aghanim's Astral Scepter",
+          cost: 1750,
           icon: "fa-wand-magic-sparkles",
           color: "text-sky-300",
           bg: "from-indigo-950/80 to-slate-900",
-          desc: "[Mage] +18 All Stats, +280 HP/MP, -18% CDs & +22% Spell Amp.",
+          desc: "[Mage] +22 All Stats, +340 HP/MP, -20% CDs & +26% Spell Amp.",
           stats: {
-            str: 18,
-            agi: 18,
-            int: 18,
-            maxHp: 280,
-            maxMana: 280,
-            cdrMult: 0.82,
-            spellAmpBonus: 0.22,
+            str: 22,
+            agi: 22,
+            int: 22,
+            maxHp: 340,
+            maxMana: 340,
+            cdrMult: 0.8,
+            spellAmpBonus: 0.26,
           },
         },
         {
@@ -16931,26 +17084,160 @@
           cat: "int",
           shop: "secret",
           name: "Shiva's Frost Guard",
-          cost: 1700,
+          cost: 2350,
+          cd: 12,
           icon: "fa-snowflake",
           color: "text-cyan-300",
           bg: "from-cyan-950/90 to-slate-900",
-          desc: "[Secret Mage] +30 INT, +14 Armor & Active [1-6] Arctic Blast!",
-          stats: { int: 30, armor: 14, maxMana: 350 },
+          desc: "[Secret Mage] +32 INT, +16 Armor, +380 MP & Active [1-6]: Arctic Blast 210 AoE Dmg + 45% Slow (12s CD)!",
+          stats: { int: 32, armor: 16, maxMana: 380 },
           active: "shiva",
+        },
+        {
+          id: "octarine_core",
+          cat: "int",
+          shop: "base",
+          name: "Octarine Core",
+          cost: 2450,
+          icon: "fa-ring",
+          color: "text-fuchsia-300",
+          bg: "from-fuchsia-950/85 to-slate-900",
+          desc: "[Mage] +32 INT, +460 HP, +460 Mana, -28% Cooldowns & +20% Spell Amp!",
+          stats: {
+            int: 32,
+            maxHp: 460,
+            maxMana: 460,
+            cdrMult: 0.72,
+            spellAmpBonus: 0.2,
+          },
         },
         {
           id: "vyse",
           cat: "int",
           shop: "secret",
           name: "Scythe of Vyse",
-          cost: 1900,
+          cost: 2700,
+          cd: 13,
           icon: "fa-hat-wizard",
           color: "text-fuchsia-300",
           bg: "from-fuchsia-950/90 to-slate-900",
-          desc: "[Secret Mage] +38 INT, +12 Mana Regen & Active [1-6] Hex Stun!",
-          stats: { int: 38, manaRegen: 12, maxMana: 450, spellAmpBonus: 0.18 },
+          desc: "[Secret Mage] +42 INT, +14 Mana/s, +480 MP, +20% Spell Amp & Active [1-6]: 2.4s Hex Stun (13s CD)!",
+          stats: { int: 42, manaRegen: 14, maxMana: 480, spellAmpBonus: 0.2 },
           active: "hex",
+        },
+        {
+          id: "dagon_5",
+          cat: "int",
+          shop: "secret",
+          name: "Dagon Arc-Cannon (Tier V)",
+          cost: 3450,
+          cd: 12,
+          icon: "fa-explosion",
+          color: "text-rose-400",
+          bg: "from-rose-950/90 to-purple-950",
+          desc: "[Secret Burst] +40 INT, +26% Spell Amp, +10 Mana/s & Active [1-6]: 680 Arcane Laser Burst (12s CD)!",
+          stats: { int: 40, spellAmpBonus: 0.26, manaRegen: 10 },
+          active: "dagon_5",
+        },
+        {
+          id: "bloodstone",
+          cat: "int",
+          shop: "secret",
+          name: "Bloodstone",
+          cost: 3850,
+          cd: 15,
+          icon: "fa-droplet",
+          color: "text-rose-400",
+          bg: "from-rose-950/90 to-indigo-950",
+          desc: "[Mythic Mage] +44 INT, +580 HP/MP, +30% Spell Amp & Active [1-6]: Bloodpact +500 HP/MP (15s CD)!",
+          stats: {
+            int: 44,
+            maxHp: 580,
+            maxMana: 580,
+            manaRegen: 15,
+            spellAmpBonus: 0.3,
+          },
+          active: "bloodstone",
+        },
+        {
+          id: "refresher_orb",
+          cat: "int",
+          shop: "secret",
+          name: "Refresher Orb of Eternity",
+          cost: 5600,
+          cd: 28,
+          icon: "fa-arrows-spin",
+          color: "text-emerald-300",
+          bg: "from-emerald-950/90 to-amber-950",
+          desc: "[Mythic Mage] +36 INT, +24 HP/s, +22 Mana/s, -15% CDs & Active [1-6]: Resets ALL Q/W/E/R Cooldowns (28s CD)!",
+          stats: { int: 36, hpRegen: 24, manaRegen: 22, cdrMult: 0.85 },
+          active: "refresher",
+        },
+
+        // Ultra-Expensive Endgame God-Tier Secret Relics
+        {
+          id: "crown_of_infinity",
+          cat: "all",
+          shop: "secret",
+          name: "Crown of the Infinite Warlord",
+          cost: 7500,
+          icon: "fa-crown",
+          color: "text-amber-300",
+          bg: "from-amber-800/85 via-purple-950 to-slate-950",
+          desc: "[Sovereign Relic] +60 STR/AGI/INT, +1,200 HP, +700 MP, +18 Armor, +25% Lifesteal, +35% Spell Amp & -22% CDs!",
+          stats: {
+            str: 60,
+            agi: 60,
+            int: 60,
+            maxHp: 1200,
+            maxMana: 700,
+            armor: 18,
+            lifesteal: 0.25,
+            spellAmpBonus: 0.35,
+            cdrMult: 0.78,
+          },
+        },
+        {
+          id: "chrono_aegis_core",
+          cat: "all",
+          shop: "secret",
+          name: "Chrono-Aegis Infinity Core",
+          cost: 7800,
+          cd: 22,
+          icon: "fa-hourglass-half",
+          color: "text-cyan-200",
+          bg: "from-cyan-900/90 via-indigo-950 to-slate-950",
+          desc: "[Temporal Relic] +45 All Stats, +850 HP, +650 MP, +20 Armor, -25% CDs & Active [1-6]: 2.5s Invulnerability + 40% Heal (22s CD)!",
+          stats: {
+            str: 45,
+            agi: 45,
+            int: 45,
+            maxHp: 850,
+            maxMana: 650,
+            armor: 20,
+            cdrMult: 0.75,
+            spellAmpBonus: 0.3,
+          },
+          active: "chrono_aegis",
+        },
+        {
+          id: "apocalypse_starforge",
+          cat: "agi",
+          shop: "secret",
+          name: "Apocalypse Starforge Blade",
+          cost: 8200,
+          icon: "fa-star",
+          color: "text-yellow-200",
+          bg: "from-rose-900/90 via-amber-900/80 to-slate-950",
+          desc: "[Apex God-Blade] +220 ATK, +70% Atk Spd, +35% Crit (2.8x), +30% Lifesteal & Starfire Shockwave on every hit!",
+          stats: {
+            atkDamage: 220,
+            atkSpeedMult: 0.7,
+            critChance: 0.35,
+            critMult: 2.8,
+            lifesteal: 0.3,
+            hasStarforge: true,
+          },
         },
 
         // Consumables & Permanent Stat Tomes
@@ -16959,265 +17246,107 @@
           cat: "consumable",
           shop: "base",
           name: "Elixir of Vitality & Surge",
-          cost: 180,
+          cost: 220,
           icon: "fa-flask",
           color: "text-emerald-300",
           bg: "from-emerald-950/90 to-slate-900",
           active: "vitality_elixir",
-          desc: "[Consumable 1-6] Restores +450 HP & +280 Mana, and grants +10 All Stats & +2.6 Speed for 16s!",
+          desc: "[Consumable 1-6] Restores +480 HP & +300 Mana, and grants +12 All Stats & +2.8 Speed for 16s!",
         },
         {
           id: "tome_str",
           cat: "consumable",
           shop: "base",
           name: "Tome of Strength",
-          cost: 350,
+          cost: 400,
           icon: "fa-book-skull",
           color: "text-rose-400",
           bg: "from-rose-950/90 to-slate-900",
           consumeOnBuy: true,
-          desc: "[Permanent Tome • 0 Slots] Instantly absorbs +7 STR, +140 Max HP & +3.0 HP Regen permanently!",
-          stats: { str: 7, maxHp: 140, hpRegen: 3.0 },
+          desc: "[Permanent Tome • 0 Slots] Instantly absorbs +8 STR, +160 Max HP & +3.5 HP Regen permanently!",
+          stats: { str: 8, maxHp: 160, hpRegen: 3.5 },
         },
         {
           id: "tome_agi",
           cat: "consumable",
           shop: "base",
           name: "Tome of Agility",
-          cost: 350,
+          cost: 400,
           icon: "fa-book-open",
           color: "text-emerald-400",
           bg: "from-emerald-950/90 to-slate-900",
           consumeOnBuy: true,
-          desc: "[Permanent Tome • 0 Slots] Instantly absorbs +7 AGI, +12% Attack Speed & +1.5 Armor permanently!",
-          stats: { agi: 7, atkSpeedMult: 0.12, armor: 1.5 },
+          desc: "[Permanent Tome • 0 Slots] Instantly absorbs +8 AGI, +14% Attack Speed & +1.8 Armor permanently!",
+          stats: { agi: 8, atkSpeedMult: 0.14, armor: 1.8 },
         },
         {
           id: "tome_int",
           cat: "consumable",
           shop: "base",
           name: "Tome of Intelligence",
-          cost: 350,
+          cost: 400,
           icon: "fa-book-journal-whills",
           color: "text-sky-400",
           bg: "from-sky-950/90 to-slate-900",
           consumeOnBuy: true,
-          desc: "[Permanent Tome • 0 Slots] Instantly absorbs +7 INT, +140 Max Mana & +6% Spell Amp permanently!",
-          stats: { int: 7, maxMana: 140, spellAmpBonus: 0.06 },
+          desc: "[Permanent Tome • 0 Slots] Instantly absorbs +8 INT, +160 Max Mana & +7% Spell Amp permanently!",
+          stats: { int: 8, maxMana: 160, spellAmpBonus: 0.07 },
         },
         {
           id: "tome_omni",
           cat: "consumable",
           shop: "secret",
           name: "Tome of Omniscience",
-          cost: 850,
+          cost: 950,
           icon: "fa-book-sparkles",
           color: "text-amber-300",
           bg: "from-amber-950/90 to-slate-900",
           consumeOnBuy: true,
-          xpGrant: 300,
-          desc: "[Secret Tome • 0 Slots] Permanently absorbs +9 All Stats (STR/AGI/INT), +18 ATK & +300 XP!",
-          stats: { str: 9, agi: 9, int: 9, atkDamage: 18 },
+          xpGrant: 350,
+          desc: "[Secret Tome • 0 Slots] Permanently absorbs +10 All Stats (STR/AGI/INT), +22 ATK & +350 XP!",
+          stats: { str: 10, agi: 10, int: 10, atkDamage: 22 },
         },
         {
           id: "moon_shard",
           cat: "consumable",
           shop: "secret",
           name: "Celestial Moon Shard",
-          cost: 1450,
+          cost: 1650,
           icon: "fa-moon",
           color: "text-cyan-300",
           bg: "from-cyan-950/90 to-indigo-950",
           consumeOnBuy: true,
-          desc: "[Secret Consumable • 0 Slots] Permanently absorbs +60% Attack Speed & +1.8 Move Speed!",
-          stats: { atkSpeedMult: 0.6, moveSpeed: 1.8 },
+          desc: "[Secret Consumable • 0 Slots] Permanently absorbs +65% Attack Speed & +2.0 Move Speed!",
+          stats: { atkSpeedMult: 0.65, moveSpeed: 2.0 },
         },
         {
           id: "aghanim_blessing",
           cat: "consumable",
           shop: "secret",
           name: "Aghanim's Blessing",
-          cost: 2250,
+          cost: 2500,
           icon: "fa-wand-sparkles",
           color: "text-fuchsia-300",
           bg: "from-indigo-950/90 to-purple-950",
           consumeOnBuy: true,
-          desc: "[Secret Consumable • 0 Slots] Permanently absorbs +22 All Stats, +300 HP/MP, -20% CDs & +25% Spell Amp!",
+          desc: "[Secret Consumable • 0 Slots] Permanently absorbs +24 All Stats, +350 HP/MP, -20% CDs & +28% Spell Amp!",
           stats: {
-            str: 22,
-            agi: 22,
-            int: 22,
-            maxHp: 300,
-            maxMana: 300,
-            cdrMult: 0.8,
-            spellAmpBonus: 0.25,
-          },
-        },
-
-        // Additional High-Tier Utility, Tank, Carry & Mage Relics
-        {
-          id: "travel_boots",
-          cat: "all",
-          shop: "base",
-          name: "Boots of Travel",
-          cost: 1100,
-          icon: "fa-wind",
-          color: "text-cyan-300",
-          bg: "from-sky-950/80 to-slate-900",
-          desc: "[Mobility] +6.5 Move Speed, +12 All Stats & cuts TP Scroll cooldown by 50%!",
-          stats: {
-            moveSpeed: 6.5,
-            str: 12,
-            agi: 12,
-            int: 12,
-            hasTravelBoots: true,
-          },
-        },
-        {
-          id: "bkb",
-          cat: "str",
-          shop: "base",
-          name: "Black King Bar",
-          cost: 1450,
-          icon: "fa-shield",
-          color: "text-amber-300",
-          bg: "from-amber-900/85 to-slate-900",
-          desc: "[Tank/Core] +24 STR, +34 ATK & Active [1-6]: Avatar Spell Immunity & +50% Dmg Reduction (6s)!",
-          stats: { str: 24, atkDamage: 34 },
-          active: "bkb",
-        },
-        {
-          id: "assault_cuirass",
-          cat: "str",
-          shop: "secret",
-          name: "Assault Cuirass",
-          cost: 1950,
-          icon: "fa-vest",
-          color: "text-amber-400",
-          bg: "from-amber-950/90 to-slate-900",
-          desc: "[Secret Tank] +20 STR, +24 Armor & +55% Attack Speed!",
-          stats: { str: 20, armor: 24, atkSpeedMult: 0.55 },
-        },
-        {
-          id: "abyssal_blade",
-          cat: "str",
-          shop: "secret",
-          name: "Abyssal Skullblade",
-          cost: 2150,
-          icon: "fa-gavel",
-          color: "text-rose-400",
-          bg: "from-rose-950/90 to-purple-950",
-          desc: "[Secret Bruiser] +32 STR, +68 ATK, +350 HP & Active [1-6]: Overwhelm Stun (2.0s) + 220 Pure Bash!",
-          stats: { str: 32, atkDamage: 68, maxHp: 350 },
-          active: "abyssal",
-        },
-        {
-          id: "manta_style",
-          cat: "agi",
-          shop: "base",
-          name: "Manta Style",
-          cost: 1350,
-          icon: "fa-clone",
-          color: "text-sky-300",
-          bg: "from-indigo-950/85 to-slate-900",
-          desc: "[Carry] +26 AGI, +14 STR/INT, +30% Atk Spd, +3.0 Speed & Active [1-6]: Mirror Cleanse + Haste!",
-          stats: {
-            agi: 26,
-            str: 14,
-            int: 14,
-            atkSpeedMult: 0.3,
-            moveSpeed: 3.0,
-          },
-          active: "manta",
-        },
-        {
-          id: "eye_of_skadi",
-          cat: "agi",
-          shop: "secret",
-          name: "Eye of Skadi",
-          cost: 2100,
-          icon: "fa-eye",
-          color: "text-cyan-300",
-          bg: "from-cyan-950/90 to-blue-950",
-          desc: "[Secret Carry] +30 All Stats, +450 HP, +350 Mana & Frost Attacks (35% Slow)!",
-          stats: {
-            str: 30,
-            agi: 30,
-            int: 30,
-            maxHp: 450,
+            str: 24,
+            agi: 24,
+            int: 24,
+            maxHp: 350,
             maxMana: 350,
-            hasSkadi: true,
+            cdrMult: 0.8,
+            spellAmpBonus: 0.28,
           },
-        },
-        {
-          id: "divine_rapier",
-          cat: "agi",
-          shop: "secret",
-          name: "Divine Rapier",
-          cost: 2600,
-          icon: "fa-sword",
-          color: "text-yellow-300",
-          bg: "from-amber-700/80 via-rose-950 to-slate-950",
-          desc: "[Secret Supreme] +240 Attack Damage & +25% Critical Strike (2.5x)!",
-          stats: { atkDamage: 240, critChance: 0.25, critMult: 2.5 },
-        },
-        {
-          id: "octarine_core",
-          cat: "int",
-          shop: "base",
-          name: "Octarine Core",
-          cost: 1800,
-          icon: "fa-ring",
-          color: "text-fuchsia-300",
-          bg: "from-fuchsia-950/85 to-slate-900",
-          desc: "[Mage] +28 INT, +425 HP, +425 Mana, -28% Cooldowns & +18% Spell Amp!",
-          stats: {
-            int: 28,
-            maxHp: 425,
-            maxMana: 425,
-            cdrMult: 0.72,
-            spellAmpBonus: 0.18,
-          },
-        },
-        {
-          id: "bloodstone",
-          cat: "int",
-          shop: "secret",
-          name: "Bloodstone",
-          cost: 1600,
-          icon: "fa-droplet",
-          color: "text-rose-400",
-          bg: "from-rose-950/90 to-indigo-950",
-          desc: "[Secret Mage] +34 INT, +450 HP/MP, +25% Spell Amp & Active [1-6]: Bloodpact Heal (+500 HP/MP)!",
-          stats: {
-            int: 34,
-            maxHp: 450,
-            maxMana: 450,
-            manaRegen: 12,
-            spellAmpBonus: 0.25,
-          },
-          active: "bloodstone",
-        },
-        {
-          id: "refresher_orb",
-          cat: "int",
-          shop: "secret",
-          name: "Refresher Orb",
-          cost: 2300,
-          icon: "fa-arrows-spin",
-          color: "text-emerald-300",
-          bg: "from-emerald-950/90 to-amber-950",
-          desc: "[Secret Mage] +26 INT, +18 HP Regen, +16 Mana Regen & Active [1-6]: Resets ALL Q/W/E/R Cooldowns!",
-          stats: { int: 26, hpRegen: 18, manaRegen: 16 },
-          active: "refresher",
         },
       ];
       const SHOP_ITEM_BY_ID = new Map(SHOP_ITEMS.map((it) => [it.id, it]));
 
       /***********************************************************************
-       * 6. EXPANDED 260x260 WORLD-SPACE GLSL TERRAIN, WATER, BRIDGE & DENSE FOREST
+       * 6. EXPANDED 380x380 WORLD-SPACE GLSL TERRAIN, WATER, BRIDGE & DENSE FOREST
        ***********************************************************************/
-      const MAP_HALF = 130;
+      const MAP_HALF = 190;
       let riverShaderUniforms = null;
       let terrainShaderUniforms = null;
       let ambientButterflies = [];
@@ -17228,7 +17357,7 @@
         const distRiver = Math.abs(wx - wz) / Math.SQRT2;
         const distLane = Math.abs(wx + wz) / Math.SQRT2;
         const edgeDist = Math.max(Math.abs(wx), Math.abs(wz));
-        const rimMask = THREE.MathUtils.smoothstep(edgeDist, 114, 129);
+        const rimMask = THREE.MathUtils.smoothstep(edgeDist, 168, 189);
         const rimNoise =
           (Math.sin(wx * 0.14) * Math.cos(wz * 0.14) +
             Math.sin((wx - wz) * 0.08) +
@@ -17236,11 +17365,11 @@
           0.45;
         const rimHeight = rimMask * (4.2 + rimNoise * 3.8);
 
-        const dRadBase = Math.hypot(wx + 96, wz - 96);
-        const dDireBase = Math.hypot(wx - 96, wz + 96);
+        const dRadBase = Math.hypot(wx + 140, wz - 140);
+        const dDireBase = Math.hypot(wx - 140, wz + 140);
         const baseTerrace =
           (1.0 -
-            THREE.MathUtils.smoothstep(Math.min(dRadBase, dDireBase), 18, 28)) *
+            THREE.MathUtils.smoothstep(Math.min(dRadBase, dDireBase), 22, 34)) *
           0.35;
 
         if (distLane < 7.4 && distRiver < 10.5 && rimMask < 0.35) {
@@ -17349,9 +17478,9 @@
           const distRiver = Math.abs(vx - vz) / Math.SQRT2;
           const distLane = Math.abs(vx + vz) / Math.SQRT2;
 
-          // Perimeter mountain ridge framing the outer edges of the arena
+          // Perimeter mountain ridge framing the outer edges of the 380x380 arena
           const edgeDist = Math.max(Math.abs(vx), Math.abs(vz));
-          const rimMask = THREE.MathUtils.smoothstep(edgeDist, 114, 129);
+          const rimMask = THREE.MathUtils.smoothstep(edgeDist, 168, 189);
           const rimNoise =
             (Math.sin(vx * 0.14) * Math.cos(vz * 0.14) +
               Math.sin((vx - vz) * 0.08) +
@@ -17359,15 +17488,15 @@
             0.45;
           const rimHeight = rimMask * (4.2 + rimNoise * 3.8);
 
-          // Subtle elevated citadel terraces around Radiant (-96,96) and Dire (96,-96)
-          const dRadBase = Math.hypot(vx + 96, vz - 96);
-          const dDireBase = Math.hypot(vx - 96, vz + 96);
+          // Subtle elevated citadel terraces around Radiant (-140,140) and Dire (140,-140)
+          const dRadBase = Math.hypot(vx + 140, vz - 140);
+          const dDireBase = Math.hypot(vx - 140, vz + 140);
           const baseTerrace =
             (1.0 -
               THREE.MathUtils.smoothstep(
                 Math.min(dRadBase, dDireBase),
-                18,
-                28,
+                22,
+                34,
               )) *
             0.35;
 
@@ -17552,7 +17681,7 @@ varying vec3 vTerrainNormal;
                             float molten = smoothstep(0.38, 0.64, nMacro);
                             // Keep the paved lane and the Dire plaza intact
                             molten *= smoothstep(7.4, 9.4, abs(wpXZ.x + wpXZ.y) * 0.70710678);
-                            molten *= smoothstep(22.0, 31.0, length(wpXZ - vec2(96.0, -96.0)));
+                            molten *= smoothstep(26.0, 38.0, length(wpXZ - vec2(140.0, -140.0)));
                             crack = (1.0 - smoothstep(0.0, 0.13, seam)) * molten;
                             crackCore = (1.0 - smoothstep(0.0, 0.04, seam)) * molten;
                         }
@@ -17582,11 +17711,11 @@ varying vec3 vTerrainNormal;
                         }
 
                         // Smooth circular sanctuary trim around Radiant & Dire Base Plazas (no square grid lines)
-                        float dRadP = length(wpXZ - vec2(-96.0, 96.0));
-                        float dDireP = length(wpXZ - vec2(96.0, -96.0));
-                        float plazaMask = 1.0 - smoothstep(15.0, 26.5, min(dRadP, dDireP));
+                        float dRadP = length(wpXZ - vec2(-140.0, 140.0));
+                        float dDireP = length(wpXZ - vec2(140.0, -140.0));
+                        float plazaMask = 1.0 - smoothstep(19.0, 32.0, min(dRadP, dDireP));
                         if (plazaMask > 0.02) {
-                            float ringTrim = smoothstep(0.18, 0.04, abs(min(dRadP, dDireP) - 18.5));
+                            float ringTrim = smoothstep(0.18, 0.04, abs(min(dRadP, dDireP) - 22.5));
                             diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.85, 0.68, 0.24), ringTrim * plazaMask * 0.75);
                         }
 
@@ -17631,8 +17760,8 @@ varying vec3 vTerrainNormal;
         terrain.receiveShadow = true;
         scene.add(freezeStaticObject(terrain));
 
-        // Seamless Outer Mountain & Foothill Apron surrounding the 260x260 arena so edges never expose empty void
-        const skirtGeo = new THREE.PlaneGeometry(780, 780, 96, 96);
+        // Seamless Outer Mountain & Foothill Apron surrounding the 380x380 arena so edges never expose empty void
+        const skirtGeo = new THREE.PlaneGeometry(1140, 1140, 96, 96);
         skirtGeo.rotateX(-Math.PI / 2);
         const sPos = skirtGeo.attributes.position;
         const sCols = [];
@@ -17644,8 +17773,8 @@ varying vec3 vTerrainNormal;
           const sx = sPos.getX(i);
           const sz = sPos.getZ(i);
           const eDist = Math.max(Math.abs(sx), Math.abs(sz));
-          const insideT = 1.0 - THREE.MathUtils.smoothstep(eDist, 122, 132);
-          const outerRise = THREE.MathUtils.smoothstep(eDist, 127, 165);
+          const insideT = 1.0 - THREE.MathUtils.smoothstep(eDist, 178, 192);
+          const outerRise = THREE.MathUtils.smoothstep(eDist, 185, 240);
           const ridgeWave =
             (Math.sin(sx * 0.065) * Math.cos(sz * 0.065) +
               Math.sin((sx + sz) * 0.045) +
@@ -17971,7 +18100,7 @@ roughnessFactor *= mix(1.0, 0.38, wetRough);`,
 
                     void main() {
                         vec2 wp = vWorldPos.xz;
-                        if (max(abs(wp.x), abs(wp.y)) > 128.5) discard;
+                        if (max(abs(wp.x), abs(wp.y)) > 188.5) discard;
                         if (uFastWater > 0.5) {
                             float depthFactor = smoothstep(0.03, 0.68, vBankDist);
                             float ripple = sin(wp.x * 0.45 - uTime * 1.4) * cos(wp.y * 0.45 + uTime * 1.2) * 0.5 + 0.5;
@@ -18066,22 +18195,23 @@ roughnessFactor *= mix(1.0, 0.38, wetRough);`,
 
         buildLaneCurbsAndRiverFlora();
         buildArchedRiverBridge();
-        buildRoshanPit(-34, -34);
-        buildFountainSanctuary(-96, 96, "radiant");
-        buildFountainSanctuary(96, -96, "dire");
-        build3DMerchantShop(-86, 102, "base", "Radiant Armory");
-        build3DMerchantShop(86, -102, "base", "Dire Armory");
-        build3DMerchantShop(44, 16, "secret", "Secret Shop");
+        buildRoshanPit(-50, -50);
+        buildFountainSanctuary(-140, 140, "radiant");
+        buildFountainSanctuary(140, -140, "dire");
+        build3DMerchantShop(-126, 148, "base", "Radiant Armory");
+        build3DMerchantShop(126, -148, "base", "Dire Armory");
+        build3DMerchantShop(64, 24, "secret", "East Secret Shop");
+        build3DMerchantShop(-64, -24, "secret", "West Secret Shop");
 
         [
-          [-16, 4],
-          [-4, 16],
-          [16, -4],
-          [4, -16],
-          [-25, -25],
-          [-43, -25],
-          [-25, -43],
-          [42, 12],
+          [-22, 6],
+          [-6, 22],
+          [22, -6],
+          [6, -22],
+          [-37, -37],
+          [-62, -37],
+          [-37, -62],
+          [62, 20],
         ].forEach(([tx, tz], idx) => {
           buildTorchBrazier(tx, tz, tx - tz < 0 ? 0x34d399 : 0xf97316, idx < 4);
         });
@@ -18150,11 +18280,11 @@ roughnessFactor *= mix(1.0, 0.38, wetRough);`,
 
         const rayGeo = new THREE.CylinderGeometry(1.4, 5.2, 66, 28, 1, true);
         const coords = [
-          [-56, 48, 0.9],
-          [-24, 16, 0.85],
+          [-88, 80, 0.95],
+          [-42, 34, 0.9],
           [0, 0, 1.0],
-          [28, -26, 0.85],
-          [58, -54, 0.9],
+          [44, -42, 0.9],
+          [90, -86, 0.95],
         ];
         coords.forEach(([rx, rz, sc], i) => {
           const beam = new THREE.Mesh(rayGeo, rayMat);
@@ -18181,7 +18311,7 @@ roughnessFactor *= mix(1.0, 0.38, wetRough);`,
         });
         const curbBlocks = [];
         const waystones = [];
-        for (let s = -114; s <= 114; s += 6.0) {
+        for (let s = -168; s <= 168; s += 6.0) {
           if (Math.abs(s) < 15.5) continue; // Keep clear of arched river bridge
           [-6.45, 6.45].forEach((offset, sideIdx) => {
             const wx = (s + offset) / Math.SQRT2;
@@ -18238,8 +18368,8 @@ roughnessFactor *= mix(1.0, 0.38, wetRough);`,
 
         // 2. Floating River Lily Pads & Glowing Lotus Blossoms on Radiant River Reach
         const lilyPads = [];
-        for (let i = 0; i < 64; i++) {
-          const along = -148 + (i / 64) * 126; // Northwest / Radiant side of bridge
+        for (let i = 0; i < 84; i++) {
+          const along = -220 + (i / 84) * 196; // Northwest / Radiant side of bridge
           const across = Math.sin(i * 4.3) * 0.72 * 5.8;
           const lx = (along + across) / Math.SQRT2;
           const lz = (along - across) / Math.SQRT2;
@@ -19922,23 +20052,34 @@ diffuseColor.rgb *= mix(0.58, 1.04, groundAO) * canopyShade;`,
 
       function buildDenseInstancedForest() {
         const clearZones = [
-          { x: -86, z: 102, r: 12 },
-          { x: 86, z: -102, r: 12 },
-          { x: 44, z: 16, r: 12 },
-          { x: -34, z: -34, r: 17 },
-          // 12 Deep-Forest Neutral Camp Clearings (Well away from all lane & Citadel towers)
-          { x: -108, z: 38, r: 11.5 },
-          { x: -82, z: 32, r: 11.5 },
-          { x: -112, z: 6, r: 11.5 },
-          { x: -38, z: 108, r: 11.5 },
-          { x: -104, z: -24, r: 12.0 },
-          { x: -6, z: 112, r: 12.0 },
-          { x: 108, z: -38, r: 11.5 },
-          { x: 82, z: -32, r: 11.5 },
-          { x: 112, z: -6, r: 11.5 },
-          { x: 38, z: -108, r: 11.5 },
-          { x: 104, z: 24, r: 12.0 },
-          { x: 6, z: -112, r: 12.0 },
+          { x: -126, z: 148, r: 13 },
+          { x: 126, z: -148, r: 13 },
+          { x: 64, z: 24, r: 13 },
+          { x: -64, z: -24, r: 13 },
+          { x: -50, z: -50, r: 19 },
+          // 22 Deep-Forest & Riverbank Neutral Camp Clearings across the 380x380 map
+          { x: -158, z: 56, r: 12.5 },
+          { x: -120, z: 46, r: 12.5 },
+          { x: -164, z: 10, r: 12.5 },
+          { x: -56, z: 158, r: 12.5 },
+          { x: -152, z: -36, r: 13.0 },
+          { x: -10, z: 164, r: 13.0 },
+          { x: -84, z: 22, r: 12.0 },
+          { x: -24, z: 86, r: 12.0 },
+          { x: -108, z: 66, r: 12.0 },
+          { x: -124, z: -6, r: 12.0 },
+          { x: -94, z: -64, r: 13.0 },
+          { x: 158, z: -56, r: 12.5 },
+          { x: 120, z: -46, r: 12.5 },
+          { x: 164, z: -10, r: 12.5 },
+          { x: 56, z: -158, r: 12.5 },
+          { x: 152, z: 36, r: 13.0 },
+          { x: 10, z: -164, r: 13.0 },
+          { x: 84, z: -22, r: 12.0 },
+          { x: 24, z: -86, r: 12.0 },
+          { x: 108, z: -66, r: 12.0 },
+          { x: 124, z: 6, r: 12.0 },
+          { x: 94, z: 64, r: 13.0 },
         ];
 
         const radOaks = [];
@@ -19946,15 +20087,15 @@ diffuseColor.rgb *= mix(0.58, 1.04, groundAO) * canopyShade;`,
         const radWillows = [];
         const direSpires = [];
 
-        for (let i = 0; i < 620; i++) {
-          const tx = (Math.random() - 0.5) * 252;
-          const tz = (Math.random() - 0.5) * 252;
+        for (let i = 0; i < 860; i++) {
+          const tx = (Math.random() - 0.5) * 368;
+          const tz = (Math.random() - 0.5) * 368;
           const distLane = Math.abs(tx + tz) / Math.SQRT2;
           const distRiver = Math.abs(tx - tz) / Math.SQRT2;
-          if (distLane < 12.6 || distRiver < 11.4) continue;
+          if (distLane < 12.8 || distRiver < 11.6) continue;
           if (
-            Math.hypot(tx + 84, tz - 84) < 28 ||
-            Math.hypot(tx - 84, tz + 84) < 28
+            Math.hypot(tx + 124, tz - 124) < 34 ||
+            Math.hypot(tx - 124, tz + 124) < 34
           )
             continue;
           if (clearZones.some((c) => Math.hypot(tx - c.x, tz - c.z) < c.r))
@@ -21268,9 +21409,33 @@ diffuseColor.rgb *= mix(0.58, 1.04, groundAO) * canopyShade;`,
         ring.position.y = 0.08;
         g.add(ring);
 
+        const hitVolume = new THREE.Mesh(
+          new THREE.CylinderGeometry(5.6, 5.8, 7.6, 16),
+          new THREE.MeshBasicMaterial({
+            transparent: true,
+            opacity: 0.0,
+            depthWrite: false,
+          }),
+        );
+        hitVolume.position.y = 3.8;
+        g.add(hitVolume);
+
         g.position.set(x, 0, z);
         scene.add(g);
-        shopEntities.push({ x, z, type, name: label, signMesh, npcMesh: npc });
+        g.updateMatrixWorld(true);
+        const shopEntry = {
+          x,
+          z,
+          type,
+          name: label,
+          signMesh,
+          npcMesh: npc,
+          mesh: g,
+        };
+        g.traverse((ch) => {
+          ch.userData.shopEntity = shopEntry;
+        });
+        shopEntities.push(shopEntry);
       }
 
       function buildTorchBrazier(x, z, colorHex, castLight) {
@@ -32144,8 +32309,8 @@ diffuseColor.rgb *= mix(0.58, 1.04, groundAO) * canopyShade;`,
             this.parts.hips.rotation.set(0, 0, 0);
           }
           const offset = ((this.id % 3) - 1) * 4;
-          const sx = (this.team === "radiant" ? -92 : 92) + offset;
-          const sz = (this.team === "radiant" ? 92 : -92) + offset;
+          const sx = (this.team === "radiant" ? -134 : 134) + offset;
+          const sz = (this.team === "radiant" ? 134 : -134) + offset;
           this.mesh.position.set(sx, 0, sz);
           this.mesh.visible = true;
           this.bar.el.style.display = "flex";
@@ -33966,15 +34131,15 @@ diffuseColor.rgb *= mix(0.58, 1.04, groundAO) * canopyShade;`,
       }
 
       const DRAGON_RANDOM_ZONES = [
-        { x: 38, z: 38, region: "Eastern River Shallows" },
-        { x: 60, z: 60, region: "Southeastern River Bend" },
-        { x: -62, z: -62, region: "Northwestern River Bend" },
-        { x: 16, z: 16, region: "Central River Crossing" },
-        { x: -16, z: -16, region: "Upper River Rapids" },
-        { x: -64, z: 10, region: "Radiant Emerald Glade" },
-        { x: 64, z: -10, region: "Dire Crimson Flats" },
-        { x: -10, z: 64, region: "Radiant Whispering Woods" },
-        { x: 10, z: -64, region: "Dire Ashen Ridge" },
+        { x: 56, z: 56, region: "Eastern River Shallows" },
+        { x: 92, z: 92, region: "Southeastern River Bend" },
+        { x: -94, z: -94, region: "Northwestern River Bend" },
+        { x: 24, z: 24, region: "Central River Crossing" },
+        { x: -24, z: -24, region: "Upper River Rapids" },
+        { x: -94, z: 16, region: "Radiant Emerald Glade" },
+        { x: 94, z: -16, region: "Dire Crimson Flats" },
+        { x: -16, z: 94, region: "Radiant Whispering Woods" },
+        { x: 16, z: -94, region: "Dire Ashen Ridge" },
       ];
       let lastDragonSpot = null;
 
@@ -34056,8 +34221,8 @@ diffuseColor.rgb *= mix(0.58, 1.04, groundAO) * canopyShade;`,
           team: "neutral",
           type: "boss",
           subType: "boss",
-          x: -34,
-          z: -34,
+          x: -50,
+          z: -50,
           maxHp: Math.round(6800 * m.hp * infMon),
           hpRegen: 26.0 * m.hp * infMon,
           atkDamage: Math.round(182 * m.dmg * infMon),
@@ -34078,8 +34243,8 @@ diffuseColor.rgb *= mix(0.58, 1.04, groundAO) * canopyShade;`,
         const m = getEscalationMults();
         const infMon = getInfinityMonsterMult();
         const isRad = team === "radiant";
-        const spawnX = isRad ? -85 : 85;
-        const spawnZ = isRad ? 85 : -85;
+        const spawnX = isRad ? -125 : 125;
+        const spawnZ = isRad ? 125 : -125;
         const label = isRad ? "Radiant" : "Dire";
 
         const otherGuardHp = Math.round(7600 * m.hp * infMon);
@@ -34929,14 +35094,14 @@ diffuseColor.rgb *= mix(0.58, 1.04, groundAO) * canopyShade;`,
           }
         });
         neutralCamps = [
-          // 6 Radiant Deep-Jungle Camps (Minimum 30+ units away from any tower)
+          // 11 Radiant Jungle & Riverbank Camps spread across the expanded 380x380 arena
           {
             id: 1,
             name: "Radiant West-Woods Wolf Pack",
             kind: "wolf",
             isAncient: false,
-            x: -108,
-            z: 38,
+            x: -158,
+            z: 56,
             respawnTimer: 0,
             alive: false,
             altarMesh: null,
@@ -34946,8 +35111,8 @@ diffuseColor.rgb *= mix(0.58, 1.04, groundAO) * canopyShade;`,
             name: "Radiant River-Flank Satyrs",
             kind: "satyr",
             isAncient: false,
-            x: -82,
-            z: 32,
+            x: -120,
+            z: 46,
             respawnTimer: 0,
             alive: false,
             altarMesh: null,
@@ -34957,8 +35122,8 @@ diffuseColor.rgb *= mix(0.58, 1.04, groundAO) * canopyShade;`,
             name: "Radiant Deep Forest Centaurs",
             kind: "centaur",
             isAncient: false,
-            x: -112,
-            z: 6,
+            x: -164,
+            z: 10,
             respawnTimer: 0,
             alive: false,
             altarMesh: null,
@@ -34968,8 +35133,8 @@ diffuseColor.rgb *= mix(0.58, 1.04, groundAO) * canopyShade;`,
             name: "Radiant South-Woods Hellbears",
             kind: "hellbear",
             isAncient: false,
-            x: -38,
-            z: 108,
+            x: -56,
+            z: 158,
             respawnTimer: 0,
             alive: false,
             altarMesh: null,
@@ -34979,8 +35144,8 @@ diffuseColor.rgb *= mix(0.58, 1.04, groundAO) * canopyShade;`,
             name: "Radiant Ancient Sanctuary West",
             kind: "golem",
             isAncient: true,
-            x: -104,
-            z: -24,
+            x: -152,
+            z: -36,
             respawnTimer: 0,
             alive: false,
             altarMesh: null,
@@ -34990,20 +35155,76 @@ diffuseColor.rgb *= mix(0.58, 1.04, groundAO) * canopyShade;`,
             name: "Radiant Ancient Sanctuary South",
             kind: "behemoth",
             isAncient: true,
-            x: -6,
-            z: 112,
+            x: -10,
+            z: 164,
             respawnTimer: 0,
             alive: false,
             altarMesh: null,
           },
-          // 6 Dire Deep-Jungle Camps (Minimum 30+ units away from any tower)
+          {
+            id: 13,
+            name: "Radiant Mid-Flank Timber Wolves",
+            kind: "wolf",
+            isAncient: false,
+            x: -84,
+            z: 22,
+            respawnTimer: 0,
+            alive: false,
+            altarMesh: null,
+          },
+          {
+            id: 14,
+            name: "Radiant East-Flank Satyr Glade",
+            kind: "satyr",
+            isAncient: false,
+            x: -24,
+            z: 86,
+            respawnTimer: 0,
+            alive: false,
+            altarMesh: null,
+          },
+          {
+            id: 15,
+            name: "Radiant Inner-Woods Dark Trolls",
+            kind: "troll",
+            isAncient: false,
+            x: -108,
+            z: 66,
+            respawnTimer: 0,
+            alive: false,
+            altarMesh: null,
+          },
+          {
+            id: 16,
+            name: "Radiant Northwest Ridge Harpies",
+            kind: "harpy",
+            isAncient: false,
+            x: -124,
+            z: -6,
+            respawnTimer: 0,
+            alive: false,
+            altarMesh: null,
+          },
+          {
+            id: 17,
+            name: "Radiant Far-North Frost Wyverns",
+            kind: "wyvern",
+            isAncient: true,
+            x: -94,
+            z: -64,
+            respawnTimer: 0,
+            alive: false,
+            altarMesh: null,
+          },
+
+          // 11 Dire Jungle & Riverbank Camps spread across the expanded 380x380 arena
           {
             id: 7,
             name: "Dire East-Woods Harpies",
             kind: "harpy",
             isAncient: false,
-            x: 108,
-            z: -38,
+            x: 158,
+            z: -56,
             respawnTimer: 0,
             alive: false,
             altarMesh: null,
@@ -35013,8 +35234,8 @@ diffuseColor.rgb *= mix(0.58, 1.04, groundAO) * canopyShade;`,
             name: "Dire River-Flank Dark Trolls",
             kind: "troll",
             isAncient: false,
-            x: 82,
-            z: -32,
+            x: 120,
+            z: -46,
             respawnTimer: 0,
             alive: false,
             altarMesh: null,
@@ -35024,8 +35245,8 @@ diffuseColor.rgb *= mix(0.58, 1.04, groundAO) * canopyShade;`,
             name: "Dire Deep Forest Basilisks",
             kind: "basilisk",
             isAncient: true,
-            x: 112,
-            z: -6,
+            x: 164,
+            z: -10,
             respawnTimer: 0,
             alive: false,
             altarMesh: null,
@@ -35035,8 +35256,8 @@ diffuseColor.rgb *= mix(0.58, 1.04, groundAO) * canopyShade;`,
             name: "Dire North-Woods Hellbears",
             kind: "hellbear",
             isAncient: false,
-            x: 38,
-            z: -108,
+            x: 56,
+            z: -158,
             respawnTimer: 0,
             alive: false,
             altarMesh: null,
@@ -35046,8 +35267,8 @@ diffuseColor.rgb *= mix(0.58, 1.04, groundAO) * canopyShade;`,
             name: "Dire Ancient Sanctuary East",
             kind: "ancient_dragon",
             isAncient: true,
-            x: 104,
-            z: 24,
+            x: 152,
+            z: 36,
             respawnTimer: 0,
             alive: false,
             altarMesh: null,
@@ -35057,8 +35278,63 @@ diffuseColor.rgb *= mix(0.58, 1.04, groundAO) * canopyShade;`,
             name: "Dire Ancient Sanctuary North",
             kind: "wyvern",
             isAncient: true,
-            x: 6,
-            z: -112,
+            x: 10,
+            z: -164,
+            respawnTimer: 0,
+            alive: false,
+            altarMesh: null,
+          },
+          {
+            id: 18,
+            name: "Dire Mid-Flank Shadow Wolves",
+            kind: "wolf",
+            isAncient: false,
+            x: 84,
+            z: -22,
+            respawnTimer: 0,
+            alive: false,
+            altarMesh: null,
+          },
+          {
+            id: 19,
+            name: "Dire West-Flank Satyr Hollow",
+            kind: "satyr",
+            isAncient: false,
+            x: 24,
+            z: -86,
+            respawnTimer: 0,
+            alive: false,
+            altarMesh: null,
+          },
+          {
+            id: 20,
+            name: "Dire Inner-Ash Centaur Warband",
+            kind: "centaur",
+            isAncient: false,
+            x: 108,
+            z: -66,
+            respawnTimer: 0,
+            alive: false,
+            altarMesh: null,
+          },
+          {
+            id: 21,
+            name: "Dire Southeast Crag Hellbears",
+            kind: "hellbear",
+            isAncient: false,
+            x: 124,
+            z: 6,
+            respawnTimer: 0,
+            alive: false,
+            altarMesh: null,
+          },
+          {
+            id: 22,
+            name: "Dire Far-South Granite Sanctum",
+            kind: "golem",
+            isAncient: true,
+            x: 94,
+            z: 64,
             respawnTimer: 0,
             alive: false,
             altarMesh: null,
@@ -35912,9 +36188,9 @@ diffuseColor.rgb *= mix(0.58, 1.04, groundAO) * canopyShade;`,
             name: "Radiant Ancient",
             team: "radiant",
             type: "ancient",
-            x: -96,
-            z: 96,
-            maxHp: 7800,
+            x: -140,
+            z: 140,
+            maxHp: 8200,
             hpRegen: 10.0,
             armor: 26,
             radius: 5.0,
@@ -35927,16 +36203,16 @@ diffuseColor.rgb *= mix(0.58, 1.04, groundAO) * canopyShade;`,
             name: "Radiant Citadel Tower Front",
             team: "radiant",
             type: "tower",
-            x: -78,
-            z: 78,
-            maxHp: 5800,
-            atkDamage: 485,
+            x: -114,
+            z: 114,
+            maxHp: 6000,
+            atkDamage: 495,
             atkRange: 26.0,
             atkCooldown: 0.65,
             armor: 32,
             radius: 2.8,
-            goldBounty: [320, 380],
-            xpBounty: 320,
+            goldBounty: [340, 400],
+            xpBounty: 340,
           }),
         );
         units.push(
@@ -35944,16 +36220,16 @@ diffuseColor.rgb *= mix(0.58, 1.04, groundAO) * canopyShade;`,
             name: "Radiant Citadel Tower North",
             team: "radiant",
             type: "tower",
-            x: -92,
-            z: 68,
-            maxHp: 5600,
-            atkDamage: 460,
+            x: -134,
+            z: 100,
+            maxHp: 5800,
+            atkDamage: 470,
             atkRange: 25.0,
             atkCooldown: 0.68,
             armor: 30,
             radius: 2.7,
-            goldBounty: [300, 350],
-            xpBounty: 300,
+            goldBounty: [320, 380],
+            xpBounty: 320,
           }),
         );
         units.push(
@@ -35961,16 +36237,16 @@ diffuseColor.rgb *= mix(0.58, 1.04, groundAO) * canopyShade;`,
             name: "Radiant Citadel Tower East",
             team: "radiant",
             type: "tower",
-            x: -68,
-            z: 92,
-            maxHp: 5600,
-            atkDamage: 460,
+            x: -100,
+            z: 134,
+            maxHp: 5800,
+            atkDamage: 470,
             atkRange: 25.0,
             atkCooldown: 0.68,
             armor: 30,
             radius: 2.7,
-            goldBounty: [300, 350],
-            xpBounty: 300,
+            goldBounty: [320, 380],
+            xpBounty: 320,
           }),
         );
         units.push(
@@ -35978,16 +36254,16 @@ diffuseColor.rgb *= mix(0.58, 1.04, groundAO) * canopyShade;`,
             name: "Radiant Tier 2 Tower",
             team: "radiant",
             type: "tower",
-            x: -54,
-            z: 54,
-            maxHp: 4000,
-            atkDamage: 235,
+            x: -78,
+            z: 78,
+            maxHp: 4200,
+            atkDamage: 245,
             atkRange: 16.5,
             atkCooldown: 0.92,
             armor: 18,
             radius: 2.5,
-            goldBounty: [240, 280],
-            xpBounty: 240,
+            goldBounty: [260, 310],
+            xpBounty: 260,
           }),
         );
         units.push(
@@ -35995,16 +36271,16 @@ diffuseColor.rgb *= mix(0.58, 1.04, groundAO) * canopyShade;`,
             name: "Radiant Tier 1 Tower",
             team: "radiant",
             type: "tower",
-            x: -24,
-            z: 24,
-            maxHp: 3100,
-            atkDamage: 180,
+            x: -36,
+            z: 36,
+            maxHp: 3300,
+            atkDamage: 185,
             atkRange: 16.5,
             atkCooldown: 0.95,
             armor: 15,
             radius: 2.5,
-            goldBounty: [200, 240],
-            xpBounty: 200,
+            goldBounty: [220, 260],
+            xpBounty: 220,
           }),
         );
 
@@ -36014,9 +36290,9 @@ diffuseColor.rgb *= mix(0.58, 1.04, groundAO) * canopyShade;`,
             name: "Dire Ancient",
             team: "dire",
             type: "ancient",
-            x: 96,
-            z: -96,
-            maxHp: 7800,
+            x: 140,
+            z: -140,
+            maxHp: 8200,
             hpRegen: 10.0,
             armor: 26,
             radius: 5.0,
@@ -36029,16 +36305,16 @@ diffuseColor.rgb *= mix(0.58, 1.04, groundAO) * canopyShade;`,
             name: "Dire Citadel Tower Front",
             team: "dire",
             type: "tower",
-            x: 78,
-            z: -78,
-            maxHp: 5800,
-            atkDamage: 485,
+            x: 114,
+            z: -114,
+            maxHp: 6000,
+            atkDamage: 495,
             atkRange: 26.0,
             atkCooldown: 0.65,
             armor: 32,
             radius: 2.8,
-            goldBounty: [320, 380],
-            xpBounty: 320,
+            goldBounty: [340, 400],
+            xpBounty: 340,
           }),
         );
         units.push(
@@ -36046,16 +36322,16 @@ diffuseColor.rgb *= mix(0.58, 1.04, groundAO) * canopyShade;`,
             name: "Dire Citadel Tower South",
             team: "dire",
             type: "tower",
-            x: 92,
-            z: -68,
-            maxHp: 5600,
-            atkDamage: 460,
+            x: 134,
+            z: -100,
+            maxHp: 5800,
+            atkDamage: 470,
             atkRange: 25.0,
             atkCooldown: 0.68,
             armor: 30,
             radius: 2.7,
-            goldBounty: [300, 350],
-            xpBounty: 300,
+            goldBounty: [320, 380],
+            xpBounty: 320,
           }),
         );
         units.push(
@@ -36063,16 +36339,16 @@ diffuseColor.rgb *= mix(0.58, 1.04, groundAO) * canopyShade;`,
             name: "Dire Citadel Tower West",
             team: "dire",
             type: "tower",
-            x: 68,
-            z: -92,
-            maxHp: 5600,
-            atkDamage: 460,
+            x: 100,
+            z: -134,
+            maxHp: 5800,
+            atkDamage: 470,
             atkRange: 25.0,
             atkCooldown: 0.68,
             armor: 30,
             radius: 2.7,
-            goldBounty: [300, 350],
-            xpBounty: 300,
+            goldBounty: [320, 380],
+            xpBounty: 320,
           }),
         );
         units.push(
@@ -36080,16 +36356,16 @@ diffuseColor.rgb *= mix(0.58, 1.04, groundAO) * canopyShade;`,
             name: "Dire Tier 2 Tower",
             team: "dire",
             type: "tower",
-            x: 54,
-            z: -54,
-            maxHp: 4000,
-            atkDamage: 235,
+            x: 78,
+            z: -78,
+            maxHp: 4200,
+            atkDamage: 245,
             atkRange: 16.5,
             atkCooldown: 0.92,
             armor: 18,
             radius: 2.5,
-            goldBounty: [240, 280],
-            xpBounty: 240,
+            goldBounty: [260, 310],
+            xpBounty: 260,
           }),
         );
         units.push(
@@ -36097,16 +36373,16 @@ diffuseColor.rgb *= mix(0.58, 1.04, groundAO) * canopyShade;`,
             name: "Dire Tier 1 Tower",
             team: "dire",
             type: "tower",
-            x: 24,
-            z: -24,
-            maxHp: 3100,
-            atkDamage: 180,
+            x: 36,
+            z: -36,
+            maxHp: 3300,
+            atkDamage: 185,
             atkRange: 16.5,
             atkCooldown: 0.95,
             armor: 15,
             radius: 2.5,
-            goldBounty: [200, 240],
-            xpBounty: 200,
+            goldBounty: [220, 260],
+            xpBounty: 220,
           }),
         );
         staticStructures = units.filter(
@@ -36129,10 +36405,10 @@ diffuseColor.rgb *= mix(0.58, 1.04, groundAO) * canopyShade;`,
             const team = p.team === "dire" ? "dire" : "radiant";
             const idx = team === "radiant" ? radCount++ : direCount++;
             const sx =
-              (team === "radiant" ? -74 : 74) +
+              (team === "radiant" ? -108 : 108) +
               (idx % 2 === 0 ? 0 : team === "radiant" ? 5 : -5);
             const sz =
-              (team === "radiant" ? 74 : -74) +
+              (team === "radiant" ? 108 : -108) +
               (idx % 2 === 0 ? 0 : team === "radiant" ? 5 : -5);
             const heroEnt = new MobaEntity({
               name: `${hCfg.name} (${p.name})`,
@@ -36169,8 +36445,8 @@ diffuseColor.rgb *= mix(0.58, 1.04, groundAO) * canopyShade;`,
               type: "hero",
               isPlayer: false,
               heroCfg: direCfg1,
-              x: 74,
-              z: -74,
+              x: 108,
+              z: -108,
               ...scaleBotStatsByDifficulty(direCfg1.stats),
               radius: 1.4,
               gold: 650,
@@ -36190,8 +36466,8 @@ diffuseColor.rgb *= mix(0.58, 1.04, groundAO) * canopyShade;`,
               type: "hero",
               isPlayer: false,
               heroCfg: allyCfg,
-              x: -74,
-              z: 74,
+              x: -108,
+              z: 108,
               ...scaleBotStatsByDifficulty(allyCfg.stats),
               radius: 1.4,
               gold: 650,
@@ -36230,8 +36506,8 @@ diffuseColor.rgb *= mix(0.58, 1.04, groundAO) * canopyShade;`,
             type: "hero",
             isPlayer: true,
             heroCfg: radHeroCfg,
-            x: -74,
-            z: 74,
+            x: -108,
+            z: 108,
             ...radHeroCfg.stats,
             radius: 1.4,
             gold: 650,
@@ -36247,8 +36523,8 @@ diffuseColor.rgb *= mix(0.58, 1.04, groundAO) * canopyShade;`,
             type: "hero",
             isPlayer: false,
             heroCfg: p2Cfg,
-            x: p2IsRad ? -69 : 74,
-            z: p2IsRad ? 78 : -74,
+            x: p2IsRad ? -103 : 108,
+            z: p2IsRad ? 112 : -108,
             ...p2Cfg.stats,
             radius: 1.4,
             gold: 650,
@@ -36269,8 +36545,8 @@ diffuseColor.rgb *= mix(0.58, 1.04, groundAO) * canopyShade;`,
                 type: "hero",
                 isPlayer: false,
                 heroCfg: dc,
-                x: 74 + idx * 4,
-                z: -74 + idx * 5,
+                x: 108 + idx * 4,
+                z: -108 + idx * 5,
                 ...scaleBotStatsByDifficulty(dc.stats),
                 radius: 1.4,
                 gold: 650,
@@ -36299,8 +36575,8 @@ diffuseColor.rgb *= mix(0.58, 1.04, groundAO) * canopyShade;`,
             type: "hero",
             isPlayer: true,
             heroCfg: radHeroCfg,
-            x: -74,
-            z: 74,
+            x: -108,
+            z: 108,
             ...radHeroCfg.stats,
             radius: 1.4,
             gold: 650,
@@ -36317,8 +36593,8 @@ diffuseColor.rgb *= mix(0.58, 1.04, groundAO) * canopyShade;`,
               type: "hero",
               isPlayer: false,
               heroCfg: allyCfg,
-              x: -69,
-              z: 78,
+              x: -103,
+              z: 112,
               ...scaleBotStatsByDifficulty(allyCfg.stats),
               radius: 1.4,
               gold: 650,
@@ -36338,8 +36614,8 @@ diffuseColor.rgb *= mix(0.58, 1.04, groundAO) * canopyShade;`,
             type: "hero",
             isPlayer: false,
             heroCfg: direCfg1,
-            x: 74,
-            z: -74,
+            x: 108,
+            z: -108,
             ...scaleBotStatsByDifficulty(direCfg1.stats),
             radius: 1.4,
             gold: 650,
@@ -36359,8 +36635,8 @@ diffuseColor.rgb *= mix(0.58, 1.04, groundAO) * canopyShade;`,
               type: "hero",
               isPlayer: false,
               heroCfg: direCfg2,
-              x: 78,
-              z: -69,
+              x: 112,
+              z: -103,
               ...scaleBotStatsByDifficulty(direCfg2.stats),
               radius: 1.4,
               gold: 650,
@@ -36387,20 +36663,20 @@ diffuseColor.rgb *= mix(0.58, 1.04, groundAO) * canopyShade;`,
           const nz = 0.70710678 * sideOff;
           const nodes = isRad
             ? [
-                [-54, 54],
-                [-24, 24],
+                [-78, 78],
+                [-36, 36],
                 [0, 0],
-                [24, -24],
-                [54, -54],
-                [91, -91],
+                [36, -36],
+                [78, -78],
+                [134, -134],
               ]
             : [
-                [54, -54],
-                [24, -24],
+                [78, -78],
+                [36, -36],
                 [0, 0],
-                [-24, 24],
-                [-54, 54],
-                [-91, 91],
+                [-36, 36],
+                [-78, 78],
+                [-134, 134],
               ];
           return nodes.map(([px, pz], idx) =>
             idx === nodes.length - 1
@@ -36432,8 +36708,8 @@ diffuseColor.rgb *= mix(0.58, 1.04, groundAO) * canopyShade;`,
             type: "creep",
             subType: f.sub,
             isMega: radiantMegaCreeps,
-            x: -74 + f.dx,
-            z: 74 + f.dz,
+            x: -108 + f.dx,
+            z: 108 + f.dz,
             maxHp: Math.round((isR ? 350 : 490) * m.hp * radMegaMult),
             atkDamage: Math.round((isR ? 38 : 30) * m.dmg * radMegaMult),
             atkRange: isR ? 9.5 : 2.8,
@@ -36469,8 +36745,8 @@ diffuseColor.rgb *= mix(0.58, 1.04, groundAO) * canopyShade;`,
             type: "creep",
             subType: f.sub,
             isMega: direMegaCreeps,
-            x: 74 - f.dx,
-            z: -74 - f.dz,
+            x: 108 - f.dx,
+            z: -108 - f.dz,
             maxHp: Math.round((isR ? 350 : 490) * m.hp * direMegaMult),
             atkDamage: Math.round((isR ? 38 : 30) * m.dmg * direMegaMult),
             atkRange: isR ? 9.5 : 2.8,
@@ -36498,16 +36774,16 @@ diffuseColor.rgb *= mix(0.58, 1.04, groundAO) * canopyShade;`,
       const RIVER_RUNE_DEFS = [
         {
           bit: 1,
-          x: -18,
-          z: -18,
+          x: -28,
+          z: -28,
           kind: "bounty",
           color: 0xfacc15,
           text: "BOUNTY RUNE (+140g & +180 HP/MP)",
         },
         {
           bit: 2,
-          x: 18,
-          z: 18,
+          x: 28,
+          z: 28,
           kind: "arcane",
           color: 0x34d399,
           text: "ARCANE RUNE (+240 HP/MP & Haste)",
@@ -39501,8 +39777,79 @@ diffuseColor.rgb *= mix(0.58, 1.04, groundAO) * canopyShade;`,
               target.type !== "tower" &&
               target.type !== "ancient"
             ) {
-              target.slowTimer = Math.max(target.slowTimer, 2.5);
-              target.slowFactor = Math.min(target.slowFactor, 0.65);
+              target.slowTimer = Math.max(target.slowTimer, 2.6);
+              target.slowFactor = Math.min(target.slowFactor, 0.55);
+            }
+            if (attacker.hasDesolator && target.type !== "ancient") {
+              target._desolatorShred = Math.min(
+                5.0,
+                (target._desolatorShred || 0) + 0.8,
+              );
+              if ((target._desolatorShred || 0) <= 5.0) {
+                target.armor = Math.max(-6, target.armor - 0.8);
+              }
+            }
+            if (
+              attacker.hasAbyssalBash &&
+              target.type !== "tower" &&
+              target.type !== "ancient" &&
+              Math.random() < 0.22
+            ) {
+              target.stunTimer = Math.max(target.stunTimer, 0.9);
+              target.takeDamage(95, attacker, false);
+              spawnFloatText(
+                target.mesh.position,
+                "ABYSSAL BASH!",
+                "#fb7185",
+                14,
+              );
+            }
+            if (attacker.hasMjollnir && attacker.atkComboIndex === 0) {
+              let bounced = 0;
+              units.forEach((foe) => {
+                if (
+                  bounced < 4 &&
+                  foe !== target &&
+                  !foe.dead &&
+                  foe.team !== attacker.team &&
+                  foe.type !== "ancient" &&
+                  foe.mesh.position.distanceTo(target.mesh.position) <=
+                    11.0 + foe.radius
+                ) {
+                  bounced++;
+                  foe.takeDamage(140, attacker, false);
+                  spawnLightningBolt3D(
+                    target.mesh.position,
+                    foe.mesh.position,
+                    0x38bdf8,
+                    0xe0f2fe,
+                    0.28,
+                  );
+                }
+              });
+            }
+            if (attacker.hasStarforge) {
+              spawnShockwaveRing(
+                target.mesh.position.x,
+                target.mesh.position.z,
+                6.5,
+                0xfacc15,
+                0.35,
+              );
+              units.forEach((foe) => {
+                if (
+                  foe !== target &&
+                  !foe.dead &&
+                  foe.team !== attacker.team &&
+                  foe.type !== "ancient" &&
+                  foe.mesh.position.distanceTo(target.mesh.position) <=
+                    6.5 + foe.radius
+                ) {
+                  foe.takeDamage(115, attacker, false);
+                  foe.slowTimer = Math.max(foe.slowTimer, 1.5);
+                  foe.slowFactor = Math.min(foe.slowFactor, 0.75);
+                }
+              });
             }
             if (attacker.lifesteal > 0)
               attacker.hp = Math.min(
@@ -39757,14 +40104,14 @@ diffuseColor.rgb *= mix(0.58, 1.04, groundAO) * canopyShade;`,
 
       let _radTowersAliveCache = true;
       let _direTowersAliveCache = true;
-      const _vFountainRad = new THREE.Vector3(-94, 0, 94);
-      const _vFountainDire = new THREE.Vector3(94, 0, -94);
-      const _vFountainHealRad = new THREE.Vector3(-96, 0, 96);
-      const _vFountainHealDire = new THREE.Vector3(96, 0, -96);
-      const _vRetreatRad = new THREE.Vector3(-34, 0, 34);
-      const _vRetreatDire = new THREE.Vector3(34, 0, -34);
-      const _vBaseRad = new THREE.Vector3(-92, 0, 92);
-      const _vBaseDire = new THREE.Vector3(92, 0, -92);
+      const _vFountainRad = new THREE.Vector3(-138, 0, 138);
+      const _vFountainDire = new THREE.Vector3(138, 0, -138);
+      const _vFountainHealRad = new THREE.Vector3(-140, 0, 140);
+      const _vFountainHealDire = new THREE.Vector3(140, 0, -140);
+      const _vRetreatRad = new THREE.Vector3(-52, 0, 52);
+      const _vRetreatDire = new THREE.Vector3(52, 0, -52);
+      const _vBaseRad = new THREE.Vector3(-134, 0, 134);
+      const _vBaseDire = new THREE.Vector3(134, 0, -134);
       const _vScratch1 = new THREE.Vector3();
       const _vScratch2 = new THREE.Vector3();
       const _heroLoopList = [];
@@ -39904,24 +40251,24 @@ diffuseColor.rgb *= mix(0.58, 1.04, groundAO) * canopyShade;`,
           "vanguard",
           "desolator",
           "kaya_sange",
-          "daedalus",
+          "mjollnir",
           "heart",
         ];
         const infCarryBuild = [
           "travel_boots",
           "bkb",
-          "abyssal",
+          "abyssal_blade",
           "daedalus",
           "satanic",
-          "heart",
+          "apocalypse_starforge",
         ];
         const infCasterBuild = [
           "travel_boots",
           "bkb",
-          "sheepstick",
-          "octarine",
-          "shiva",
-          "refresher",
+          "vyse",
+          "octarine_core",
+          "dagon_5",
+          "crown_of_infinity",
         ];
 
         // Track real-time velocity of all heroes for predictive skillshot leading in Infinity mode
@@ -39989,8 +40336,18 @@ diffuseColor.rgb *= mix(0.58, 1.04, groundAO) * canopyShade;`,
                   ? infCasterBuild
                   : infCarryBuild
                 : stdItemBuild;
-              const targetItem = SHOP_ITEM_BY_ID.get(buildArr[nextSlot]);
-              if (targetItem && bot.gold >= targetItem.cost) {
+              const candidateId = buildArr.find(
+                (id) =>
+                  !bot.inventory.some((invIt) => invIt && invIt.id === id),
+              );
+              const targetItem = candidateId
+                ? SHOP_ITEM_BY_ID.get(candidateId)
+                : null;
+              if (
+                targetItem &&
+                !isItemAlreadyOwned(bot, targetItem) &&
+                bot.gold >= targetItem.cost
+              ) {
                 bot.gold -= targetItem.cost;
                 bot.inventory[nextSlot] = targetItem;
                 applyItemStatsToHero(bot, targetItem);
@@ -40774,9 +41131,15 @@ diffuseColor.rgb *= mix(0.58, 1.04, groundAO) * canopyShade;`,
               u.team === "radiant" ? _vFountainHealRad : _vFountainHealDire;
             const inFountain = u.mesh.position.distanceToSquared(fPos) < 182.25;
             const towerRegen = towerAura ? towerAura.bonusRegen : 0;
+            const heartPctRegen = u.hasHeartRegen ? u.maxHp * 0.03 : 0;
             u.hp = Math.min(
               u.maxHp,
-              u.hp + (u.hpRegen + towerRegen + (inFountain ? 90 : 0)) * dt,
+              u.hp +
+                (u.hpRegen +
+                  heartPctRegen +
+                  towerRegen +
+                  (inFountain ? 110 : 0)) *
+                  dt,
             );
             u.mana = Math.min(
               u.maxMana,
@@ -41683,6 +42046,63 @@ diffuseColor.rgb *= mix(0.58, 1.04, groundAO) * canopyShade;`,
               p.target.takeDamage(p.damage, p.owner, p.isCrit);
               if (
                 p.owner &&
+                p.owner.hasDesolator &&
+                p.target.type !== "ancient"
+              ) {
+                p.target._desolatorShred = Math.min(
+                  5.0,
+                  (p.target._desolatorShred || 0) + 0.8,
+                );
+                if ((p.target._desolatorShred || 0) <= 5.0)
+                  p.target.armor = Math.max(-6, p.target.armor - 0.8);
+              }
+              if (p.owner && p.owner.hasMjollnir && Math.random() < 0.34) {
+                let bounced = 0;
+                units.forEach((foe) => {
+                  if (
+                    bounced < 4 &&
+                    foe !== p.target &&
+                    !foe.dead &&
+                    foe.team !== p.owner.team &&
+                    foe.type !== "ancient" &&
+                    foe.mesh.position.distanceTo(p.target.mesh.position) <=
+                      11.0 + foe.radius
+                  ) {
+                    bounced++;
+                    foe.takeDamage(140, p.owner, false);
+                    spawnLightningBolt3D(
+                      p.target.mesh.position,
+                      foe.mesh.position,
+                      0x38bdf8,
+                      0xe0f2fe,
+                      0.28,
+                    );
+                  }
+                });
+              }
+              if (p.owner && p.owner.hasStarforge) {
+                spawnShockwaveRing(
+                  p.target.mesh.position.x,
+                  p.target.mesh.position.z,
+                  6.5,
+                  0xfacc15,
+                  0.35,
+                );
+                units.forEach((foe) => {
+                  if (
+                    foe !== p.target &&
+                    !foe.dead &&
+                    foe.team !== p.owner.team &&
+                    foe.type !== "ancient" &&
+                    foe.mesh.position.distanceTo(p.target.mesh.position) <=
+                      6.5 + foe.radius
+                  ) {
+                    foe.takeDamage(115, p.owner, false);
+                  }
+                });
+              }
+              if (
+                p.owner &&
                 p.owner.hasSkadi &&
                 p.target.type !== "tower" &&
                 p.target.type !== "ancient"
@@ -42559,11 +42979,23 @@ diffuseColor.rgb *= mix(0.58, 1.04, groundAO) * canopyShade;`,
             Math.hypot(
               playerHero.mesh.position.x - s.x,
               playerHero.mesh.position.z - s.z,
-            ) <= 13.5
+            ) <= 14.5
           )
             return s;
         }
         return null;
+      }
+
+      function isHeroNearSecretShop(hero) {
+        if (!hero || hero.dead) return false;
+        return shopEntities.some(
+          (s) =>
+            s.type === "secret" &&
+            Math.hypot(
+              hero.mesh.position.x - s.x,
+              hero.mesh.position.z - s.z,
+            ) <= 14.5,
+        );
       }
 
       const _hudElCache = new Map();
@@ -42862,6 +43294,11 @@ diffuseColor.rgb *= mix(0.58, 1.04, groundAO) * canopyShade;`,
         setTxt("score-dire", String(direKills));
 
         const nearShop = getNearbyShop();
+        const nearSecretNow = isHeroNearSecretShop(playerHero);
+        if (window._lastNearSecretShop !== nearSecretNow) {
+          window._lastNearSecretShop = nearSecretNow;
+          refreshActiveShopIfOpen();
+        }
 
         if (playerHero) {
           const aegisBadge = getHudEl("aegis-hud-badge");
@@ -43140,7 +43577,7 @@ diffuseColor.rgb *= mix(0.58, 1.04, groundAO) * canopyShade;`,
         });
 
         // Roshan Boss Marker with 'R' emblem
-        const rp = mapPt(-34, -34);
+        const rp = mapPt(-50, -50);
         minimapCtx.fillStyle =
           roshanBoss && !roshanBoss.dead ? "#f97316" : "#475569";
         minimapCtx.strokeStyle = "#fef08a";
@@ -43471,16 +43908,9 @@ diffuseColor.rgb *= mix(0.58, 1.04, groundAO) * canopyShade;`,
           );
 
         playerHero.inventory[slotIdx] = null;
-        playerHero.hasRadiance = playerHero.inventory.some(
-          (x) => x && x.stats && x.stats.hasRadiance,
-        );
-        playerHero.hasSkadi = playerHero.inventory.some(
-          (x) => x && x.stats && x.stats.hasSkadi,
-        );
-        playerHero.hasTravelBoots = playerHero.inventory.some(
-          (x) => x && x.stats && x.stats.hasTravelBoots,
-        );
+        syncHeroUniqueItemFlags(playerHero);
         if (swapSourceSlot === slotIdx) swapSourceSlot = null;
+        refreshActiveShopIfOpen();
 
         sfx.play("gold");
         refreshInventoryGrid();
@@ -43781,10 +44211,17 @@ diffuseColor.rgb *= mix(0.58, 1.04, groundAO) * canopyShade;`,
               return true;
             }
             const sellVal = Math.max(50, Math.round((it.cost || 400) * 0.6));
+            const remCd = it.active
+              ? playerHero.itemCooldowns[it.active] || 0
+              : 0;
+            const cdTagHtml =
+              typeof it.cd === "number" && it.cd > 0
+                ? `<span class="${remCd > 0 ? "text-rose-300" : "text-sky-300"}"><i class="fa-solid fa-clock mr-1"></i>${remCd > 0 ? remCd.toFixed(1) + "s / " : ""}${it.cd}s CD</span>`
+                : "";
             ttTitle.textContent = it.name;
             ttBadge.textContent = `Key ${idx + 1}`;
             ttRank.textContent = it.active ? "Active Relic" : "Passive Relic";
-            ttMeta.innerHTML = `<span class="text-amber-300">Sell: +${sellVal}g</span>${it.active ? '<span class="text-cyan-300">Press [' + (idx + 1) + "] to Use</span>" : ""}`;
+            ttMeta.innerHTML = `<span class="text-amber-300">Sell: +${sellVal}g</span>${cdTagHtml}${it.active ? '<span class="text-cyan-300">Press [' + (idx + 1) + "]</span>" : ""}`;
             ttDesc.textContent = it.desc;
             ttHint.textContent =
               "Drag or Alt+Click to swap • Right-Click to sell for 60% gold";
@@ -43885,8 +44322,8 @@ diffuseColor.rgb *= mix(0.58, 1.04, groundAO) * canopyShade;`,
             id: "base",
             label: isRad ? "Radiant Base Fountain" : "Dire Base Fountain",
             shortLabel: "Base Fountain",
-            x: isRad ? -92 : 92,
-            z: isRad ? 92 : -92,
+            x: isRad ? -134 : 134,
+            z: isRad ? 134 : -134,
             isBase: true,
           },
         ];
@@ -44396,6 +44833,74 @@ diffuseColor.rgb *= mix(0.58, 1.04, groundAO) * canopyShade;`,
           if (hero.isPlayer) sfx.play("spell_shadow_coil");
           spawnShockwaveRing(p.x, p.z, 5.0, 0xf43f5e, 0.55);
           spawnFloatText(p, "BLOODPACT (+500 HP & MANA)!", "#fb7185", 16);
+        } else if (it.active === "crimson_guard") {
+          hero.itemCooldowns.crimson_guard = 15.0;
+          if (hero.isPlayer) sfx.play("spell_shield_nova");
+          spawnShockwaveRing(p.x, p.z, 14.0, 0xf43f5e, 0.65);
+          units.forEach((ally) => {
+            if (
+              !ally.dead &&
+              ally.team === hero.team &&
+              ally.type === "hero" &&
+              ally.mesh.position.distanceTo(p) <= 14.0
+            ) {
+              ally.shield = (ally.shield || 0) + 340;
+              spawnFloatText(
+                ally.mesh.position,
+                "CRIMSON GUARD (+340 SHIELD)!",
+                "#fb7185",
+                14,
+              );
+            }
+          });
+        } else if (it.active === "dagon_5") {
+          const target = findNearestTarget(hero, 20.0, false, true);
+          if (!target) {
+            if (hero.isPlayer)
+              spawnFloatText(p, "No target in range!", "#94a3b8", 13);
+            return;
+          }
+          hero.itemCooldowns.dagon_5 = 12.0;
+          if (hero.isPlayer) sfx.play("crit");
+          const burstDmg = 680 * (1 + (hero.spellAmpBonus || 0));
+          target.takeDamage(burstDmg, hero, true);
+          spawnLightningBolt3D(
+            p,
+            target.mesh.position,
+            0xf43f5e,
+            0xfacc15,
+            0.45,
+          );
+          spawnShockwaveRing(
+            target.mesh.position.x,
+            target.mesh.position.z,
+            3.6,
+            0xf43f5e,
+            0.45,
+          );
+          spawnFloatText(
+            target.mesh.position,
+            `DAGON V (-${Math.round(burstDmg)})!`,
+            "#fb7185",
+            16,
+          );
+        } else if (it.active === "chrono_aegis") {
+          hero.itemCooldowns.chrono_aegis = 22.0;
+          hero.bkbTimer = Math.max(hero.bkbTimer || 0, 2.5);
+          hero.shield = (hero.shield || 0) + 650;
+          hero.stunTimer = 0;
+          hero.slowTimer = 0;
+          hero.hp = Math.min(hero.maxHp, hero.hp + hero.maxHp * 0.4);
+          hero.mana = Math.min(hero.maxMana, hero.mana + hero.maxMana * 0.4);
+          if (hero.isPlayer) sfx.play("aegis_reborn");
+          spawnOrbitalSkyBeam(p.x, p.z, 4.6, 0x22d3ee, 0.9);
+          spawnShockwaveRing(p.x, p.z, 6.5, 0xfacc15, 0.65);
+          spawnFloatText(
+            p,
+            "CHRONO-AEGIS STASIS (+40% HP/MP & SHIELD)!",
+            "#22d3ee",
+            16,
+          );
         } else if (it.active === "refresher") {
           hero.itemCooldowns.refresher = 28.0;
           ["Q", "W", "E", "R"].forEach((k) => {
@@ -44461,6 +44966,9 @@ diffuseColor.rgb *= mix(0.58, 1.04, groundAO) * canopyShade;`,
             abyssal: 14.0,
             bloodstone: 15.0,
             refresher: 28.0,
+            crimson_guard: 15.0,
+            dagon_5: 12.0,
+            chrono_aegis: 22.0,
           };
           if (cdMap[it.active])
             playerHero.itemCooldowns[it.active] = cdMap[it.active];
@@ -44542,6 +45050,25 @@ diffuseColor.rgb *= mix(0.58, 1.04, groundAO) * canopyShade;`,
           AI_DIFFICULTY_PROFILES[aiDifficulty] ||
           AI_DIFFICULTY_PROFILES.veteran;
         const cLimit = getModeConsumableLimit();
+        const nearSecret = isHeroNearSecretShop(playerHero);
+
+        const secretBanner = document.createElement("div");
+        secretBanner.className = `sm:col-span-2 ${nearSecret ? "bg-purple-950/85 border-purple-400/60" : "bg-slate-950/90 border-purple-500/40"} border rounded-xl px-3.5 py-2 flex flex-wrap items-center justify-between gap-2 text-xs`;
+        secretBanner.innerHTML = nearSecret
+          ? `<span class="font-cinzel font-bold text-purple-200"><i class="fa-solid fa-crown text-amber-300 mr-1.5"></i>SECRET SHOP IN RANGE</span>
+                   <span class="font-mono font-bold text-emerald-300">All Secret &amp; Mythic Relics Unlocked!</span>`
+          : `<span class="font-cinzel font-bold text-purple-200"><i class="fa-solid fa-location-dot text-purple-400 mr-1.5"></i>SECRET ITEMS REQUIRE SECRET SHOP PROXIMITY</span>
+                   <button type="button" id="btn-banner-walk-secret" class="px-2.5 py-1 rounded-lg bg-purple-700 hover:bg-purple-600 text-white font-cinzel font-bold text-[10px] shadow transition">
+                       <i class="fa-solid fa-person-walking mr-1"></i>Walk to Secret Shop
+                   </button>`;
+        grid.appendChild(secretBanner);
+        const bannerWalkBtn = secretBanner.querySelector(
+          "#btn-banner-walk-secret",
+        );
+        if (bannerWalkBtn) {
+          bannerWalkBtn.onclick = () => window.walkToNearestSecretShop();
+        }
+
         if (cat === "consumable" || cat === "all") {
           const infoBar = document.createElement("div");
           infoBar.className =
@@ -44571,15 +45098,27 @@ diffuseColor.rgb *= mix(0.58, 1.04, groundAO) * canopyShade;`,
             ? getConsumableUsageState(playerHero, item)
             : null;
           const isExhausted = Boolean(cState && cState.exhausted);
+          const alreadyOwned = isItemAlreadyOwned(playerHero, item);
+          const secretLocked = item.shop === "secret" && !nearSecret;
+          const isLocked = isExhausted || alreadyOwned || secretLocked;
 
           const card = document.createElement("div");
-          card.className = `bg-gradient-to-br ${item.bg} border ${isExhausted ? "border-slate-700/70 opacity-70" : "border-amber-500/25 hover:border-amber-400"} rounded-xl p-3 flex items-center justify-between gap-3 transition`;
+          card.className = `bg-gradient-to-br ${item.bg} border ${isLocked ? "border-slate-700/70 opacity-75" : "border-amber-500/25 hover:border-amber-400"} rounded-xl p-3 flex items-center justify-between gap-3 transition`;
 
           let badgeTag = item.consumeOnBuy
             ? '<span class="ml-1.5 text-[9px] font-mono font-bold uppercase px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-300 border border-emerald-400/40">Instant Tome</span>'
             : item.shop === "secret"
-              ? '<span class="ml-1.5 text-[9px] font-mono font-bold uppercase px-1.5 py-0.5 rounded bg-purple-500/20 text-purple-300 border border-purple-400/40">Secret</span>'
+              ? `<span class="ml-1.5 text-[9px] font-mono font-bold uppercase px-1.5 py-0.5 rounded ${nearSecret ? "bg-purple-500/25 text-purple-200 border-purple-400/50" : "bg-purple-950/90 text-purple-300 border-purple-500/45"}">Secret Shop</span>`
               : "";
+
+          if (typeof item.cd === "number" && item.cd > 0) {
+            badgeTag += `<span class="ml-1.5 text-[9px] font-mono font-bold uppercase px-1.5 py-0.5 rounded bg-cyan-500/20 text-cyan-200 border border-cyan-400/45"><i class="fa-solid fa-clock mr-1"></i>${item.cd}s CD</span>`;
+          }
+
+          if (alreadyOwned) {
+            badgeTag +=
+              '<span class="ml-1.5 text-[9px] font-mono font-bold uppercase px-1.5 py-0.5 rounded bg-emerald-500/25 text-emerald-200 border border-emerald-400/50">Unique • Owned</span>';
+          }
 
           if (isCons && cState) {
             const quotaCls = isExhausted
@@ -44596,13 +45135,21 @@ diffuseColor.rgb *= mix(0.58, 1.04, groundAO) * canopyShade;`,
             badgeTag += `<span class="ml-1.5 text-[9px] font-mono font-bold uppercase px-1.5 py-0.5 rounded border ${quotaCls}">${quotaLabel}</span>`;
           }
 
-          const btnHtml = isExhausted
-            ? `<button disabled class="buy-action bg-slate-800 text-slate-400 border border-slate-700 font-mono font-black text-[11px] px-3 py-2 rounded-lg shrink-0 flex items-center gap-1 cursor-not-allowed">
-                        <i class="fa-solid fa-ban"></i> ${aiDifficulty === "infinity" ? "DISABLED" : aiDifficulty === "immortal" ? "USED (1/1)" : `MAX (${cState.limit}/${cState.limit})`}
+          const btnHtml = alreadyOwned
+            ? `<button disabled class="buy-action bg-emerald-950/85 text-emerald-300 border border-emerald-500/45 font-mono font-black text-[11px] px-3 py-2 rounded-lg shrink-0 flex items-center gap-1 cursor-not-allowed">
+                        <i class="fa-solid fa-check"></i> OWNED
                        </button>`
-            : `<button class="buy-action bg-amber-500 hover:bg-amber-400 text-slate-950 font-mono font-black text-xs px-3 py-2 rounded-lg shrink-0 flex items-center gap-1 shadow">
-                        <i class="fa-solid fa-coins"></i> ${item.cost}
-                       </button>`;
+            : isExhausted
+              ? `<button disabled class="buy-action bg-slate-800 text-slate-400 border border-slate-700 font-mono font-black text-[11px] px-3 py-2 rounded-lg shrink-0 flex items-center gap-1 cursor-not-allowed">
+                            <i class="fa-solid fa-ban"></i> ${aiDifficulty === "infinity" ? "DISABLED" : aiDifficulty === "immortal" ? "USED (1/1)" : `MAX (${cState.limit}/${cState.limit})`}
+                           </button>`
+              : secretLocked
+                ? `<button type="button" class="buy-action bg-purple-950/90 hover:bg-purple-900 text-purple-200 border border-purple-400/50 font-mono font-bold text-[11px] px-2.5 py-2 rounded-lg shrink-0 flex items-center gap-1" title="Move near the East or West Secret Shop to purchase">
+                                <i class="fa-solid fa-lock"></i> ${item.cost}
+                               </button>`
+                : `<button class="buy-action bg-amber-500 hover:bg-amber-400 text-slate-950 font-mono font-black text-xs px-3 py-2 rounded-lg shrink-0 flex items-center gap-1 shadow">
+                                <i class="fa-solid fa-coins"></i> ${item.cost}
+                               </button>`;
 
           card.innerHTML = `
                     <div class="flex items-center gap-3">
@@ -44616,12 +45163,47 @@ diffuseColor.rgb *= mix(0.58, 1.04, groundAO) * canopyShade;`,
                     </div>
                     ${btnHtml}
                 `;
-          if (!isExhausted) {
-            card.querySelector(".buy-action").onclick = () =>
-              purchaseItem(item);
-          }
+          card.querySelector(".buy-action").onclick = () => purchaseItem(item);
           grid.appendChild(card);
         });
+      }
+
+      function isItemAlreadyOwned(hero, item) {
+        if (
+          !hero ||
+          !item ||
+          isConsumableItem(item) ||
+          item.isTpScroll ||
+          item.consumeOnBuy
+        )
+          return false;
+        return (
+          Array.isArray(hero.inventory) &&
+          hero.inventory.some((slot) => slot && slot.id === item.id)
+        );
+      }
+
+      function syncHeroUniqueItemFlags(hero) {
+        if (!hero) return;
+        const inv = hero.inventory || [];
+        hero.hasRadiance = inv.some((x) => x && x.stats && x.stats.hasRadiance);
+        hero.hasSkadi = inv.some((x) => x && x.stats && x.stats.hasSkadi);
+        hero.hasTravelBoots = inv.some(
+          (x) => x && x.stats && x.stats.hasTravelBoots,
+        );
+        hero.hasMjollnir = inv.some((x) => x && x.stats && x.stats.hasMjollnir);
+        hero.hasDesolator = inv.some(
+          (x) => x && x.stats && x.stats.hasDesolator,
+        );
+        hero.hasHeartRegen = inv.some(
+          (x) => x && x.stats && x.stats.hasHeartRegen,
+        );
+        hero.hasAbyssalBash = inv.some(
+          (x) => x && x.stats && x.stats.hasAbyssalBash,
+        );
+        hero.hasStarforge = inv.some(
+          (x) => x && x.stats && x.stats.hasStarforge,
+        );
       }
 
       function applyItemStatsToHero(hero, item) {
@@ -44648,6 +45230,11 @@ diffuseColor.rgb *= mix(0.58, 1.04, groundAO) * canopyShade;`,
         if (st.hasRadiance) hero.hasRadiance = true;
         if (st.hasSkadi) hero.hasSkadi = true;
         if (st.hasTravelBoots) hero.hasTravelBoots = true;
+        if (st.hasMjollnir) hero.hasMjollnir = true;
+        if (st.hasDesolator) hero.hasDesolator = true;
+        if (st.hasHeartRegen) hero.hasHeartRegen = true;
+        if (st.hasAbyssalBash) hero.hasAbyssalBash = true;
+        if (st.hasStarforge) hero.hasStarforge = true;
         if (st.cdrMult) hero.cdrMult *= st.cdrMult;
         if (st.spellAmpBonus) hero.spellAmpBonus += st.spellAmpBonus;
         if (st.critChance) {
@@ -44659,6 +45246,25 @@ diffuseColor.rgb *= mix(0.58, 1.04, groundAO) * canopyShade;`,
 
       function purchaseItem(item) {
         if (!playerHero || gameOver) return;
+        if (item.shop === "secret" && !isHeroNearSecretShop(playerHero)) {
+          sfx.play("move");
+          spawnFloatText(
+            playerHero.mesh.position,
+            "MUST BE NEAR SECRET SHOP TO BUY!",
+            "#c084fc",
+            15,
+          );
+          return;
+        }
+        if (isItemAlreadyOwned(playerHero, item)) {
+          spawnFloatText(
+            playerHero.mesh.position,
+            "UNIQUE RELIC: ALREADY OWNED!",
+            "#fb7185",
+            14,
+          );
+          return;
+        }
         if (mpState.active && mpState.role === "guest") {
           if (playerHero.gold < item.cost) {
             spawnFloatText(
@@ -44961,6 +45567,27 @@ diffuseColor.rgb *= mix(0.58, 1.04, groundAO) * canopyShade;`,
         if (!playerHero || gameOver || inHeroSelect) return;
         raycastGround(cx, cy);
 
+        const detectClickedShop = () => {
+          const shopMeshes = shopEntities.map((s) => s.mesh).filter(Boolean);
+          if (shopMeshes.length > 0) {
+            const sHits = raycaster.intersectObjects(shopMeshes, true);
+            if (sHits.length > 0 && sHits[0].object.userData.shopEntity) {
+              return sHits[0].object.userData.shopEntity;
+            }
+          }
+          for (const s of shopEntities) {
+            if (Math.hypot(worldCursor.x - s.x, worldCursor.z - s.z) < 7.2)
+              return s;
+          }
+          return null;
+        };
+
+        const clickedShop = detectClickedShop();
+        if (clickedShop) {
+          window.openShopForEntity(clickedShop);
+          return;
+        }
+
         // Allow inspecting units (and clearing inspection) even while player hero is dead or reincarnating
         if (playerHero.dead || playerHero.reincarnating) {
           const allUnitMeshes = units.filter((u) => !u.dead).map((u) => u.mesh);
@@ -45112,30 +45739,7 @@ diffuseColor.rgb *= mix(0.58, 1.04, groundAO) * canopyShade;`,
           }
         }
 
-        for (const s of shopEntities) {
-          if (Math.hypot(worldCursor.x - s.x, worldCursor.z - s.z) < 4.5) {
-            const distHero = Math.hypot(
-              playerHero.mesh.position.x - s.x,
-              playerHero.mesh.position.z - s.z,
-            );
-            if (distHero <= 13.5) {
-              renderShopTab(s.type === "secret" ? "secret" : "all");
-              document.getElementById("shop-modal").classList.remove("hidden");
-              return;
-            } else {
-              if (playerHero.tpChannel)
-                window.cancelTeleportChannel("Teleport Canceled");
-              playerHero.targetUnit = null;
-              playerHero.attackMovePos = null;
-              playerHero.targetPos = new THREE.Vector3(s.x, 0, s.z + 4);
-              if (mpState.active && mpState.role === "guest")
-                mpSendToHost({ type: "CMD", cmd: "MOVE", x: s.x, z: s.z + 4 });
-              triggerMoveWaypoint(s.x, s.z + 4, 0xfacc15);
-              sfx.play("move");
-              return;
-            }
-          }
-        }
+        // Shop clicks are handled at top of issueCanvasOrder so clicking any shop opens the shop dialog immediately
 
         const enemyRoots = units
           .filter((u) => !u.dead && u.team !== playerHero.team)
@@ -45195,15 +45799,59 @@ diffuseColor.rgb *= mix(0.58, 1.04, groundAO) * canopyShade;`,
         }
       }
 
+      window._shopOpenedAtTs = 0;
+      window.openShopForEntity = function (shopObj, shouldWalk = true) {
+        if (!shopObj) return;
+        window._shopOpenedAtTs = performance.now();
+        renderShopTab(shopObj.type === "secret" ? "secret" : "all");
+        const shopModal = document.getElementById("shop-modal");
+        if (shopModal) shopModal.classList.remove("hidden");
+        if (
+          shouldWalk &&
+          playerHero &&
+          !playerHero.dead &&
+          !playerHero.reincarnating
+        ) {
+          const distHero = Math.hypot(
+            playerHero.mesh.position.x - shopObj.x,
+            playerHero.mesh.position.z - shopObj.z,
+          );
+          if (distHero > 14.5) {
+            if (playerHero.tpChannel)
+              window.cancelTeleportChannel("Teleport Canceled");
+            playerHero.targetUnit = null;
+            playerHero.attackMovePos = null;
+            const destZ = shopObj.z + (shopObj.z > 0 ? -4.5 : 4.5);
+            playerHero.targetPos = new THREE.Vector3(shopObj.x, 0, destZ);
+            if (mpState.active && mpState.role === "guest")
+              mpSendToHost({
+                type: "CMD",
+                cmd: "MOVE",
+                x: shopObj.x,
+                z: destZ,
+              });
+            triggerMoveWaypoint(
+              shopObj.x,
+              destZ,
+              shopObj.type === "secret" ? 0xa855f7 : 0xfacc15,
+            );
+          }
+        }
+        sfx.play("move");
+      };
+
       window.addEventListener("contextmenu", (e) => e.preventDefault());
       document.addEventListener("pointerdown", (e) => {
         const shopModal = document.getElementById("shop-modal");
         if (shopModal && !shopModal.classList.contains("hidden")) {
-          if (
-            !e.target.closest("#shop-dialog-card") &&
-            !e.target.closest("#btn-open-shop")
-          ) {
-            shopModal.classList.add("hidden");
+          // Prevent closing on the very same pointerdown event that just opened the shop from the 3D map or minimap
+          if (performance.now() - (window._shopOpenedAtTs || 0) > 180) {
+            if (
+              !e.target.closest("#shop-dialog-card") &&
+              !e.target.closest("#btn-open-shop")
+            ) {
+              shopModal.classList.add("hidden");
+            }
           }
         }
         if (
@@ -45470,7 +46118,7 @@ diffuseColor.rgb *= mix(0.58, 1.04, groundAO) * canopyShade;`,
               CAMERA_OFFSET.multiplyScalar(
                 THREE.MathUtils.clamp(zoomFactor, 0.9, 1.12),
               );
-              CAMERA_OFFSET.y = THREE.MathUtils.clamp(CAMERA_OFFSET.y, 26, 92);
+              CAMERA_OFFSET.y = THREE.MathUtils.clamp(CAMERA_OFFSET.y, 26, 128);
               CAMERA_OFFSET.z = THREE.MathUtils.clamp(CAMERA_OFFSET.z, 20, 72);
             }
             canvasTouchGesture.mode = "pinch";
@@ -45557,7 +46205,7 @@ diffuseColor.rgb *= mix(0.58, 1.04, groundAO) * canopyShade;`,
           }
           const zoom = e.deltaY > 0 ? 1.07 : 0.93;
           CAMERA_OFFSET.multiplyScalar(zoom);
-          CAMERA_OFFSET.y = THREE.MathUtils.clamp(CAMERA_OFFSET.y, 26, 92);
+          CAMERA_OFFSET.y = THREE.MathUtils.clamp(CAMERA_OFFSET.y, 26, 128);
           CAMERA_OFFSET.z = THREE.MathUtils.clamp(CAMERA_OFFSET.z, 20, 72);
         },
         { passive: false },
@@ -45700,6 +46348,19 @@ diffuseColor.rgb *= mix(0.58, 1.04, groundAO) * canopyShade;`,
           }
           miniTouchState.lastTapTs = now;
           const { wx, wz } = minimapClientToWorld(useX, useY);
+          const tappedMiniShop = shopEntities.find(
+            (s) => Math.hypot(wx - s.x, wz - s.z) <= 18.0,
+          );
+          if (tappedMiniShop) {
+            window._minimapTapPulse = {
+              wx: tappedMiniShop.x,
+              wz: tappedMiniShop.z,
+              ttl: 0.85,
+              color: tappedMiniShop.type === "secret" ? "#c084fc" : "#facc15",
+            };
+            window.openShopForEntity(tappedMiniShop, true);
+            return;
+          }
           executeMinimapMoveOrder(wx, wz, attackMovePrimed);
         }
       };
@@ -45786,6 +46447,24 @@ diffuseColor.rgb *= mix(0.58, 1.04, groundAO) * canopyShade;`,
           return;
         }
 
+        const clickedMiniShop = shopEntities.find(
+          (s) => Math.hypot(wx - s.x, wz - s.z) <= 18.0,
+        );
+        if (clickedMiniShop) {
+          window._minimapTapPulse = {
+            wx: clickedMiniShop.x,
+            wz: clickedMiniShop.z,
+            ttl: 0.85,
+            color: clickedMiniShop.type === "secret" ? "#c084fc" : "#facc15",
+          };
+          window.openShopForEntity(clickedMiniShop, true);
+          if (e.button === 0) {
+            cameraLocked = false;
+            syncCamLockLabel();
+            cameraFocus.set(clickedMiniShop.x, 0, clickedMiniShop.z);
+          }
+          return;
+        }
         if (e.button === 2 && playerHero && !playerHero.dead) {
           executeMinimapMoveOrder(wx, wz, false);
         } else {
@@ -45964,8 +46643,8 @@ diffuseColor.rgb *= mix(0.58, 1.04, groundAO) * canopyShade;`,
           }
           if (k2 === "N") {
             e.preventDefault();
-            const bx = localP2Hero.team === "radiant" ? -92 : 92;
-            const bz = localP2Hero.team === "radiant" ? 92 : -92;
+            const bx = localP2Hero.team === "radiant" ? -134 : 134;
+            const bz = localP2Hero.team === "radiant" ? 134 : -134;
             localP2Hero.mesh.position.set(bx, getTerrainHeightAt(bx, bz), bz);
             localP2Hero.targetPos = null;
             localP2Hero.targetUnit = null;
@@ -46859,12 +47538,22 @@ diffuseColor.rgb *= mix(0.58, 1.04, groundAO) * canopyShade;`,
       document.querySelectorAll(".shop-tab-btn").forEach((btn) => {
         btn.onclick = () => renderShopTab(btn.dataset.shopTab);
       });
-      document.getElementById("btn-walk-secret").onclick = () => {
+      window.walkToNearestSecretShop = function () {
         document.getElementById("shop-modal").classList.add("hidden");
         if (playerHero && !playerHero.dead) {
+          if (playerHero.tpChannel)
+            window.cancelTeleportChannel("Teleport Canceled");
+          const p = playerHero.mesh.position;
+          const dEast = Math.hypot(p.x - 64, p.z - 24);
+          const dWest = Math.hypot(p.x + 64, p.z + 24);
+          const sx = dWest < dEast ? -64 : 64;
+          const sz = dWest < dEast ? -20 : 28;
           playerHero.targetUnit = null;
-          playerHero.targetPos = new THREE.Vector3(44, 0, 20);
-          triggerMoveWaypoint(44, 20, 0xa855f7);
+          playerHero.attackMovePos = null;
+          playerHero.targetPos = new THREE.Vector3(sx, 0, sz);
+          if (mpState.active && mpState.role === "guest")
+            mpSendToHost({ type: "CMD", cmd: "MOVE", x: sx, z: sz });
+          triggerMoveWaypoint(sx, sz, 0xa855f7);
           sfx.play("move");
         }
       };
@@ -47362,9 +48051,34 @@ diffuseColor.rgb *= mix(0.58, 1.04, groundAO) * canopyShade;`,
               hoverHits.length > 0 && hoverHits[0].object.userData.unit
                 ? hoverHits[0].object.userData.unit
                 : null;
-            if (nextHover !== hoveredUnit) {
+            const shopHoverMeshes = shopEntities
+              .map((s) => s.mesh)
+              .filter(Boolean);
+            const shopHits =
+              shopHoverMeshes.length > 0
+                ? raycaster.intersectObjects(shopHoverMeshes, true)
+                : [];
+            const isHoveringShop =
+              shopHits.length > 0 ||
+              shopEntities.some(
+                (s) =>
+                  Math.hypot(worldCursor.x - s.x, worldCursor.z - s.z) < 7.0,
+              );
+            if (
+              nextHover !== hoveredUnit ||
+              window._lastHoveringShop !== isHoveringShop
+            ) {
               hoveredUnit = nextHover;
+              window._lastHoveringShop = isHoveringShop;
               updateCanvasCursorState();
+              if (
+                isHoveringShop &&
+                !primedSkill &&
+                !attackMovePrimed &&
+                !tpTargetMode
+              ) {
+                canvas.classList.add("cursor-ally");
+              }
             }
           }
         }
