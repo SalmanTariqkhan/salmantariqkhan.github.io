@@ -10,7 +10,7 @@
     <meta name="mobile-web-app-capable" content="yes" />
     <title>
       Defense of the Ancients 3D • Grandmaster Sovereign Multiplayer Edition
-      (v122)
+      (v126)
     </title>
     <link rel="preconnect" href="https://unpkg.com" crossorigin />
     <link rel="preconnect" href="https://cdn.tailwindcss.com" crossorigin />
@@ -479,6 +479,33 @@
         pointer-events: none;
         will-change: left, top;
       }
+      .unit-bar .b-hp {
+        position: relative;
+        background-image: linear-gradient(
+          180deg,
+          rgba(255, 255, 255, 0.42) 0%,
+          rgba(255, 255, 255, 0.08) 45%,
+          rgba(0, 0, 0, 0.26) 100%
+        );
+        transition: width 0.14s ease-out;
+      }
+      .unit-bar .b-hp::after {
+        content: "";
+        position: absolute;
+        inset: 0;
+        background: repeating-linear-gradient(
+          90deg,
+          transparent 0 11px,
+          rgba(2, 6, 23, 0.6) 11px 12px
+        );
+      }
+      .unit-bar .b-mp {
+        background-image: linear-gradient(
+          180deg,
+          rgba(255, 255, 255, 0.4),
+          rgba(0, 0, 0, 0.16)
+        );
+      }
       .floating-text {
         position: absolute;
         transform: translate(-50%, -50%);
@@ -489,6 +516,20 @@
           0 0 10px rgba(0, 0, 0, 0.75);
         will-change: left, top, opacity;
         white-space: nowrap;
+        animation: nxgTextPop 0.2s cubic-bezier(0.2, 1.5, 0.4, 1);
+        -webkit-text-stroke: 0.6px rgba(2, 6, 23, 0.55);
+      }
+      @keyframes nxgTextPop {
+        from {
+          scale: 1.8;
+        }
+        to {
+          scale: 1;
+        }
+      }
+      body.nxg-lite .dota-stone-panel {
+        backdrop-filter: none;
+        -webkit-backdrop-filter: none;
       }
       @keyframes lvlPulse {
         0%,
@@ -503,6 +544,27 @@
       }
       .skill-up-btn {
         animation: lvlPulse 1.35s infinite;
+      }
+      @keyframes ctrlUpgradePulse {
+        0%,
+        100% {
+          transform: scale(1);
+          box-shadow: 0 0 12px rgba(56, 189, 248, 0.85);
+        }
+        50% {
+          transform: scale(1.06);
+          box-shadow: 0 0 22px rgba(250, 204, 21, 0.98);
+        }
+      }
+      #hud-layer.ctrl-upgrade-active .ctrl-eligible-card {
+        border-color: #facc15 !important;
+        box-shadow:
+          0 0 22px rgba(250, 204, 21, 0.88),
+          inset 0 0 12px rgba(250, 204, 21, 0.34) !important;
+        animation: ctrlUpgradePulse 1.1s ease-in-out infinite;
+      }
+      #hud-layer.ctrl-upgrade-active .ctrl-key-hint {
+        display: flex !important;
       }
 
       /* Desktop & Mobile Responsive HUD Architecture */
@@ -2950,11 +3012,12 @@
                 >
                 <span
                   class="text-[9px] font-sans font-semibold text-amber-200/85 hidden sm:inline"
-                  >Click [+] • Stats (+2) • Talents [T]</span
+                  >Skills: Ctrl+Q/W/E/R • Stats: Ctrl+U • Talents:
+                  Ctrl+1/2</span
                 >
                 <span
                   class="text-[9px] font-sans font-semibold text-amber-200/85 sm:hidden"
-                  >Tap [+1] or [+2]</span
+                  >Tap [+1] / [+2] / [Talent]</span
                 >
               </div>
 
@@ -2964,6 +3027,14 @@
               >
                 <!-- TALENT TREE -->
                 <div class="flex flex-col items-center gap-1">
+                  <button
+                    id="lvlup-TALENT"
+                    onclick="window.openTalentModal()"
+                    class="hidden skill-up-btn mob-lvlup-btn w-12 h-5 rounded-md bg-gradient-to-b from-amber-300 to-orange-500 text-slate-950 font-black text-[10px] flex items-center justify-center gap-0.5 border border-amber-100/70"
+                    title="Spend 1 Skill Point on a Hero Talent [Ctrl+1 / Ctrl+2]"
+                  >
+                    <i class="fa-solid fa-star text-[8px]"></i> +1
+                  </button>
                   <button
                     id="btn-open-talents"
                     onclick="window.openTalentModal()"
@@ -2980,6 +3051,10 @@
                     <span
                       class="hud-keycap hidden sm:inline-block absolute top-0.5 left-1 text-[8px] font-black text-amber-300 px-1 py-0.5 rounded"
                       >T</span
+                    >
+                    <span
+                      class="ctrl-key-hint hidden absolute inset-x-0.5 bottom-0.5 z-20 justify-center text-[7px] font-mono font-black text-slate-950 bg-amber-300 rounded-xs"
+                      >CTRL+1/2</span
                     >
                     <span
                       id="talent-notif-dot"
@@ -3015,6 +3090,10 @@
                     <span
                       class="hud-keycap absolute top-0.5 left-0.5 sm:top-1 sm:left-1 text-[8px] sm:text-[9px] font-black text-amber-300 px-1 sm:px-1.5 py-0.5 rounded"
                       >Q</span
+                    >
+                    <span
+                      class="ctrl-key-hint hidden absolute inset-x-0.5 top-0.5 z-20 justify-center text-[7px] font-mono font-black text-slate-950 bg-amber-300 rounded-xs"
+                      >CTRL+Q</span
                     >
                     <span
                       id="ab-mana-Q"
@@ -3058,6 +3137,10 @@
                       >W</span
                     >
                     <span
+                      class="ctrl-key-hint hidden absolute inset-x-0.5 top-0.5 z-20 justify-center text-[7px] font-mono font-black text-slate-950 bg-amber-300 rounded-xs"
+                      >CTRL+W</span
+                    >
+                    <span
                       id="ab-mana-W"
                       class="absolute bottom-0.5 right-0.5 sm:right-1 text-[8px] sm:text-[9px] font-mono font-bold text-sky-200 bg-slate-950/85 px-1 rounded tabular-nums"
                       >50</span
@@ -3097,6 +3180,10 @@
                     <span
                       class="hud-keycap absolute top-0.5 left-0.5 sm:top-1 sm:left-1 text-[8px] sm:text-[9px] font-black text-amber-300 px-1 sm:px-1.5 py-0.5 rounded"
                       >E</span
+                    >
+                    <span
+                      class="ctrl-key-hint hidden absolute inset-x-0.5 top-0.5 z-20 justify-center text-[7px] font-mono font-black text-slate-950 bg-amber-300 rounded-xs"
+                      >CTRL+E</span
                     >
                     <span
                       id="ab-mana-E"
@@ -3140,6 +3227,10 @@
                       >R</span
                     >
                     <span
+                      class="ctrl-key-hint hidden absolute inset-x-0.5 top-0.5 z-20 justify-center text-[7px] font-mono font-black text-slate-950 bg-amber-300 rounded-xs"
+                      >CTRL+R</span
+                    >
+                    <span
                       id="ab-mana-R"
                       class="absolute bottom-0.5 right-0.5 sm:right-1 text-[8px] sm:text-[9px] font-mono font-bold text-sky-200 bg-slate-950/85 px-1 rounded tabular-nums"
                       >120</span
@@ -3170,7 +3261,7 @@
                     id="btn-stats-cmd"
                     onclick="window.levelUpAttributes()"
                     data-hud-tip="stats"
-                    class="ability-card mob-util-btn w-11 h-12 sm:w-12 sm:h-14 rounded-xl bg-gradient-to-b from-emerald-950/55 via-slate-900 to-slate-950 border border-emerald-500/50 flex flex-col items-center justify-center text-emerald-300 hover:bg-emerald-950/60"
+                    class="ability-card mob-util-btn w-11 h-12 sm:w-12 sm:h-14 rounded-xl bg-gradient-to-b from-emerald-950/55 via-slate-900 to-slate-950 border border-emerald-500/50 flex flex-col items-center justify-center text-emerald-300 hover:bg-emerald-950/60 relative"
                   >
                     <i class="fa-solid fa-dna text-xs sm:text-sm"></i>
                     <span
@@ -3180,7 +3271,11 @@
                     <span
                       id="attr-rank-text"
                       class="text-[8px] sm:text-[9px] font-mono font-bold text-amber-300 tabular-nums"
-                      >0/7</span
+                      >0/10</span
+                    >
+                    <span
+                      class="ctrl-key-hint hidden absolute inset-x-0.5 bottom-0.5 z-20 justify-center text-[7px] font-mono font-black text-slate-950 bg-emerald-300 rounded-xs"
+                      >CTRL+U</span
                     >
                   </button>
                   <div class="h-1.5"></div>
@@ -3415,7 +3510,10 @@
                 HERO TALENT TREE
               </h2>
               <p class="text-xs text-slate-300">
-                Unlock powerful specialization perks at Levels 10, 15, 20 & 25
+                Spend 1 Skill Point per tier at Levels 10, 15, 20 & 25 •
+                Quick-pick:
+                <strong class="text-amber-300">[Ctrl+1]</strong> Left /
+                <strong class="text-amber-300">[Ctrl+2]</strong> Right
               </p>
             </div>
           </div>
@@ -3433,10 +3531,12 @@
           class="bg-slate-950 px-5 py-2.5 border-t border-slate-800 flex justify-between text-xs text-slate-400"
         >
           <span
-            >Tip: Gain XP fast by clearing Neutral Camps, Roshan & the Elder
-            Dragon!</span
+            >Tip: Skills, Stats & Talents share your Skill Points • Press [1] or
+            [2] here to unlock!</span
           >
-          <span class="text-amber-400 font-bold">Hotkey: [T]</span>
+          <span class="text-amber-400 font-bold"
+            >Hotkey: [T] • Quick: [Ctrl+1/2]</span
+          >
         </div>
       </div>
     </div>
@@ -4059,6 +4159,30 @@
                   type="checkbox"
                   onchange="window.updateGraphicsSettings()"
                   class="w-4 h-4 accent-sky-400 rounded cursor-pointer"
+                />
+              </label>
+              <label
+                class="flex items-center justify-between text-[11px] text-slate-200 cursor-pointer"
+              >
+                <span>Ambient Occlusion & Cloud Shadows</span>
+                <input
+                  id="set-ao"
+                  type="checkbox"
+                  onchange="window.updateGraphicsSettings()"
+                  class="w-4 h-4 accent-sky-400 rounded cursor-pointer"
+                />
+              </label>
+              <label
+                class="flex items-center justify-between text-[11px] text-slate-200 cursor-pointer"
+                title="Lowers render resolution automatically when the frame rate drops, and restores it when there is headroom"
+              >
+                <span>Adaptive Resolution (hold frame rate)</span>
+                <input
+                  id="set-dynres"
+                  type="checkbox"
+                  checked
+                  onchange="window.updateGraphicsSettings()"
+                  class="w-4 h-4 accent-cyan-400 rounded cursor-pointer"
                 />
               </label>
               <label
@@ -9813,12 +9937,14 @@
           } else if (
             msg.cmd === "PICK_TALENT" &&
             actor.heroCfg &&
+            actor.skillPoints > 0 &&
             actor.level >= msg.tierLvl &&
             !actor.chosenTalents[msg.tierLvl]
           ) {
             const pair = actor.heroCfg.talents[msg.tierLvl];
             const opt = pair && pair.find((o) => o.id === msg.talentId);
             if (opt) {
+              actor.skillPoints--;
               actor.chosenTalents[msg.tierLvl] = msg.talentId;
               opt.apply(actor);
               if (mpState.lastHeroExtras)
@@ -12348,7 +12474,9 @@
           }
           if (this.musicGain && this.ctx && this.musicEnabled) {
             const baseMus = this._targetMusicGain();
-            const mTarget = duck ? baseMus * 0.55 : baseMus;
+            const mTarget = duck
+              ? baseMus * (this._deepDuck ? 0.3 : 0.55)
+              : baseMus;
             this.musicGain.gain.setTargetAtTime(
               mTarget,
               this.ctx.currentTime,
@@ -12395,10 +12523,13 @@
             .map((v, idx) => {
               const n = v.name.toLowerCase();
               let q = 0;
-              if (/natural|neural|online|premium|enhanced|studio|siri/.test(n))
-                q += 24;
-              if (/google/.test(n)) q += 18;
-              if (/microsoft/.test(n) && /natural|online/.test(n)) q += 18;
+              if (/natural|neural/.test(n)) q += 60;
+              else if (/premium/.test(n)) q += 52;
+              else if (/enhanced|studio/.test(n)) q += 46;
+              else if (/siri/.test(n)) q += 40;
+              else if (/google/.test(n)) q += 34;
+              else if (/online/.test(n)) q += 30;
+              if (/compact|desktop/.test(n)) q -= 6;
               if (
                 /daniel|samantha|aria|jenny|guy|sonia|libby|serena|moira|tessa|karen|rishi|ava|allison|oliver|arthur|fiona|alex|tom|david|zira|hazel|george|susan/.test(
                   n,
@@ -12406,6 +12537,7 @@
               )
                 q += 10;
               if (v.localService) q += 2;
+              (this._voiceQ || (this._voiceQ = new Map())).set(v.name, q);
               return { v, q, idx };
             })
             .sort((a, b) => b.q - a.q || a.idx - b.idx)
@@ -12444,15 +12576,28 @@
             if (wantFemale) return femRe.test(n) && !/\bmale\b/i.test(n);
             return maleRe.test(n) && !/female/i.test(n);
           });
-          const candidates = gendered.length > 0 ? gendered : pool;
+          const allOfGender = gendered.length > 0 ? gendered : pool;
+          // Cast only from the best-sounding tier on this device; pitch and pace keep the heroes distinct
+          const qOf = (v) => (this._voiceQ && this._voiceQ.get(v.name)) || 0;
+          const bestQ = allOfGender.reduce((m, v) => Math.max(m, qOf(v)), -99);
+          const topTier = allOfGender.filter((v) => qOf(v) >= bestQ - 16);
+          const candidates = topTier.length > 0 ? topTier : allOfGender;
 
           if (archetype === "announcer") {
-            const ann = candidates.find((v) =>
-              /daniel|arthur|george|google uk english male|brian|oliver|guy|steffan/i.test(
-                v.name,
-              ),
-            );
-            return ann || candidates[0];
+            const prefs = [
+              /ryan/i,
+              /thomas/i,
+              /christopher/i,
+              /guy|eric|davis|andrew|brian|roger|steffan/i,
+              /google uk english male/i,
+              /daniel|arthur|oliver|malcolm|evan|alex/i,
+              /george|david|mark/i,
+            ];
+            for (let pi = 0; pi < prefs.length; pi++) {
+              const hit = candidates.find((v) => prefs[pi].test(v.name));
+              if (hit) return hit;
+            }
+            return candidates[0];
           }
 
           // Prefer regional accent match first, then distribute 1-to-1 across all distinct voices in candidates!
@@ -12768,14 +12913,14 @@
           let pitchMod = 1.0,
             rateMod = 1.0;
           if (emotion === "triumph") {
-            pitchMod = 1.01;
-            rateMod = 1.01;
-          } else if (emotion === "urgent") {
             pitchMod = 1.02;
             rateMod = 1.02;
+          } else if (emotion === "urgent") {
+            pitchMod = 1.04;
+            rateMod = 1.06;
           } else if (emotion === "commanding") {
-            pitchMod = 0.99;
-            rateMod = 0.98;
+            pitchMod = 0.97;
+            rateMod = 0.95;
           }
 
           const slot =
@@ -12792,8 +12937,14 @@
 
           const rawPitch = heroCfg.voice.pitch || 1.0;
           const rawRate = heroCfg.voice.rate || 1.0;
-          const gentlePitch = 1.0 + (rawPitch - 1.0) * 0.35;
-          const gentleRate = 1.0 + (rawRate - 1.0) * 0.45;
+          // Modern neural and network voices stay clean across a wide range, so each hero gets a real register;
+          // legacy system voices keep a narrow range because their pitch shifter warbles.
+          const hqVoice =
+            !!chosen &&
+            ((this._voiceQ && this._voiceQ.get(chosen.name)) || 0) >= 30;
+          const gentlePitch = 1.0 + (rawPitch - 1.0) * (hqVoice ? 0.95 : 0.45);
+          const gentleRate = 1.0 + (rawRate - 1.0) * (hqVoice ? 0.85 : 0.5);
+          this._deepDuck = false;
 
           const spokenText = this._formatSpeechProsody(
             rawLine,
@@ -12801,8 +12952,14 @@
             heroCfg.voice.cadence || "heroic",
           );
           this._speakUtterance(spokenText, {
-            pitch: Math.min(1.06, Math.max(0.95, gentlePitch * pitchMod)),
-            rate: Math.min(1.06, Math.max(0.94, gentleRate * rateMod)),
+            pitch: Math.min(
+              hqVoice ? 1.24 : 1.08,
+              Math.max(hqVoice ? 0.76 : 0.92, gentlePitch * pitchMod),
+            ),
+            rate: Math.min(
+              hqVoice ? 1.14 : 1.08,
+              Math.max(hqVoice ? 0.84 : 0.92, gentleRate * rateMod),
+            ),
             volume: Math.min(1.0, 1.0 * this.voiceVolumeScale),
             voice: chosen,
           });
@@ -12858,6 +13015,18 @@
             });
           }
 
+          if (this.sfxEnabled && this.ctx) {
+            this.playNoiseBurst(0.6, "lowpass", 240, 52, 0.46, 0.9);
+            this.playNoiseBurst(
+              tier >= 4 ? 1.5 : 1.0,
+              "highpass",
+              5200,
+              8200,
+              0.03,
+              0.95,
+            );
+          }
+
           if (this.voiceEnabled) {
             this.announcerSpeakingUntil = performance.now() + 3400;
             this._showSubtitle("GRANDMASTER ANNOUNCER:", spokenText, true);
@@ -12873,8 +13042,26 @@
               "en-gb",
               "",
             );
-            const announcerPitch = tier >= 4 ? 0.88 : tier >= 2 ? 0.86 : 0.84;
-            const announcerRate = tier >= 4 ? 0.94 : 0.91;
+            const annHq =
+              !!deepVoice &&
+              ((this._voiceQ && this._voiceQ.get(deepVoice.name)) || 0) >= 30;
+            const announcerPitch = annHq
+              ? tier >= 4
+                ? 0.78
+                : 0.74
+              : tier >= 4
+                ? 0.88
+                : tier >= 2
+                  ? 0.86
+                  : 0.84;
+            const announcerRate = annHq
+              ? tier >= 4
+                ? 0.97
+                : 0.9
+              : tier >= 4
+                ? 0.94
+                : 0.91;
+            this._deepDuck = true;
 
             this._speakUtterance(formatted, {
               pitch: announcerPitch,
@@ -13806,6 +13993,1720 @@
         composer = null;
       }
 
+      /***********************************************************************
+       * 15. NEXT-GEN LAYER: DEPTH AO + CLOUD SHADOWS, GPU PARTICLES, GLOW VFX,
+       *     FLASH LIGHTS, WIND GRASS, HERO RIM SHADING & ADAPTIVE RESOLUTION
+       ***********************************************************************/
+      const nxg = {
+        ready: false,
+        time: 0,
+        aoPass: null,
+        aoOk: true,
+        tex: {},
+        matPool: new Map(),
+        parts: null,
+        partHead: 0,
+        flashes: [],
+        grass: [],
+        grassUniforms: null,
+        dynResScale: 1.0,
+        dynLowTime: 0,
+        dynHighTime: 0,
+        dynHold: 0,
+        dynProbe: null,
+      };
+
+      function nxgCanvasTex(size, draw) {
+        const c = document.createElement("canvas");
+        c.width = size;
+        c.height = size;
+        draw(c.getContext("2d"), size);
+        const t = new THREE.CanvasTexture(c);
+        t.colorSpace = THREE.SRGBColorSpace;
+        return t;
+      }
+
+      function nxgBuildTextures() {
+        // Soft radial glow
+        nxg.tex.glow = nxgCanvasTex(128, (ctx, s) => {
+          const g = ctx.createRadialGradient(
+            s / 2,
+            s / 2,
+            0,
+            s / 2,
+            s / 2,
+            s / 2,
+          );
+          g.addColorStop(0, "rgba(255,255,255,1)");
+          g.addColorStop(0.22, "rgba(255,255,255,0.62)");
+          g.addColorStop(0.55, "rgba(255,255,255,0.16)");
+          g.addColorStop(1, "rgba(255,255,255,0)");
+          ctx.fillStyle = g;
+          ctx.fillRect(0, 0, s, s);
+        });
+        // Expanding shockwave: bright leading edge, soft trailing fill
+        nxg.tex.ring = nxgCanvasTex(256, (ctx, s) => {
+          const g = ctx.createRadialGradient(
+            s / 2,
+            s / 2,
+            0,
+            s / 2,
+            s / 2,
+            s / 2,
+          );
+          g.addColorStop(0, "rgba(255,255,255,0)");
+          g.addColorStop(0.46, "rgba(255,255,255,0.05)");
+          g.addColorStop(0.74, "rgba(255,255,255,0.26)");
+          g.addColorStop(0.88, "rgba(255,255,255,1)");
+          g.addColorStop(0.94, "rgba(255,255,255,0.55)");
+          g.addColorStop(1, "rgba(255,255,255,0)");
+          ctx.fillStyle = g;
+          ctx.fillRect(0, 0, s, s);
+        });
+        // Thin selection ring with inner halo
+        nxg.tex.selRing = nxgCanvasTex(256, (ctx, s) => {
+          const g = ctx.createRadialGradient(
+            s / 2,
+            s / 2,
+            0,
+            s / 2,
+            s / 2,
+            s / 2,
+          );
+          g.addColorStop(0, "rgba(255,255,255,0)");
+          g.addColorStop(0.5, "rgba(255,255,255,0.10)");
+          g.addColorStop(0.7, "rgba(255,255,255,0.22)");
+          g.addColorStop(0.78, "rgba(255,255,255,1)");
+          g.addColorStop(0.84, "rgba(255,255,255,0.9)");
+          g.addColorStop(0.9, "rgba(255,255,255,0.18)");
+          g.addColorStop(1, "rgba(255,255,255,0)");
+          ctx.fillStyle = g;
+          ctx.fillRect(0, 0, s, s);
+        });
+        // Arcane rune circle decal
+        nxg.tex.rune = nxgCanvasTex(512, (ctx, s) => {
+          const c = s / 2;
+          const fill = ctx.createRadialGradient(c, c, 0, c, c, c);
+          fill.addColorStop(0, "rgba(255,255,255,0.30)");
+          fill.addColorStop(0.7, "rgba(255,255,255,0.12)");
+          fill.addColorStop(1, "rgba(255,255,255,0)");
+          ctx.fillStyle = fill;
+          ctx.fillRect(0, 0, s, s);
+          ctx.strokeStyle = "rgba(255,255,255,0.95)";
+          ctx.shadowColor = "rgba(255,255,255,0.9)";
+          ctx.shadowBlur = 10;
+          [
+            [0.9, 7],
+            [0.8, 2.5],
+            [0.52, 3],
+          ].forEach(([r, w]) => {
+            ctx.lineWidth = w;
+            ctx.beginPath();
+            ctx.arc(c, c, c * r, 0, Math.PI * 2);
+            ctx.stroke();
+          });
+          // Two interlocked triangles
+          ctx.lineWidth = 3;
+          for (let t = 0; t < 2; t++) {
+            ctx.beginPath();
+            for (let i = 0; i <= 3; i++) {
+              const a = (i / 3) * Math.PI * 2 + (t * Math.PI) / 3 - Math.PI / 2;
+              const x = c + Math.cos(a) * c * 0.78,
+                y = c + Math.sin(a) * c * 0.78;
+              if (i === 0) ctx.moveTo(x, y);
+              else ctx.lineTo(x, y);
+            }
+            ctx.stroke();
+          }
+          // Glyph ticks between the two outer rings
+          ctx.lineWidth = 4;
+          for (let i = 0; i < 36; i++) {
+            const a = (i / 36) * Math.PI * 2;
+            const r0 = c * (i % 3 === 0 ? 0.815 : 0.835),
+              r1 = c * 0.885;
+            ctx.beginPath();
+            ctx.moveTo(c + Math.cos(a) * r0, c + Math.sin(a) * r0);
+            ctx.lineTo(c + Math.cos(a) * r1, c + Math.sin(a) * r1);
+            ctx.stroke();
+          }
+          for (let i = 0; i < 6; i++) {
+            const a = (i / 6) * Math.PI * 2 + Math.PI / 6;
+            ctx.beginPath();
+            ctx.arc(
+              c + Math.cos(a) * c * 0.52,
+              c + Math.sin(a) * c * 0.52,
+              c * 0.045,
+              0,
+              Math.PI * 2,
+            );
+            ctx.stroke();
+          }
+        });
+        // Vertical beam: soft sides, hot core
+        nxg.tex.beam = nxgCanvasTex(128, (ctx, s) => {
+          const g = ctx.createLinearGradient(0, 0, 0, s);
+          g.addColorStop(0, "rgba(255,255,255,0)");
+          g.addColorStop(0.18, "rgba(255,255,255,0.55)");
+          g.addColorStop(0.8, "rgba(255,255,255,0.95)");
+          g.addColorStop(1, "rgba(255,255,255,1)");
+          ctx.fillStyle = g;
+          ctx.fillRect(0, 0, s, s);
+        });
+        // Blade-trail crescent (UVs of a ring sector run radially, so fade inner -> outer)
+        nxg.tex.slash = nxgCanvasTex(128, (ctx, s) => {
+          const g = ctx.createRadialGradient(
+            s / 2,
+            s / 2,
+            s * 0.2,
+            s / 2,
+            s / 2,
+            s / 2,
+          );
+          g.addColorStop(0, "rgba(255,255,255,0)");
+          g.addColorStop(0.55, "rgba(255,255,255,0.18)");
+          g.addColorStop(0.9, "rgba(255,255,255,1)");
+          g.addColorStop(1, "rgba(255,255,255,0)");
+          ctx.fillStyle = g;
+          ctx.fillRect(0, 0, s, s);
+        });
+        Object.values(nxg.tex).forEach((t) => registerSharedAsset(t));
+      }
+
+      // Pooled additive glow materials keyed by texture (returned to the pool by the effect's final update)
+      function nxgGlowMat(texKey, colorHex, opacity, boost = 1.7) {
+        let pool = nxg.matPool.get(texKey);
+        if (!pool) {
+          pool = [];
+          nxg.matPool.set(texKey, pool);
+        }
+        const mat =
+          pool.pop() ||
+          registerSharedAsset(
+            new THREE.MeshBasicMaterial({
+              map: nxg.tex[texKey],
+              transparent: true,
+              depthWrite: false,
+              side: THREE.DoubleSide,
+              blending: THREE.AdditiveBlending,
+              fog: false,
+            }),
+          );
+        mat.color.setHex(colorHex).multiplyScalar(boost);
+        mat.opacity = opacity;
+        mat.userData.nxgKey = texKey;
+        return mat;
+      }
+      function nxgReleaseMat(mat) {
+        const pool = nxg.matPool.get(mat.userData.nxgKey);
+        if (pool && pool.length < 96) pool.push(mat);
+      }
+
+      /* ---------- GPU particle system: one draw call, zero per-frame CPU work ---------- */
+      const NXG_PART_CAP = 3072;
+      function nxgBuildParticles() {
+        const geo = new THREE.BufferGeometry();
+        const mk = (n) =>
+          new THREE.BufferAttribute(
+            new Float32Array(NXG_PART_CAP * n),
+            n,
+          ).setUsage(THREE.DynamicDrawUsage);
+        geo.setAttribute("position", mk(3));
+        geo.setAttribute("aVel", mk(3));
+        geo.setAttribute("aMeta", mk(4));
+        geo.setAttribute("aColor", mk(3));
+        const meta = geo.attributes.aMeta.array;
+        for (let i = 0; i < NXG_PART_CAP; i++) meta[i * 4] = -1000;
+        const mat = new THREE.ShaderMaterial({
+          uniforms: { uTime: { value: 0 }, uPxScale: { value: 600 } },
+          transparent: true,
+          depthWrite: false,
+          blending: THREE.AdditiveBlending,
+          vertexShader: `
+                    attribute vec3 aVel; attribute vec4 aMeta; attribute vec3 aColor;
+                    uniform float uTime; uniform float uPxScale;
+                    varying vec3 vCol; varying float vA;
+                    void main() {
+                        float t = uTime - aMeta.x;
+                        float p = t / max(aMeta.y, 0.001);
+                        float alive = step(0.0, p) * step(p, 1.0);
+                        float tt = max(t, 0.0);
+                        vec3 pos = position + aVel * (1.0 - exp(-1.9 * tt)) / 1.9;
+                        pos.y -= 0.5 * aMeta.w * tt * tt;
+                        vec4 mv = viewMatrix * vec4(pos, 1.0);
+                        gl_Position = projectionMatrix * mv;
+                        gl_PointSize = alive * aMeta.z * (1.0 - p * 0.6) * uPxScale / max(1.0, -mv.z);
+                        if (alive < 0.5) gl_Position = vec4(2.0, 2.0, 2.0, 1.0);
+                        vCol = aColor;
+                        vA = alive * (1.0 - p) * smoothstep(0.0, 0.06, p);
+                    }`,
+          fragmentShader: `
+                    varying vec3 vCol; varying float vA;
+                    void main() {
+                        float d = length(gl_PointCoord - 0.5) * 2.0;
+                        float a = pow(max(0.0, 1.0 - d), 1.7) * vA;
+                        if (a < 0.004) discard;
+                        gl_FragColor = vec4(vCol * (1.0 + (1.0 - d) * 1.4), a);
+                        #include <tonemapping_fragment>
+                        #include <colorspace_fragment>
+                    }`,
+        });
+        nxg.parts = new THREE.Points(geo, mat);
+        nxg.parts.frustumCulled = false;
+        nxg.parts.renderOrder = 6;
+        scene.add(nxg.parts);
+      }
+
+      const _nxgCol = new THREE.Color();
+      // opts: speed, up, life, size, gravity, spread (start radius), yOff
+      function nxgEmit(pos, colorHex, count, opts = {}) {
+        if (!nxg.parts) return;
+        const g = nxg.parts.geometry;
+        const P = g.attributes.position.array,
+          V = g.attributes.aVel.array,
+          M = g.attributes.aMeta.array,
+          C = g.attributes.aColor.array;
+        const speed = opts.speed ?? 9,
+          up = opts.up ?? 7,
+          life = opts.life ?? 0.7,
+          size = opts.size ?? 0.5;
+        const grav = opts.gravity ?? 14,
+          spread = opts.spread ?? 0.25,
+          yOff = opts.yOff ?? 1.4;
+        _nxgCol.setHex(colorHex);
+        for (let n = 0; n < count; n++) {
+          const i = nxg.partHead;
+          nxg.partHead = (nxg.partHead + 1) % NXG_PART_CAP;
+          const a = Math.random() * Math.PI * 2,
+            r = Math.sqrt(Math.random());
+          P[i * 3] = pos.x + Math.cos(a) * r * spread;
+          P[i * 3 + 1] = (pos.y || 0) + yOff + (Math.random() - 0.5) * spread;
+          P[i * 3 + 2] = pos.z + Math.sin(a) * r * spread;
+          const sp = speed * (0.35 + Math.random() * 0.65);
+          V[i * 3] = Math.cos(a) * sp;
+          V[i * 3 + 1] = up * (0.3 + Math.random() * 0.7);
+          V[i * 3 + 2] = Math.sin(a) * sp;
+          M[i * 4] = nxg.time;
+          M[i * 4 + 1] = life * (0.6 + Math.random() * 0.4);
+          M[i * 4 + 2] = size * (0.6 + Math.random() * 0.8);
+          M[i * 4 + 3] = grav;
+          const w = Math.random() * 0.35;
+          C[i * 3] = _nxgCol.r + (1 - _nxgCol.r) * w;
+          C[i * 3 + 1] = _nxgCol.g + (1 - _nxgCol.g) * w;
+          C[i * 3 + 2] = _nxgCol.b + (1 - _nxgCol.b) * w;
+        }
+        g.attributes.position.needsUpdate = true;
+        g.attributes.aVel.needsUpdate = true;
+        g.attributes.aMeta.needsUpdate = true;
+        g.attributes.aColor.needsUpdate = true;
+      }
+
+      /* ---------- Fixed pool of flash lights (constant light count => no shader recompiles) ---------- */
+      function nxgBuildFlashLights() {
+        for (let i = 0; i < 2; i++) {
+          const l = new THREE.PointLight(0xffffff, 0, 30, 1.6);
+          l.position.set(0, -200, 0);
+          scene.add(l);
+          nxg.flashes.push({ light: l, t: 1, dur: 1, peak: 0 });
+        }
+      }
+      function nxgFlash(x, y, z, colorHex, peak = 30, dist = 26, dur = 0.34) {
+        if (!nxg.flashes.length || userSettings.qualityPreset === "potato")
+          return;
+        let best = nxg.flashes[0];
+        for (let i = 1; i < nxg.flashes.length; i++) {
+          if (nxg.flashes[i].t / nxg.flashes[i].dur > best.t / best.dur)
+            best = nxg.flashes[i];
+        }
+        if (best.t < best.dur * 0.35 && best.peak > peak) return;
+        best.light.color.setHex(colorHex);
+        best.light.distance = dist;
+        best.light.position.set(x, y, z);
+        best.t = 0;
+        best.dur = dur;
+        best.peak = peak;
+      }
+
+      /* ---------- Depth-based ambient occlusion + drifting cloud shadows (one half-res pass + composite) ---------- */
+      function nxgBuildAOPass() {
+        if (!composer || !renderer.capabilities.isWebGL2) {
+          nxg.aoOk = false;
+          return;
+        }
+        try {
+          [composer.renderTarget1, composer.renderTarget2].forEach((rt) => {
+            rt.depthTexture = new THREE.DepthTexture(rt.width, rt.height);
+            rt.depthTexture.minFilter = THREE.NearestFilter;
+            rt.depthTexture.magFilter = THREE.NearestFilter;
+            rt.dispose();
+          });
+          const aoRT = new THREE.WebGLRenderTarget(4, 4, {
+            depthBuffer: false,
+            minFilter: THREE.LinearFilter,
+            magFilter: THREE.LinearFilter,
+          });
+          const tri = new THREE.BufferGeometry();
+          tri.setAttribute(
+            "position",
+            new THREE.Float32BufferAttribute(
+              [-1, -1, 0, 3, -1, 0, -1, 3, 0],
+              3,
+            ),
+          );
+          tri.setAttribute(
+            "uv",
+            new THREE.Float32BufferAttribute([0, 0, 2, 0, 0, 2], 2),
+          );
+          const fsCam = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
+          const vs =
+            "varying vec2 vUv; void main() { vUv = uv; gl_Position = vec4(position.xy, 0.0, 1.0); }";
+          const aoMat = new THREE.ShaderMaterial({
+            depthTest: false,
+            depthWrite: false,
+            uniforms: {
+              tDepth: { value: null },
+              uInvProj: { value: new THREE.Matrix4() },
+              uProjY: { value: 1 },
+              uTexel: { value: new THREE.Vector2() },
+              uRadius: { value: 2.1 },
+              uIntensity: { value: 1.25 },
+            },
+            vertexShader: vs,
+            fragmentShader: `
+                        uniform sampler2D tDepth; uniform mat4 uInvProj; uniform float uProjY;
+                        uniform vec2 uTexel; uniform float uRadius; uniform float uIntensity;
+                        varying vec2 vUv;
+                        vec3 vpos(vec2 uv) {
+                            float d = texture2D(tDepth, uv).x;
+                            vec4 c = uInvProj * vec4(uv * 2.0 - 1.0, d * 2.0 - 1.0, 1.0);
+                            return c.xyz / c.w;
+                        }
+                        void main() {
+                            if (texture2D(tDepth, vUv).x >= 0.99995) { gl_FragColor = vec4(1.0); return; }
+                            vec3 p = vpos(vUv);
+                            vec3 pr = vpos(vUv + vec2(uTexel.x, 0.0)), pl = vpos(vUv - vec2(uTexel.x, 0.0));
+                            vec3 pu = vpos(vUv + vec2(0.0, uTexel.y)), pd = vpos(vUv - vec2(0.0, uTexel.y));
+                            vec3 dx = abs(pr.z - p.z) < abs(p.z - pl.z) ? pr - p : p - pl;
+                            vec3 dy = abs(pu.z - p.z) < abs(p.z - pd.z) ? pu - p : p - pd;
+                            vec3 n = normalize(cross(dx, dy));
+                            float rUv = uRadius * uProjY * 0.5 / max(1.0, -p.z);
+                            float aspect = uTexel.x / uTexel.y;
+                            vec2 cell = mod(floor(gl_FragCoord.xy), 4.0);
+                            float ang = (cell.x + cell.y * 4.0) * 0.3927 + 0.2;
+                            float occ = 0.0;
+                            float bias = 0.05 + 0.0018 * -p.z;
+                            for (int i = 0; i < 8; i++) {
+                                float fi = (float(i) + 0.5) / 8.0;
+                                float a = ang + float(i) * 2.39996323;
+                                vec2 off = vec2(cos(a) * aspect, sin(a)) * (sqrt(fi) * rUv);
+                                vec3 v = vpos(vUv + off) - p;
+                                float vv = dot(v, v);
+                                float w = max(0.0, 1.0 - vv / (uRadius * uRadius));
+                                occ += max(0.0, dot(v, n) - bias) * inversesqrt(vv + 0.0001) * w;
+                            }
+                            gl_FragColor = vec4(vec3(1.0 - clamp(occ * 0.125 * uIntensity, 0.0, 1.0)), 1.0);
+                        }`,
+          });
+          const compMat = new THREE.ShaderMaterial({
+            depthTest: false,
+            depthWrite: false,
+            uniforms: {
+              tDiffuse: { value: null },
+              tAO: { value: aoRT.texture },
+              tDepth: { value: null },
+              uInvProj: { value: new THREE.Matrix4() },
+              uCamWorld: { value: new THREE.Matrix4() },
+              uAOTexel: { value: new THREE.Vector2() },
+              uStrength: { value: 0.85 },
+              uCloud: { value: 0.0 },
+              uTime: { value: 0 },
+              uNearFar: { value: new THREE.Vector2(1, 500) },
+              uHaze: { value: 0.0 },
+              uHazeCol: { value: new THREE.Color(0x6a93c4) },
+            },
+            vertexShader: vs,
+            fragmentShader: `
+                        uniform sampler2D tDiffuse; uniform sampler2D tAO; uniform sampler2D tDepth;
+                        uniform mat4 uInvProj; uniform mat4 uCamWorld; uniform vec2 uAOTexel;
+                        uniform float uStrength; uniform float uCloud; uniform float uTime; uniform vec2 uNearFar;
+                        uniform float uHaze; uniform vec3 uHazeCol;
+                        varying vec2 vUv;
+                        float linZ(float d) { return uNearFar.x * uNearFar.y / (uNearFar.y - d * (uNearFar.y - uNearFar.x)); }
+                        float h21(vec2 p) { p = fract(p * vec2(123.34, 456.21)); p += dot(p, p + 45.32); return fract(p.x * p.y); }
+                        float vn(vec2 p) {
+                            vec2 i = floor(p), f = fract(p); f = f * f * (3.0 - 2.0 * f);
+                            return mix(mix(h21(i), h21(i + vec2(1.0, 0.0)), f.x), mix(h21(i + vec2(0.0, 1.0)), h21(i + vec2(1.0, 1.0)), f.x), f.y);
+                        }
+                        void main() {
+                            vec4 c = texture2D(tDiffuse, vUv);
+                            float d0 = texture2D(tDepth, vUv).x;
+                            if (d0 >= 0.99995) { gl_FragColor = c; return; }
+                            float z0 = linZ(d0);
+                            float ao = 0.0, ws = 0.0;
+                            for (int i = 0; i < 4; i++) {
+                                vec2 o = vec2(i == 0 || i == 2 ? -1.0 : 1.0, i < 2 ? -1.0 : 1.0) * uAOTexel;
+                                float zi = linZ(texture2D(tDepth, vUv + o).x);
+                                float w = 1.0 / (1.0 + abs(zi - z0) * 2.2);
+                                ao += texture2D(tAO, vUv + o).r * w; ws += w;
+                            }
+                            ao = mix(1.0, ao / max(ws, 0.0001), uStrength);
+                            // Shadowed creases pick up a cool sky tint instead of going flat grey
+                            c.rgb *= mix(vec3(0.20, 0.25, 0.38), vec3(1.0), ao);
+                            if (uCloud > 0.01) {
+                                vec4 vp = uInvProj * vec4(vUv * 2.0 - 1.0, d0 * 2.0 - 1.0, 1.0);
+                                vec3 wp = (uCamWorld * vec4(vp.xyz / vp.w, 1.0)).xyz;
+                                vec2 q = wp.xz * 0.017 + uTime * vec2(0.011, 0.0065);
+                                float cl = vn(q) * 0.62 + vn(q * 2.3 + 7.1) * 0.38;
+                                c.rgb *= 1.0 - smoothstep(0.52, 0.80, cl) * uCloud;
+                            }
+                            // Aerial perspective: far ground eases toward the sky colour, giving the map real depth
+                            if (uHaze > 0.001) c.rgb = mix(c.rgb, uHazeCol, smoothstep(58.0, 150.0, z0) * uHaze);
+                            gl_FragColor = c;
+                        }`,
+          });
+          const fsMesh = new THREE.Mesh(tri, aoMat);
+          fsMesh.frustumCulled = false;
+          nxg.aoPass = {
+            enabled: false,
+            needsSwap: true,
+            clear: false,
+            renderToScreen: false,
+            cloud: 0,
+            haze: 0,
+            hazeCol: new THREE.Color(0x6a93c4),
+            setSize(w, h) {
+              const hw = Math.max(2, Math.floor(w * 0.5)),
+                hh = Math.max(2, Math.floor(h * 0.5));
+              aoRT.setSize(hw, hh);
+              aoMat.uniforms.uTexel.value.set(1 / hw, 1 / hh);
+              compMat.uniforms.uAOTexel.value.set(1 / hw, 1 / hh);
+            },
+            render(r, writeBuffer, readBuffer) {
+              const depth = readBuffer.depthTexture;
+              aoMat.uniforms.tDepth.value = depth;
+              aoMat.uniforms.uInvProj.value.copy(
+                camera.projectionMatrixInverse,
+              );
+              aoMat.uniforms.uProjY.value = camera.projectionMatrix.elements[5];
+              fsMesh.material = aoMat;
+              r.setRenderTarget(aoRT);
+              r.render(fsMesh, fsCam);
+              compMat.uniforms.tDiffuse.value = readBuffer.texture;
+              compMat.uniforms.tDepth.value = depth;
+              compMat.uniforms.uInvProj.value.copy(
+                camera.projectionMatrixInverse,
+              );
+              compMat.uniforms.uCamWorld.value.copy(camera.matrixWorld);
+              compMat.uniforms.uNearFar.value.set(camera.near, camera.far);
+              compMat.uniforms.uTime.value = nxg.time;
+              compMat.uniforms.uCloud.value = this.cloud;
+              compMat.uniforms.uHaze.value = this.haze;
+              compMat.uniforms.uHazeCol.value.copy(this.hazeCol);
+              fsMesh.material = compMat;
+              r.setRenderTarget(this.renderToScreen ? null : writeBuffer);
+              r.render(fsMesh, fsCam);
+            },
+            dispose() {
+              aoRT.dispose();
+              aoMat.dispose();
+              compMat.dispose();
+            },
+          };
+          composer.insertPass(nxg.aoPass, 1);
+        } catch (e) {
+          nxg.aoPass = null;
+          nxg.aoOk = false;
+        }
+      }
+
+      /* ---------- Wind-swept instanced grass (chunked for frustum culling, density scales with preset) ---------- */
+      function nxgBuildGrass() {
+        const BLADES = 3;
+        const pos = [],
+          uv = [],
+          col = [],
+          nrm = [];
+        for (let b = 0; b < BLADES; b++) {
+          const a = (b / BLADES) * Math.PI * 2 + 0.4;
+          const lean = 0.14 + b * 0.05,
+            hgt = 0.5 + b * 0.1,
+            hw = 0.085;
+          const cx = Math.cos(a),
+            sz = Math.sin(a);
+          const px = -sz * hw,
+            pz = cx * hw;
+          pos.push(
+            px + cx * 0.05,
+            0,
+            pz + sz * 0.05,
+            -px + cx * 0.05,
+            0,
+            -pz + sz * 0.05,
+            cx * lean,
+            hgt,
+            sz * lean,
+          );
+          uv.push(0, 0, 1, 0, 0.5, 1);
+          col.push(0.42, 0.42, 0.42, 0.42, 0.42, 0.42, 1.15, 1.15, 1.15);
+          nrm.push(0, 1, 0, 0, 1, 0, 0, 1, 0);
+        }
+        const geo = new THREE.BufferGeometry();
+        geo.setAttribute("position", new THREE.Float32BufferAttribute(pos, 3));
+        geo.setAttribute("uv", new THREE.Float32BufferAttribute(uv, 2));
+        geo.setAttribute("color", new THREE.Float32BufferAttribute(col, 3));
+        geo.setAttribute("normal", new THREE.Float32BufferAttribute(nrm, 3));
+
+        nxg.grassUniforms = {
+          uTime: { value: 0 },
+          uHero: { value: new THREE.Vector3(0, -99, 0) },
+          uWind: { value: 1.0 },
+        };
+        // No depth write + drawn after other solid geometry: rings, runes and range circles always read on top of the turf,
+        // and the ambient-occlusion pass sees the ground instead of thousands of moving blades.
+        const mat = new THREE.MeshLambertMaterial({
+          vertexColors: true,
+          side: THREE.DoubleSide,
+          depthWrite: false,
+        });
+        mat.onBeforeCompile = (shader) => {
+          shader.uniforms.uTime = nxg.grassUniforms.uTime;
+          shader.uniforms.uHero = nxg.grassUniforms.uHero;
+          shader.uniforms.uWind = nxg.grassUniforms.uWind;
+          shader.vertexShader = shader.vertexShader
+            .replace(
+              "#include <common>",
+              "#include <common>\nuniform float uTime; uniform vec3 uHero; uniform float uWind;",
+            )
+            .replace(
+              "#include <project_vertex>",
+              `
+                        vec4 gW = modelMatrix * (instanceMatrix * vec4(transformed, 1.0));
+                        float gH = uv.y;
+                        float gPh = gW.x * 0.19 + gW.z * 0.15;
+                        float gSway = sin(uTime * 1.7 + gPh) * 0.6 + sin(uTime * 3.9 + gPh * 2.7) * 0.25 + sin(uTime * 0.6 + gPh * 0.31) * 0.5;
+                        gW.x += gSway * 0.20 * gH * uWind;
+                        gW.z += gSway * 0.11 * gH * uWind;
+                        vec2 gD = gW.xz - uHero.xz;
+                        float gPush = (1.0 - smoothstep(0.5, 2.7, length(gD))) * gH;
+                        gW.xz += normalize(gD + vec2(0.0001)) * gPush * 0.85;
+                        gW.y -= gPush * 0.34;
+                        vec4 mvPosition = viewMatrix * gW;
+                        gl_Position = projectionMatrix * mvPosition;`,
+            );
+          // Blades always shade like the ground they grow from, whichever face is showing
+          shader.fragmentShader = shader.fragmentShader.replace(
+            "#include <normal_fragment_begin>",
+            "#include <normal_fragment_begin>\nnormal = normalize(vNormal);",
+          );
+        };
+        mat.customProgramCacheKey = () => "nxggrass";
+
+        const cRadDeep = new THREE.Color(0x1b4222),
+          cRadGrass = new THREE.Color(0x2b5e28),
+          cRadSun = new THREE.Color(0x4b7d2c);
+        const cDireA = new THREE.Color(0x3a1420),
+          cDireB = new THREE.Color(0x6a1e2a),
+          cDireEmber = new THREE.Color(0x9a3a20);
+        const GRID = 6,
+          cell = (MAP_HALF * 2) / GRID;
+        const buckets = Array.from({ length: GRID * GRID }, () => []);
+        let seed = 1337;
+        const rnd = () => {
+          seed = (seed * 16807) % 2147483647;
+          return (seed - 1) / 2147483646;
+        };
+        const TARGET = 210000;
+        // x, z, radius of every place turf must stay clear: neutral camps (mirrored), shops, boss pit
+        const CLEAR = [-34, -34, 13, -86, 102, 6.5, 86, -102, 6.5, 44, 16, 7];
+        [
+          [-108, 38],
+          [-82, 32],
+          [-112, 6],
+          [-38, 108],
+          [-104, -24],
+          [-6, 112],
+        ].forEach(([cx, cz]) => {
+          CLEAR.push(cx, cz, 8.5, -cx, -cz, 8.5);
+        });
+        const c = new THREE.Color();
+        let placed = 0;
+        for (let tries = 0; tries < TARGET * 3 && placed < TARGET; tries++) {
+          const x = (rnd() - 0.5) * 232,
+            z = (rnd() - 0.5) * 232;
+          const dRiver = Math.abs(x - z) / Math.SQRT2,
+            dLane = Math.abs(x + z) / Math.SQRT2;
+          if (dLane < 8.7 || dRiver < 11.6) continue;
+          if (
+            Math.hypot(x + 96, z - 96) < 29 ||
+            Math.hypot(x - 96, z + 96) < 29
+          )
+            continue;
+          let cleared = false;
+          for (let ci = 0; ci < CLEAR.length; ci += 3) {
+            const cd = Math.hypot(x - CLEAR[ci], z - CLEAR[ci + 1]),
+              cr = CLEAR[ci + 2];
+            if (
+              cd < cr &&
+              (cd < cr * 0.72 || rnd() < 1 - (cd - cr * 0.72) / (cr * 0.28))
+            ) {
+              cleared = true;
+              break;
+            }
+          }
+          if (cleared) continue;
+          const loam = Math.sin(x * 0.18) * Math.cos(z * 0.18);
+          if (loam > 0.62 && rnd() < 0.85) continue;
+          const blend = THREE.MathUtils.clamp((x - z + 16) / 32, 0, 1);
+          const dire = rnd() < blend;
+          if (dire && rnd() < 0.62) continue;
+          const y = getTerrainHeightAt(x, z);
+          if (y > 1.5) continue;
+          if (dire) {
+            c.copy(cDireA)
+              .lerp(cDireB, rnd())
+              .lerp(cDireEmber, rnd() < 0.12 ? 0.8 : 0.0)
+              .multiplyScalar(1.15);
+          } else {
+            const meadow = (Math.sin(x * 0.13 + Math.cos(z * 0.09)) + 1) * 0.5;
+            const glade = Math.max(0, Math.cos(z * 0.1 - x * 0.08));
+            c.copy(cRadDeep)
+              .lerp(cRadGrass, meadow)
+              .lerp(cRadSun, glade * 0.52 + rnd() * 0.25)
+              .multiplyScalar(1.22 + rnd() * 0.3);
+          }
+          const gx = Math.min(GRID - 1, Math.floor((x + MAP_HALF) / cell)),
+            gz = Math.min(GRID - 1, Math.floor((z + MAP_HALF) / cell));
+          buckets[gz * GRID + gx].push(
+            x,
+            y - 0.04,
+            z,
+            rnd() * Math.PI * 2,
+            (dire ? 0.6 : 0.72) + rnd() * 0.58,
+            c.r,
+            c.g,
+            c.b,
+          );
+          placed++;
+        }
+        const m4 = new THREE.Matrix4(),
+          q = new THREE.Quaternion(),
+          up = new THREE.Vector3(0, 1, 0),
+          sc = new THREE.Vector3(),
+          pv = new THREE.Vector3();
+        buckets.forEach((arr) => {
+          const n = arr.length / 8;
+          if (n === 0) return;
+          const mesh = new THREE.InstancedMesh(geo, mat, n);
+          for (let i = 0; i < n; i++) {
+            const o = i * 8;
+            q.setFromAxisAngle(up, arr[o + 3]);
+            sc.set(arr[o + 4], arr[o + 4] * (0.8 + (i % 7) * 0.06), arr[o + 4]);
+            m4.compose(pv.set(arr[o], arr[o + 1], arr[o + 2]), q, sc);
+            mesh.setMatrixAt(i, m4);
+            mesh.setColorAt(i, c.setRGB(arr[o + 5], arr[o + 6], arr[o + 7]));
+          }
+          mesh.instanceMatrix.needsUpdate = true;
+          if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true;
+          mesh.receiveShadow = true;
+          mesh.castShadow = false;
+          mesh.matrixAutoUpdate = false;
+          mesh.renderOrder = 1;
+          mesh.computeBoundingSphere();
+          mesh.userData.nxgMax = n;
+          mesh.raycast = () => {};
+          scene.add(mesh);
+          nxg.grass.push(mesh);
+          groundClutterMeshes.push(mesh);
+        });
+      }
+
+      function nxgApplyQuality(preset) {
+        const dens =
+          preset === "ultramax"
+            ? 1.0
+            : preset === "ultra"
+              ? 0.68
+              : preset === "high"
+                ? 0.46
+                : preset === "balanced"
+                  ? 0.27
+                  : preset === "performance"
+                    ? 0.12
+                    : 0;
+        for (let i = 0; i < nxg.grass.length; i++) {
+          const m = nxg.grass[i];
+          m.count = Math.floor(m.userData.nxgMax * dens);
+          m.visible = dens > 0 && userSettings.clutterEnabled;
+        }
+        const aoEl = document.getElementById("set-ao");
+        if (aoEl)
+          aoEl.checked =
+            preset === "ultramax" || preset === "ultra" || preset === "high";
+        document.body.classList.toggle(
+          "nxg-lite",
+          preset === "potato" ||
+            preset === "performance" ||
+            preset === "balanced",
+        );
+        nxg.dynResScale = 1.0;
+        nxg.dynLowTime = 0;
+        nxg.dynHighTime = 0;
+        nxg.dynHold = 0;
+        nxg.dynProbe = null;
+      }
+
+      function nxgSyncSettings() {
+        const aoEl = document.getElementById("set-ao");
+        userSettings.aoEnabled =
+          !!(aoEl && aoEl.checked) && nxg.aoOk && !!nxg.aoPass;
+        const drEl = document.getElementById("set-dynres");
+        userSettings.dynResEnabled = drEl ? drEl.checked : true;
+        if (nxg.aoPass) {
+          nxg.aoPass.enabled = userSettings.aoEnabled;
+        }
+        if (nxg.parts)
+          nxg.parts.material.uniforms.uPxScale.value =
+            (renderer.domElement.height * 0.5) /
+            Math.tan((camera.fov * 0.5 * Math.PI) / 180);
+        for (let i = 0; i < nxg.grass.length; i++) {
+          nxg.grass[i].visible =
+            userSettings.clutterEnabled && nxg.grass[i].count > 0;
+        }
+      }
+
+      function nxgInit() {
+        if (nxg.ready) return;
+        nxg.ready = true;
+        nxgBuildTextures();
+        nxgBuildParticles();
+        nxgBuildFlashLights();
+        nxgBuildAOPass();
+        try {
+          nxgBuildGrass();
+        } catch (e) {}
+        nxgApplyQuality(userSettings.qualityPreset);
+        window.updateGraphicsSettings();
+      }
+
+      // Called once per rendered frame, right before the scene is drawn
+      function nxgTick(dt) {
+        if (!nxg.ready) return;
+        nxg.time += dt;
+        if (nxg.parts) {
+          nxg.parts.material.uniforms.uTime.value = nxg.time;
+          nxg.parts.material.uniforms.uPxScale.value =
+            (renderer.domElement.height * 0.5) /
+            Math.tan((camera.fov * 0.5 * Math.PI) / 180);
+        }
+        if (nxg.grassUniforms) {
+          nxg.grassUniforms.uTime.value = nxg.time;
+          nxg.grassUniforms.uWind.value =
+            currentWeather === "rain"
+              ? 1.7
+              : currentWeather === "mist"
+                ? 0.6
+                : 1.0;
+          if (
+            typeof playerHero !== "undefined" &&
+            playerHero &&
+            !playerHero.dead &&
+            !inHeroSelect
+          )
+            nxg.grassUniforms.uHero.value.copy(playerHero.mesh.position);
+          else nxg.grassUniforms.uHero.value.set(0, -99, 0);
+        }
+        if (
+          typeof ambientMotes !== "undefined" &&
+          ambientMotes &&
+          ambientMotes.material.uniforms
+        ) {
+          ambientMotes.material.uniforms.uOpacity.value =
+            ambientMotes.material.opacity;
+          ambientMotes.material.uniforms.uPxScale.value = nxg.parts
+            ? nxg.parts.material.uniforms.uPxScale.value
+            : 600;
+        }
+        for (let i = 0; i < nxg.flashes.length; i++) {
+          const f = nxg.flashes[i];
+          if (f.t >= f.dur) {
+            if (f.light.intensity !== 0) f.light.intensity = 0;
+            continue;
+          }
+          f.t += dt;
+          const p = Math.min(1, f.t / f.dur);
+          f.light.intensity = f.peak * (1 - p) * (1 - p);
+        }
+        nxgUpdateDanger();
+        if (nxg.aoPass) {
+          const day = isNightTime ? 0.0 : 1.0;
+          const qNow = userSettings.qualityPreset;
+          const target =
+            currentWeather === "clear" && !inHeroSelect
+              ? (qNow === "ultramax" ? 0.3 : 0.24) * day
+              : 0.0;
+          nxg.aoPass.cloud +=
+            (target - nxg.aoPass.cloud) * Math.min(1, dt * 0.8);
+          const sunF =
+            (Math.cos((cycleClock / DAY_CYCLE_DURATION) * Math.PI) + 1) * 0.5;
+          nxg.aoPass.hazeCol.setRGB(
+            0.03 + sunF * 0.23,
+            0.05 + sunF * 0.36,
+            0.1 + sunF * 0.5,
+          );
+          nxg.aoPass.haze = inHeroSelect
+            ? 0.0
+            : qNow === "ultramax"
+              ? 0.15
+              : qNow === "ultra"
+                ? 0.08
+                : 0.0;
+        }
+        // Adaptive resolution: trade pixels for frame rate, and give them back when there is headroom.
+        // Every drop is verified: if the frame rate does not improve (display capped or CPU-bound), it is undone.
+        if (
+          userSettings.dynResEnabled &&
+          !inTitleScreen &&
+          typeof _fpsSmooth === "number"
+        ) {
+          if (nxg.dynHold > 0) nxg.dynHold -= dt;
+          if (nxg.dynProbe) {
+            nxg.dynProbe.t += dt;
+            if (nxg.dynProbe.t > 3) {
+              if (_fpsSmooth < nxg.dynProbe.fps * 1.07) {
+                nxg.dynResScale = nxg.dynProbe.prev;
+                nxg.dynHold = 1e9;
+                applyRendererResolution();
+              }
+              nxg.dynProbe = null;
+              nxg.dynLowTime = 0;
+              nxg.dynHighTime = 0;
+            }
+          } else if (!(nxg.dynHold > 0)) {
+            if (_fpsSmooth < 42) {
+              nxg.dynLowTime += dt;
+              nxg.dynHighTime = 0;
+            } else if (_fpsSmooth > 57) {
+              nxg.dynHighTime += dt;
+              nxg.dynLowTime = 0;
+            } else {
+              nxg.dynLowTime = Math.max(0, nxg.dynLowTime - dt);
+              nxg.dynHighTime = 0;
+            }
+            if (nxg.dynLowTime > 2.5 && nxg.dynResScale > 0.6) {
+              nxg.dynProbe = { prev: nxg.dynResScale, fps: _fpsSmooth, t: 0 };
+              nxg.dynResScale = Math.max(0.6, nxg.dynResScale - 0.1);
+              nxg.dynLowTime = 0;
+              applyRendererResolution();
+            } else if (nxg.dynHighTime > 8 && nxg.dynResScale < 1.0) {
+              nxg.dynResScale = Math.min(1.0, nxg.dynResScale + 0.05);
+              nxg.dynHighTime = 0;
+              applyRendererResolution();
+            }
+          }
+        }
+      }
+
+      /* ---------- Hero shading: readable materials, sky rim light, soft selection halo, larger in-match scale ---------- */
+      function nxgPolishHero(
+        built,
+        heroCfg,
+        team,
+        isPlayer,
+        isPreview,
+        isHudPortrait,
+      ) {
+        if (!built || !built.group) return;
+        if (!nxg.ready) nxgInit();
+        const rim = new THREE.Color(heroCfg.primaryHex)
+          .lerp(new THREE.Color(0xfff4dc), 0.55)
+          .multiplyScalar(isHudPortrait ? 0.5 : 0.85);
+        const seen = new Set();
+        built.group.traverse((o) => {
+          if (!o.isMesh || !o.material) return;
+          const mats = Array.isArray(o.material) ? o.material : [o.material];
+          for (let i = 0; i < mats.length; i++) {
+            const m = mats[i];
+            if (!m.isMeshStandardMaterial || seen.has(m) || m.userData.nxgRim)
+              continue;
+            seen.add(m);
+            m.userData.nxgRim = true;
+            // Polished metal stays metal; everything else stops reading as wet plastic
+            if (m.metalness > 0.6) {
+              m.roughness = Math.max(m.roughness, 0.3);
+              m.envMapIntensity = 0.9;
+            } else {
+              m.roughness = Math.max(m.roughness, 0.52);
+              m.metalness = Math.min(m.metalness, 0.22);
+              m.envMapIntensity = 0.42;
+            }
+            const prev = m.onBeforeCompile;
+            const prevKey = m.customProgramCacheKey();
+            m.onBeforeCompile = (shader, r) => {
+              if (prev) prev.call(m, shader, r);
+              shader.uniforms.uNxgRim = { value: rim };
+              shader.fragmentShader = shader.fragmentShader
+                .replace(
+                  "#include <common>",
+                  "#include <common>\nuniform vec3 uNxgRim;",
+                )
+                .replace(
+                  "#include <opaque_fragment>",
+                  `
+                                float nxgF = pow(1.0 - saturate(dot(normalize(vViewPosition), normal)), 3.0);
+                                outgoingLight += uNxgRim * nxgF * saturate(normal.y * 0.6 + 0.7);
+                                #include <opaque_fragment>`,
+                );
+            };
+            m.customProgramCacheKey = () => prevKey + "|nxgrim";
+            m.needsUpdate = true;
+          }
+        });
+        if (!isPreview && !isHudPortrait) {
+          const rig =
+            built.parts && built.parts.hips ? built.parts.hips.parent : null;
+          if (rig) rig.scale.multiplyScalar(1.16);
+          // Soft halo in the hero's own colour so each champion keeps a presence at night and in crowded fights
+          if (built.parts && built.parts.torso && nxg.tex.glow) {
+            const aura = new THREE.Sprite(
+              new THREE.SpriteMaterial({
+                map: nxg.tex.glow,
+                color: heroCfg.primaryHex,
+                transparent: true,
+                opacity: 0.17,
+                depthWrite: false,
+                blending: THREE.AdditiveBlending,
+                fog: false,
+              }),
+            );
+            aura.scale.setScalar(4.4);
+            aura.position.set(0, 0.9, 0);
+            aura.raycast = () => {};
+            built.parts.torso.add(aura);
+          }
+          const ring = built.group.children[0];
+          if (ring && ring.geometry && ring.geometry.type === "RingGeometry") {
+            ring.geometry.dispose();
+            ring.material.dispose();
+            ring.geometry = new THREE.PlaneGeometry(5.2, 5.2);
+            ring.material = new THREE.MeshBasicMaterial({
+              map: nxg.tex.selRing,
+              color: isPlayer
+                ? 0x34d399
+                : team === "radiant"
+                  ? 0x5eead4
+                  : 0xfb7185,
+              transparent: true,
+              depthWrite: false,
+              blending: THREE.AdditiveBlending,
+              fog: false,
+            });
+            ring.material.color.multiplyScalar(1.5);
+            ring.raycast = () => {};
+          }
+        }
+      }
+
+      function nxgSpring(parts, id, rot, axis, target, dt, w = 24, z = 0.7) {
+        const sv = parts._sv || (parts._sv = {});
+        let v = sv[id] || 0,
+          x = rot[axis];
+        if (!(dt > 0)) return;
+        if (dt > 0.09) {
+          x += (target - x) * Math.min(1, dt * 12);
+          v = 0;
+        } else {
+          const steps = Math.max(1, Math.ceil(dt / 0.017)),
+            h = dt / steps;
+          for (let i = 0; i < steps; i++) {
+            v += (w * w * (target - x) - 2 * z * w * v) * h;
+            x += v * h;
+          }
+        }
+        if (!(Math.abs(x) < 12)) {
+          x = target;
+          v = 0;
+        }
+        sv[id] = v;
+        rot[axis] = x;
+      }
+
+      let _nxgPulseEl = null;
+      function nxgScreenPulse(colorHex) {
+        if (!_nxgPulseEl) {
+          _nxgPulseEl = document.createElement("div");
+          _nxgPulseEl.style.cssText =
+            "position:fixed;inset:0;pointer-events:none;z-index:30;opacity:0;";
+          document.body.appendChild(_nxgPulseEl);
+        }
+        const c = "#" + new THREE.Color(colorHex).getHexString();
+        _nxgPulseEl.style.background = `radial-gradient(ellipse at center, transparent 48%, ${c}55 86%, ${c}aa 120%)`;
+        if (_nxgPulseEl.animate)
+          _nxgPulseEl.animate(
+            [{ opacity: 0 }, { opacity: 1, offset: 0.18 }, { opacity: 0 }],
+            { duration: 620, easing: "ease-out" },
+          );
+      }
+
+      // Signature cast layer shared by all 64 abilities: rune circle, hero-coloured sparks, light pop, per-key pose
+      function nxgCastFx(caster, key) {
+        if (!caster || !caster.mesh || !caster.heroCfg) return;
+        if (caster.parts) {
+          caster.parts.castKey = key;
+          caster.parts.castClock = 0;
+        }
+        const p = caster.mesh.position;
+        if (
+          Math.abs(p.x - cameraFocus.x) > 80 ||
+          Math.abs(p.z - cameraFocus.z) > 70
+        )
+          return;
+        const c1 = caster.heroCfg.primaryHex,
+          c2 = caster.heroCfg.secondaryHex || c1;
+        if (key === "R") {
+          spawnGroundRuneDecal(p.x, p.z, 5.4, c1, 1.3);
+          spawnShockwaveRing(p.x, p.z, 7.5, c2, 0.62);
+          nxgEmit(p, c1, 34, {
+            speed: 3.2,
+            up: 13,
+            life: 1.1,
+            size: 0.5,
+            gravity: -2.5,
+            spread: 1.7,
+            yOff: 0.3,
+          });
+          nxgFlash(p.x, p.y + 3, p.z, c1, 48, 34, 0.5);
+          if (caster.isPlayer) nxgScreenPulse(c1);
+        } else {
+          spawnGroundRuneDecal(p.x, p.z, key === "Q" ? 2.5 : 3.1, c1, 0.62);
+          nxgEmit(p, key === "E" ? c2 : c1, 11, {
+            speed: 4,
+            up: 6.5,
+            life: 0.6,
+            size: 0.36,
+            gravity: 3,
+            spread: 0.9,
+            yOff: 0.6,
+          });
+        }
+      }
+
+      /* ---------- Saved settings, smart first-run preset, low-health warning ---------- */
+      const NXG_PREFS_KEY = "dota3d_nxg_prefs_v1";
+      const NXG_PREF_CHECKS = [
+        "set-cinematic",
+        "set-bloom",
+        "set-ao",
+        "set-dynres",
+        "set-shadows",
+        "set-water-hq",
+        "set-clutter",
+        "set-particles",
+        "set-portraits-3d",
+        "set-edge-pan",
+        "set-smart-cast",
+        "set-cam-shake",
+        "set-float-dmg",
+      ];
+      const NXG_PREF_RANGES = [
+        "set-res-scale",
+        "set-music-vol",
+        "set-sfx-vol",
+        "set-voice-vol",
+        "set-pan-spd",
+      ];
+      let _nxgPrefsTimer = null,
+        _nxgPrefsLive = false;
+
+      function nxgReadPrefs() {
+        try {
+          return JSON.parse(localStorage.getItem(NXG_PREFS_KEY) || "null");
+        } catch (e) {
+          return null;
+        }
+      }
+      function nxgSavePrefsSoon() {
+        if (!_nxgPrefsLive) return;
+        clearTimeout(_nxgPrefsTimer);
+        _nxgPrefsTimer = setTimeout(() => {
+          const data = { q: userSettings.qualityPreset, c: {}, r: {} };
+          NXG_PREF_CHECKS.forEach((id) => {
+            const el = document.getElementById(id);
+            if (el) data.c[id] = el.checked;
+          });
+          NXG_PREF_RANGES.forEach((id) => {
+            const el = document.getElementById(id);
+            if (el) data.r[id] = el.value;
+          });
+          try {
+            localStorage.setItem(NXG_PREFS_KEY, JSON.stringify(data));
+          } catch (e) {}
+        }, 400);
+      }
+      // First run: pick a preset from the hardware instead of always starting on Medium
+      function nxgDetectPreset(isTouch) {
+        const cores = navigator.hardwareConcurrency || 4,
+          mem = navigator.deviceMemory || 4;
+        let gpu = "";
+        try {
+          const gl = renderer.getContext(),
+            dbg = gl.getExtension("WEBGL_debug_renderer_info");
+          gpu = String(
+            dbg
+              ? gl.getParameter(dbg.UNMASKED_RENDERER_WEBGL)
+              : gl.getParameter(gl.RENDERER),
+          );
+        } catch (e) {}
+        if (
+          /swiftshader|llvmpipe|software/i.test(gpu) ||
+          cores <= 2 ||
+          mem <= 2
+        )
+          return "performance";
+        if (isTouch) return mem >= 6 && cores >= 6 ? "balanced" : "performance";
+        if (
+          /rtx|radeon rx [5-9]|rx [5-9]\d{3}|arc|apple m[1-9]|apple gpu/i.test(
+            gpu,
+          ) &&
+          cores >= 8
+        )
+          return "ultra";
+        if (/nvidia|geforce|gtx|radeon|apple/i.test(gpu)) return "high";
+        return "balanced";
+      }
+      function nxgStartupPreset(isTouch) {
+        const saved = nxgReadPrefs();
+        const valid = [
+          "potato",
+          "performance",
+          "balanced",
+          "high",
+          "ultra",
+          "ultramax",
+        ];
+        if (saved && valid.includes(saved.q))
+          return saved.q === "ultramax" && !isUltraMaxUnlocked()
+            ? "ultra"
+            : saved.q;
+        return nxgDetectPreset(isTouch);
+      }
+      function nxgRestorePrefs() {
+        const saved = nxgReadPrefs();
+        if (saved) {
+          Object.entries(saved.c || {}).forEach(([id, v]) => {
+            const el = document.getElementById(id);
+            if (el) el.checked = !!v;
+          });
+          Object.entries(saved.r || {}).forEach(([id, v]) => {
+            const el = document.getElementById(id);
+            if (el) el.value = v;
+          });
+          try {
+            window.updateGraphicsSettings();
+            window.updateAudioMixSettings();
+            window.updateGameplaySettings();
+          } catch (e) {}
+        }
+        [
+          "setGraphicsQuality",
+          "updateGraphicsSettings",
+          "updateAudioMixSettings",
+          "updateGameplaySettings",
+        ].forEach((fn) => {
+          const orig = window[fn];
+          if (typeof orig !== "function") return;
+          window[fn] = function (...args) {
+            const r = orig.apply(this, args);
+            nxgSavePrefsSoon();
+            return r;
+          };
+        });
+        _nxgPrefsLive = true;
+      }
+
+      let _nxgDangerEl = null,
+        _nxgDangerShown = -1;
+      function nxgUpdateDanger() {
+        const h = typeof playerHero !== "undefined" ? playerHero : null;
+        let level = 0;
+        if (h && !h.dead && !inHeroSelect && !gameOver && h.maxHp > 0) {
+          const ratio = h.hp / h.maxHp;
+          if (ratio < 0.32)
+            level =
+              Math.min(1, (0.32 - ratio) / 0.22) *
+              (0.72 + 0.28 * Math.sin(nxg.time * 5.2));
+        }
+        const q = Math.round(level * 20) / 20;
+        if (q === _nxgDangerShown) return;
+        _nxgDangerShown = q;
+        if (!_nxgDangerEl) {
+          if (q === 0) return;
+          _nxgDangerEl = document.createElement("div");
+          _nxgDangerEl.style.cssText =
+            "position:fixed;inset:0;pointer-events:none;z-index:29;opacity:0;transition:opacity 0.14s linear;background:radial-gradient(ellipse at center, transparent 52%, rgba(190,18,60,0.42) 92%, rgba(136,19,55,0.75) 125%);";
+          document.body.appendChild(_nxgDangerEl);
+        }
+        _nxgDangerEl.style.opacity = String(q);
+      }
+
+      /* ---------- Towers and Ancients: sculpted silhouettes merged into a handful of draw calls each ---------- */
+      function nxgMergeGeos(list) {
+        let total = 0;
+        const prepared = list.map(([g, m]) => {
+          const ng = g.index ? g.toNonIndexed() : g.clone();
+          if (m) ng.applyMatrix4(m);
+          g.dispose();
+          total += ng.attributes.position.count;
+          return ng;
+        });
+        const pos = new Float32Array(total * 3),
+          nor = new Float32Array(total * 3),
+          uv = new Float32Array(total * 2);
+        let o = 0;
+        prepared.forEach((ng) => {
+          pos.set(ng.attributes.position.array, o * 3);
+          if (ng.attributes.normal) nor.set(ng.attributes.normal.array, o * 3);
+          if (ng.attributes.uv) uv.set(ng.attributes.uv.array, o * 2);
+          o += ng.attributes.position.count;
+          ng.dispose();
+        });
+        const out = new THREE.BufferGeometry();
+        out.setAttribute("position", new THREE.BufferAttribute(pos, 3));
+        out.setAttribute("normal", new THREE.BufferAttribute(nor, 3));
+        out.setAttribute("uv", new THREE.BufferAttribute(uv, 2));
+        return out;
+      }
+      // Place a part at radius/height in its own frame, then swing it around the vertical axis
+      function nxgRadial(ang, x, y, z = 0, rz = 0, rx = 0) {
+        const m = new THREE.Matrix4()
+          .makeRotationY(ang)
+          .multiply(new THREE.Matrix4().makeTranslation(x, y, z));
+        if (rz) m.multiply(new THREE.Matrix4().makeRotationZ(rz));
+        if (rx) m.multiply(new THREE.Matrix4().makeRotationX(rx));
+        return m;
+      }
+      // Curved talon profile in the radial (x) / up (y) plane, extruded to a slab
+      function nxgTalonGeo(pts, depth) {
+        const sh = new THREE.Shape();
+        sh.moveTo(pts[0], pts[1]);
+        sh.quadraticCurveTo(pts[2], pts[3], pts[4], pts[5]);
+        sh.quadraticCurveTo(pts[6], pts[7], pts[8], pts[9]);
+        sh.closePath();
+        const g = new THREE.ExtrudeGeometry(sh, {
+          depth,
+          bevelEnabled: false,
+          curveSegments: 10,
+        });
+        g.translate(0, 0, -depth / 2);
+        return g;
+      }
+      function nxgGlowSprite(colorHex, size, opacity) {
+        const sp = new THREE.Sprite(
+          new THREE.SpriteMaterial({
+            map: nxg.tex.glow,
+            color: colorHex,
+            transparent: true,
+            opacity,
+            depthWrite: false,
+            blending: THREE.AdditiveBlending,
+            fog: false,
+          }),
+        );
+        sp.scale.setScalar(size);
+        sp.raycast = () => {};
+        return sp;
+      }
+
+      function nxgBuildTower(unit, group, isRad) {
+        if (!nxg.ready) nxgInit();
+        const isCitadel = unit.name.includes("Citadel");
+        const sc = isCitadel ? 1.26 : 1.02;
+        const teamCol = isCitadel
+          ? isRad
+            ? 0xfacc15
+            : 0xf97316
+          : isRad
+            ? 0x10b981
+            : 0xf43f5e;
+        const stoneMat = new THREE.MeshStandardMaterial({
+          map: marblePBR.map,
+          bumpMap: marblePBR.bumpMap,
+          bumpScale: 0.3,
+          roughness: 0.66,
+          metalness: 0.08,
+          color: isRad ? 0xc3ccd6 : 0x3b4354,
+        });
+        const trimMat = new THREE.MeshStandardMaterial({
+          color: isRad ? 0xe9b93a : 0xb3122f,
+          metalness: 0.85,
+          roughness: 0.3,
+        });
+        const glowMat = new THREE.MeshStandardMaterial({
+          color: teamCol,
+          emissive: teamCol,
+          emissiveIntensity: 1.5,
+          roughness: 0.3,
+          metalness: 0.1,
+        });
+        attachContactShadow(group, 3.3 * sc);
+
+        const stone = [],
+          trim = [],
+          glow = [];
+        const Y = (y) => new THREE.Matrix4().makeTranslation(0, y, 0);
+        stone.push([new THREE.CylinderGeometry(2.72, 3.12, 0.72, 8), Y(0.36)]);
+        stone.push([new THREE.CylinderGeometry(2.24, 2.5, 0.62, 8), Y(1.02)]);
+        stone.push([
+          new THREE.LatheGeometry(
+            [
+              new THREE.Vector2(2.06, 1.3),
+              new THREE.Vector2(1.6, 2.5),
+              new THREE.Vector2(1.4, 4.2),
+              new THREE.Vector2(1.5, 5.4),
+              new THREE.Vector2(2.02, 6.02),
+              new THREE.Vector2(2.28, 6.36),
+              new THREE.Vector2(2.28, 6.78),
+              new THREE.Vector2(1.72, 6.78),
+              new THREE.Vector2(1.5, 6.42),
+              new THREE.Vector2(0, 6.42),
+            ],
+            8,
+          ),
+          null,
+        ]);
+        for (let i = 0; i < 4; i++) {
+          const a = (i / 4) * Math.PI * 2 + Math.PI / 4;
+          stone.push([
+            new THREE.BoxGeometry(1.5, 4.7, 0.44),
+            nxgRadial(a, 1.86, 3.05, 0, 0.13),
+          ]);
+          stone.push([
+            new THREE.BoxGeometry(0.9, 0.5, 0.62),
+            nxgRadial(a, 2.62, 0.95),
+          ]);
+          // Glowing rune slit on each open face, gem on each plinth corner
+          glow.push([
+            new THREE.BoxGeometry(0.12, 2.5, 0.36),
+            nxgRadial(a + Math.PI / 4, 1.47, 3.6),
+          ]);
+          glow.push([
+            new THREE.OctahedronGeometry(0.24, 0),
+            nxgRadial(a, 2.62, 1.42),
+          ]);
+          // Talons cradling the crystal
+          const talon = isRad
+            ? nxgTalonGeo(
+                [1.72, 6.5, 3.15, 7.7, 1.62, 9.35, 2.5, 7.7, 1.2, 6.5],
+                0.36,
+              )
+            : nxgTalonGeo(
+                [1.72, 6.5, 3.5, 7.9, 1.5, 10.1, 2.45, 7.8, 1.2, 6.5],
+                0.3,
+              );
+          trim.push([talon, nxgRadial(a + Math.PI / 4, 0, 0)]);
+          if (!isRad)
+            stone.push([
+              new THREE.ConeGeometry(0.3, 1.5, 4),
+              nxgRadial(a, 2.35, 5.5, 0, -0.5),
+            ]);
+        }
+        for (let i = 0; i < 8; i++) {
+          stone.push([
+            new THREE.BoxGeometry(0.5, 0.56, 0.6),
+            nxgRadial((i / 8) * Math.PI * 2 + Math.PI / 8, 2.04, 7.02),
+          ]);
+        }
+        const flat = new THREE.Matrix4().makeRotationX(Math.PI / 2);
+        trim.push([
+          new THREE.TorusGeometry(1.5, 0.11, 6, 20),
+          Y(4.25).multiply(flat),
+        ]);
+        trim.push([
+          new THREE.TorusGeometry(2.32, 0.12, 6, 24),
+          Y(6.36).multiply(flat),
+        ]);
+        trim.push([
+          new THREE.TorusGeometry(2.56, 0.1, 6, 24),
+          Y(1.32).multiply(flat),
+        ]);
+
+        const stoneMesh = new THREE.Mesh(
+          nxgMergeGeos(stone).scale(sc, sc, sc),
+          stoneMat,
+        );
+        stoneMesh.castShadow = true;
+        stoneMesh.receiveShadow = true;
+        const trimMesh = new THREE.Mesh(
+          nxgMergeGeos(trim).scale(sc, sc, sc),
+          trimMat,
+        );
+        trimMesh.castShadow = true;
+        const glowMesh = new THREE.Mesh(
+          nxgMergeGeos(glow).scale(sc, sc, sc),
+          glowMat,
+        );
+        group.add(stoneMesh, trimMesh, glowMesh);
+
+        const coreMat = new THREE.MeshStandardMaterial({
+          color: teamCol,
+          emissive: teamCol,
+          emissiveIntensity: 1.5,
+          roughness: 0.18,
+          metalness: 0.25,
+        });
+        const core = new THREE.Mesh(
+          new THREE.OctahedronGeometry(1.42 * sc, isCitadel ? 1 : 0).scale(
+            0.8,
+            1.32,
+            0.8,
+          ),
+          coreMat,
+        );
+        core.position.y = 8.2 * sc;
+        core.add(nxgGlowSprite(teamCol, 8.5 * sc, 0.5));
+        group.add(core);
+        unit.parts.crystal = core;
+        unit.parts.crystalBaseY = 8.2 * sc;
+
+        const haloRing = new THREE.Mesh(
+          new THREE.TorusGeometry(2.42 * sc, 0.1 * sc, 8, 36),
+          new THREE.MeshStandardMaterial({
+            color: 0xfacc15,
+            emissive: isRad ? 0xf59e0b : 0xdc2626,
+            emissiveIntensity: 1.3,
+            metalness: 0.7,
+            roughness: 0.3,
+          }),
+        );
+        haloRing.position.y = 8.2 * sc;
+        haloRing.rotation.x = Math.PI / 2.6;
+        group.add(haloRing);
+        unit.parts.haloRing = haloRing;
+
+        const rangeRing = new THREE.Mesh(
+          new THREE.RingGeometry(unit.atkRange - 0.18, unit.atkRange, 64),
+          new THREE.MeshBasicMaterial({
+            color: teamCol,
+            side: THREE.DoubleSide,
+            transparent: true,
+            opacity: 0.18,
+            depthWrite: false,
+          }),
+        );
+        rangeRing.rotation.x = -Math.PI / 2;
+        rangeRing.position.y = 0.06;
+        group.add(rangeRing);
+        const fortRadius = Math.max(18.5, unit.atkRange);
+        const fortRing = new THREE.Mesh(
+          new THREE.RingGeometry(fortRadius - 0.28, fortRadius, 64),
+          new THREE.MeshBasicMaterial({
+            color: isRad ? 0x34d399 : 0xfb7185,
+            side: THREE.DoubleSide,
+            transparent: true,
+            opacity: 0.12,
+            depthWrite: false,
+          }),
+        );
+        fortRing.rotation.x = -Math.PI / 2;
+        fortRing.position.y = 0.05;
+        group.add(fortRing);
+        rangeRing.raycast = () => {};
+        fortRing.raycast = () => {};
+      }
+
+      function nxgBuildAncient(unit, group, isRad) {
+        if (!nxg.ready) nxgInit();
+        const ancCol = isRad ? 0x10b981 : 0xf43f5e;
+        const trimCol = isRad ? 0xfacc15 : 0xf97316;
+        const stoneMat = new THREE.MeshStandardMaterial({
+          map: marblePBR.map,
+          bumpMap: marblePBR.bumpMap,
+          bumpScale: 0.3,
+          roughness: 0.64,
+          metalness: 0.08,
+          color: isRad ? 0xc3ccd6 : 0x2f3646,
+        });
+        const trimMat = new THREE.MeshStandardMaterial({
+          color: trimCol,
+          metalness: 0.86,
+          roughness: 0.28,
+        });
+        const glowMat = new THREE.MeshStandardMaterial({
+          color: ancCol,
+          emissive: ancCol,
+          emissiveIntensity: 1.7,
+          roughness: 0.3,
+        });
+        attachContactShadow(group, 6.8);
+
+        const stone = [],
+          trim = [],
+          glow = [];
+        const Y = (y) => new THREE.Matrix4().makeTranslation(0, y, 0);
+        const flat = new THREE.Matrix4().makeRotationX(Math.PI / 2);
+        stone.push([
+          new THREE.LatheGeometry(
+            [
+              new THREE.Vector2(6.7, 0),
+              new THREE.Vector2(6.4, 0.55),
+              new THREE.Vector2(5.5, 0.9),
+              new THREE.Vector2(5.3, 1.5),
+              new THREE.Vector2(4.5, 1.9),
+              new THREE.Vector2(4.3, 2.5),
+              new THREE.Vector2(3.5, 2.9),
+              new THREE.Vector2(0, 2.9),
+            ],
+            20,
+          ),
+          null,
+        ]);
+        for (let i = 0; i < 4; i++) {
+          const a = (i / 4) * Math.PI * 2 + Math.PI / 4;
+          const talon = isRad
+            ? nxgTalonGeo(
+                [5.5, 0.5, 7.9, 5.6, 3.3, 10.8, 5.7, 6.0, 4.2, 0.5],
+                1.15,
+              )
+            : nxgTalonGeo(
+                [5.5, 0.5, 8.4, 5.9, 3.0, 11.9, 5.6, 6.2, 4.3, 0.5],
+                0.95,
+              );
+          stone.push([talon, nxgRadial(a, 0, 0)]);
+          // Gilded spine riding the outside of each talon
+          const spine = isRad
+            ? nxgTalonGeo(
+                [5.62, 0.6, 8.2, 5.6, 3.3, 10.95, 7.75, 5.7, 5.5, 0.6],
+                0.34,
+              )
+            : nxgTalonGeo(
+                [5.62, 0.6, 8.7, 5.9, 3.0, 12.05, 8.25, 6.0, 5.5, 0.6],
+                0.3,
+              );
+          trim.push([spine, nxgRadial(a, 0, 0)]);
+          // Obelisks between the talons, each capped with a gem
+          stone.push([
+            new THREE.CylinderGeometry(0.3, 0.58, 3.4, 4),
+            nxgRadial(a + Math.PI / 4, 5.75, 2.3),
+          ]);
+          glow.push([
+            new THREE.OctahedronGeometry(0.5, 0),
+            nxgRadial(a + Math.PI / 4, 5.75, 4.6),
+          ]);
+          glow.push([
+            new THREE.BoxGeometry(0.16, 0.5, 1.5),
+            nxgRadial(a + Math.PI / 4, 4.92, 1.72),
+          ]);
+        }
+        trim.push([
+          new THREE.TorusGeometry(4.4, 0.13, 6, 40),
+          Y(2.52).multiply(flat),
+        ]);
+        trim.push([
+          new THREE.TorusGeometry(5.4, 0.15, 6, 44),
+          Y(1.52).multiply(flat),
+        ]);
+        glow.push([
+          new THREE.RingGeometry(2.3, 2.75, 40),
+          Y(2.93).multiply(new THREE.Matrix4().makeRotationX(-Math.PI / 2)),
+        ]);
+
+        const stoneMesh = new THREE.Mesh(nxgMergeGeos(stone), stoneMat);
+        stoneMesh.castShadow = true;
+        stoneMesh.receiveShadow = true;
+        const trimMesh = new THREE.Mesh(nxgMergeGeos(trim), trimMat);
+        trimMesh.castShadow = true;
+        group.add(
+          stoneMesh,
+          trimMesh,
+          new THREE.Mesh(nxgMergeGeos(glow), glowMat),
+        );
+
+        const nexus = new THREE.Mesh(
+          new THREE.OctahedronGeometry(3.1, 1).scale(0.84, 1.26, 0.84),
+          new THREE.MeshStandardMaterial({
+            color: ancCol,
+            emissive: ancCol,
+            emissiveIntensity: 1.9,
+            roughness: 0.15,
+          }),
+        );
+        nexus.position.y = 6.9;
+        nexus.add(nxgGlowSprite(ancCol, 19, 0.5));
+        group.add(nexus);
+        unit.parts.crystal = nexus;
+        unit.parts.crystalBaseY = 6.9;
+
+        // Pillar of light: the Ancient reads as the objective from anywhere on screen
+        const beam = new THREE.Mesh(
+          new THREE.CylinderGeometry(0.7, 1.5, 34, 20, 1, true),
+          new THREE.MeshBasicMaterial({
+            map: nxg.tex.beam,
+            color: ancCol,
+            transparent: true,
+            opacity: 0.34,
+            depthWrite: false,
+            blending: THREE.AdditiveBlending,
+            side: THREE.DoubleSide,
+            fog: false,
+          }),
+        );
+        beam.position.y = 6.9 + 17;
+        beam.raycast = () => {};
+        group.add(beam);
+
+        const ringMat1 = new THREE.MeshStandardMaterial({
+          color: trimCol,
+          emissive: trimCol,
+          emissiveIntensity: 1.2,
+          metalness: 0.8,
+          roughness: 0.3,
+        });
+        const ringMat2 = new THREE.MeshStandardMaterial({
+          color: ancCol,
+          emissive: ancCol,
+          emissiveIntensity: 1.35,
+          metalness: 0.7,
+          roughness: 0.3,
+        });
+        const orbitRing = new THREE.Mesh(
+          new THREE.TorusGeometry(4.6, 0.2, 10, 48),
+          ringMat1,
+        );
+        orbitRing.position.y = 6.9;
+        orbitRing.rotation.x = Math.PI / 3;
+        group.add(orbitRing);
+        unit.parts.orbitRing = orbitRing;
+        const orbitRing2 = new THREE.Mesh(
+          new THREE.TorusGeometry(5.3, 0.16, 10, 48),
+          ringMat2,
+        );
+        orbitRing2.position.y = 6.9;
+        orbitRing2.rotation.y = Math.PI / 3;
+        group.add(orbitRing2);
+        unit.parts.orbitRing2 = orbitRing2;
+
+        const wardDome = new THREE.Mesh(
+          new THREE.SphereGeometry(
+            7.6,
+            28,
+            20,
+            0,
+            Math.PI * 2,
+            0,
+            Math.PI * 0.52,
+          ),
+          new THREE.MeshBasicMaterial({
+            color: ancCol,
+            transparent: true,
+            opacity: 0.09,
+            wireframe: true,
+            depthWrite: false,
+          }),
+        );
+        wardDome.position.y = 0.4;
+        wardDome.raycast = () => {};
+        group.add(wardDome);
+        unit.parts.wardDome = wardDome;
+      }
+
       // Procedural Radial Contact-Shadow Disc Texture for Grounded Depth
       const contactShadowTex = (() => {
         const c = document.createElement("canvas");
@@ -14019,19 +15920,36 @@
         const mCtx = moteCanvas.getContext("2d");
         const mGrad = mCtx.createRadialGradient(16, 16, 1, 16, 16, 15);
         mGrad.addColorStop(0, "rgba(255,255,255,1)");
-        mGrad.addColorStop(0.5, "rgba(255,255,255,0.45)");
+        mGrad.addColorStop(0.3, "rgba(255,255,255,0.4)");
+        mGrad.addColorStop(0.62, "rgba(255,255,255,0)");
         mGrad.addColorStop(1, "rgba(255,255,255,0)");
         mCtx.fillStyle = mGrad;
         mCtx.fillRect(0, 0, 32, 32);
         const moteTex = new THREE.CanvasTexture(moteCanvas);
-        const mat = new THREE.PointsMaterial({
-          size: 0.56,
-          map: moteTex,
+        const mat = new THREE.ShaderMaterial({
+          uniforms: { uOpacity: { value: 0.78 }, uPxScale: { value: 600 } },
           vertexColors: true,
           transparent: true,
-          opacity: 0.78,
-          blending: THREE.AdditiveBlending,
           depthWrite: false,
+          blending: THREE.AdditiveBlending,
+          vertexShader: `
+                    uniform float uPxScale; varying vec3 vC;
+                    void main() {
+                        vC = color;
+                        vec4 mv = modelViewMatrix * vec4(position, 1.0);
+                        gl_Position = projectionMatrix * mv;
+                        gl_PointSize = 0.5 * uPxScale / max(1.0, -mv.z);
+                    }`,
+          fragmentShader: `
+                    uniform float uOpacity; varying vec3 vC;
+                    void main() {
+                        float d = length(gl_PointCoord - 0.5) * 2.0;
+                        float a = pow(max(0.0, 1.0 - d), 2.2) * uOpacity;
+                        if (a < 0.004) discard;
+                        gl_FragColor = vec4(vC * 1.25, a);
+                        #include <tonemapping_fragment>
+                        #include <colorspace_fragment>
+                    }`,
         });
         ambientMotes = new THREE.Points(geo, mat);
         scene.add(ambientMotes);
@@ -14047,7 +15965,7 @@
         if ((++_moteTick & 1) !== 0) return;
         const stepDt = _moteAccumDt;
         _moteAccumDt = 0;
-        ambientMotes.material.opacity = 0.55 + (1.0 - sunFactor) * 0.4;
+        ambientMotes.material.opacity = 0.16 + (1.0 - sunFactor) * 0.66;
         const arr = ambientMotes.geometry.attributes.position.array;
         for (let i = 0; i < ambientMoteData.length; i++) {
           const m = ambientMoteData[i];
@@ -14208,7 +16126,7 @@
             daySky: new THREE.Color(0x133052),
             nightSky: new THREE.Color(0x11203b),
             skyCol: new THREE.Color(),
-            dayLightCol: new THREE.Color(0xfffbeb),
+            dayLightCol: new THREE.Color(0xffefd2),
             moonLightCol: new THREE.Color(0xbcd7ff),
             hemiNight: new THREE.Color(0x93c5fd),
             hemiDay: new THREE.Color(0xe0f2fe),
@@ -14236,7 +16154,7 @@
         sc.sunDir
           .set(
             Math.cos(angle) * 75,
-            102 + Math.sin(angle) * 16,
+            80 + Math.sin(angle) * 14,
             Math.sin(angle) * 75,
           )
           .normalize();
@@ -14259,11 +16177,11 @@
 
         const weatherDim = 1.0 - rainFactor * 0.14 - mistFactor * 0.1;
         const qLight = userSettings.qualityPreset || "ultramax";
-        sunLight.intensity = (1.16 + sunFactor * 0.18) * weatherDim;
+        sunLight.intensity = (1.62 + sunFactor * 0.44) * weatherDim;
         hemiLight.intensity =
           (qLight === "ultramax"
-            ? 0.76 + sunFactor * 0.1
-            : 0.92 + sunFactor * 0.12) * weatherDim;
+            ? 0.58 + sunFactor * 0.06
+            : 0.66 + sunFactor * 0.08) * weatherDim;
         hemiLight.color.copy(sc.hemiNight).lerp(sc.hemiDay, sunFactor);
 
         if (riverShaderUniforms) {
@@ -14934,6 +16852,7 @@
               if (SHARED_ASSETS.has(m)) return;
               if (
                 m.map &&
+                !SHARED_ASSETS.has(m.map) &&
                 m.map !== cobblePBR.map &&
                 m.map !== riverbedPBR.map &&
                 m.map !== marblePBR.map &&
@@ -15142,6 +17061,20 @@ varying vec3 vTerrainNormal;
                             float tufts = valNoise(wp * 1.9);
                             return baseMacroMicro + blades * 0.15 + tufts * 0.10;
                         }
+                        // Distance to the nearest cell border: 0 on a seam, rising toward the middle of each basalt plate
+                        float direSeam(vec2 p) {
+                            vec2 n = floor(p), f = fract(p);
+                            float d1 = 8.0, d2 = 8.0;
+                            for (int j = -1; j <= 1; j++) {
+                                for (int i = -1; i <= 1; i++) {
+                                    vec2 g = vec2(float(i), float(j));
+                                    vec2 r = g + vec2(hash21(n + g), hash21(n + g + 17.3)) - f;
+                                    float d = dot(r, r);
+                                    if (d < d1) { d2 = d1; d1 = d; } else if (d < d2) { d2 = d; }
+                                }
+                            }
+                            return sqrt(d2) - sqrt(d1);
+                        }
                     `,
             )
             .replace(
@@ -15157,8 +17090,8 @@ varying vec3 vTerrainNormal;
 
                         // Stratified cliff rock texture on steep slopes or high rim mountains
                         float slopeRock = smoothstep(0.92, 0.68, vTerrainNormal.y) + smoothstep(1.2, 3.6, vTerrainWorldPos.y) * 0.75;
-                        float strata = sin(vTerrainWorldPos.y * 4.5 + nMacro * 5.0) * 0.5 + 0.5;
-                        vec3 cliffCol = mix(vec3(0.16, 0.20, 0.27), vec3(0.36, 0.42, 0.50), strata * 0.6 + nMicro * 0.4);
+                        float strata = sin(vTerrainWorldPos.y * 1.9 + nMacro * 5.0) * 0.5 + 0.5;
+                        vec3 cliffCol = mix(vec3(0.10, 0.125, 0.17), vec3(0.21, 0.245, 0.30), strata * 0.3 + nMicro * 0.7);
                         diffuseColor.rgb = mix(diffuseColor.rgb, cliffCol, clamp(slopeRock, 0.0, 0.92));
 
                         float side = smoothstep(-15.0, 15.0, vTerrainWorldPos.x - vTerrainWorldPos.z);
@@ -15169,8 +17102,18 @@ varying vec3 vTerrainNormal;
 
                         // Animated pulsing molten magma cracks in Dire territory
                         float magmaPulse = 0.78 + 0.28 * sin(uTime * 2.1 + wpXZ.x * 0.14 + wpXZ.y * 0.14);
-                        float crack = smoothstep(0.83, 0.96, 1.0 - abs(nMacro - nMicro) * 3.2) * smoothstep(0.44, 0.78, nMicro);
-                        vec3 direEmber = vec3(0.62, 0.14, 0.03) * crack * magmaPulse + vec3(0.16, 0.025, 0.035) * smoothstep(0.68, 0.92, nMicro);
+                        float crack = 0.0;
+                        float crackCore = 0.0;
+                        if (side > 0.02) {
+                            float seam = direSeam(wpXZ * 0.21 + vec2(nMicro * 0.4));
+                            float molten = smoothstep(0.38, 0.64, nMacro);
+                            // Keep the paved lane and the Dire plaza intact
+                            molten *= smoothstep(7.4, 9.4, abs(wpXZ.x + wpXZ.y) * 0.70710678);
+                            molten *= smoothstep(22.0, 31.0, length(wpXZ - vec2(96.0, -96.0)));
+                            crack = (1.0 - smoothstep(0.0, 0.13, seam)) * molten;
+                            crackCore = (1.0 - smoothstep(0.0, 0.04, seam)) * molten;
+                        }
+                        vec3 direEmber = vec3(0.40, 0.085, 0.02) * crack * magmaPulse + vec3(0.14, 0.022, 0.03) * smoothstep(0.68, 0.92, nMicro);
                         diffuseColor.rgb += mix(radOrganic, direEmber, side) * (1.0 - clamp(slopeRock, 0.0, 0.8));
 
                         if (uUltraMax > 0.85) {
@@ -15179,8 +17122,7 @@ varying vec3 vTerrainNormal;
                             diffuseColor.rgb *= mix(0.84, 1.02, fineTurf);
 
                             // Ultra Max: Blazing incandescent lava core veins on Dire side
-                            float hotVein = smoothstep(0.90, 0.985, 1.0 - abs(nMacro - nMicro) * 3.4) * side;
-                            diffuseColor.rgb += vec3(1.10, 0.34, 0.06) * hotVein * magmaPulse;
+                            diffuseColor.rgb += vec3(0.95, 0.34, 0.06) * crackCore * side * magmaPulse;
 
                             // Ultra Max: Carved Mid-Lane Ancient Cobblestone Mosaic & Golden Border Inlay
                             float dLane = abs(wpXZ.x + wpXZ.y) * 0.70710678;
@@ -15653,7 +17595,7 @@ roughnessFactor *= mix(1.0, 0.38, wetRough);`,
                                 if (abs(diff.x) < rMax && abs(diff.y) < rMax) {
                                     float dRock = length(diff) - uBoulders[i].z;
                                     if (dRock > -0.25 && dRock < 0.58) {
-                                        float collar = smoothstep(0.58, -0.05, dRock) * smoothstep(0.32, 0.72, foamNoise * 0.75 + 0.25);
+                                        float collar = smoothstep(0.34, 0.0, dRock) * smoothstep(0.42, 0.86, foamNoise * 0.75 + 0.25);
                                         rockFoam = max(rockFoam, collar);
                                         if (rockFoam > 0.75) break;
                                     }
@@ -15661,7 +17603,7 @@ roughnessFactor *= mix(1.0, 0.38, wetRough);`,
                             }
                         }
 
-                        float totalFoam = clamp(bankFoam * 0.72 + rockFoam * 0.68, 0.0, 0.85);
+                        float totalFoam = clamp(bankFoam * 0.62 + rockFoam * 0.36, 0.0, 0.8);
 
                         vec3 finalRGB = mix(surfaceCol, vec3(0.88, 0.95, 0.98), totalFoam);
                         // Translucent shallows so riverbed stones show through naturally; deeper opaque center
@@ -17170,6 +19112,38 @@ roughnessFactor *= mix(1.0, 0.38, wetRough);`,
           );
         }
 
+        for (let i = 0; i < 14; i++) {
+          const inner = i < 6;
+          const ang = (i / (inner ? 6 : 8)) * Math.PI * 2 + (inner ? 0.3 : 0.1);
+          const rad = inner ? 0.85 : 1.9;
+          const pos = new THREE.Vector3(
+            0.22 + Math.cos(ang) * rad,
+            inner ? 4.7 : 4.05,
+            0.06 + Math.sin(ang) * rad,
+          );
+          const rot = new THREE.Euler(
+            inner ? 1.25 : 0.98,
+            -ang + Math.PI * 0.5,
+            0,
+            "YXZ",
+          );
+          const coverCard = createCamberedFoliageCard(
+            2.3,
+            2.2,
+            0.3,
+            pos,
+            rot,
+            4.2,
+          );
+          vOff = appendMergedPart(
+            coverCard,
+            posList,
+            normList,
+            uvList,
+            idxList,
+            vOff,
+          );
+        }
         // 28 Cascading vertical-draped willow vine curtains around the perimeter
         const rings = [
           { count: 16, r: 2.18, yMid: 2.65, w: 1.45, h: 2.95, flare: 0.14 },
@@ -17971,6 +19945,7 @@ diffuseColor.rgb *= mix(0.58, 1.04, groundAO) * canopyShade;`,
             grassInst.setColorAt(i, tmpCol);
           });
           scene.add(freezeStaticObject(grassInst));
+          grassInst.count = 0;
           groundClutterMeshes.push(grassInst);
 
           // Smooth Sculpted Mossy Woodland Boulders seated firmly in Radiant glades
@@ -18067,7 +20042,8 @@ diffuseColor.rgb *= mix(0.58, 1.04, groundAO) * canopyShade;`,
           const flowerMat = new THREE.MeshStandardMaterial({
             color: 0xfef08a,
             emissive: 0xf59e0b,
-            emissiveIntensity: 0.55,
+            emissiveIntensity: 0.06,
+            roughness: 0.8,
           });
           const flowerInst = new THREE.InstancedMesh(
             new THREE.OctahedronGeometry(0.22, 0),
@@ -18090,10 +20066,11 @@ diffuseColor.rgb *= mix(0.58, 1.04, groundAO) * canopyShade;`,
 
         if (direCrystals.length > 0) {
           const crystalMat = new THREE.MeshStandardMaterial({
-            color: 0xf43f5e,
-            emissive: 0xe11d48,
-            emissiveIntensity: 1.15,
-            roughness: 0.35,
+            color: 0x9f1239,
+            emissive: 0xbe123c,
+            emissiveIntensity: 0.22,
+            roughness: 0.3,
+            metalness: 0.2,
           });
           const crystalInst = new THREE.InstancedMesh(
             new THREE.OctahedronGeometry(0.42, 0),
@@ -18107,6 +20084,7 @@ diffuseColor.rgb *= mix(0.58, 1.04, groundAO) * canopyShade;`,
             dummy.updateMatrix();
             crystalInst.setMatrixAt(i, dummy.matrix);
           });
+          crystalInst.count = Math.ceil(direCrystals.length * 0.5);
           scene.add(freezeStaticObject(crystalInst));
           groundClutterMeshes.push(crystalInst);
         }
@@ -18241,6 +20219,7 @@ diffuseColor.rgb *= mix(0.58, 1.04, groundAO) * canopyShade;`,
         floraInst.count = placed;
         floraInst.instanceMatrix.needsUpdate = true;
         if (floraInst.instanceColor) floraInst.instanceColor.needsUpdate = true;
+        floraInst.count = 0;
         ultraMaxEnvGroup.add(floraInst);
 
         // 1B. 480 Sculpted Smooth River-Worn Cobblestone & Granite Pebble Clusters seated flush in turf
@@ -18440,7 +20419,9 @@ diffuseColor.rgb *= mix(0.58, 1.04, groundAO) * canopyShade;`,
             depthWrite: false,
           }),
         );
-        ultraMaxEnvGroup.add(ultraMaxFireflies);
+        ultraMaxFireflies.geometry.dispose();
+        ultraMaxFireflies.material.dispose();
+        ultraMaxFireflies = null;
 
         // 5. Dynamic Hero-Tracking Celestial Spotlight (illuminates armor, crown & floating cubes with crisp falloff)
         ultraMaxHeroLight = new THREE.PointLight(0xfacc15, 2.8, 28, 1.65);
@@ -19036,6 +21017,11 @@ diffuseColor.rgb *= mix(0.58, 1.04, groundAO) * canopyShade;`,
             }),
           );
         mat.color.setHex(colorHex);
+        // Bright effect colours add light (and bloom); dark ones keep normal blending so they stay visible
+        const fxGlow =
+          mat.color.r * 0.3 + mat.color.g * 0.5 + mat.color.b * 0.2 > 0.08;
+        mat.blending = fxGlow ? THREE.AdditiveBlending : THREE.NormalBlending;
+        if (fxGlow) mat.color.multiplyScalar(1.4);
         mat.opacity = opacity;
         mat.polygonOffset = polygonOffset;
         mat.polygonOffsetFactor = polygonOffset ? -2 : 0;
@@ -19050,36 +21036,37 @@ diffuseColor.rgb *= mix(0.58, 1.04, groundAO) * canopyShade;`,
 
       const _slashArcGeoCache = new Map();
       function spawnMeleeSlashArc(pos, yaw, radius, colorHex, duration = 0.24) {
+        if (!nxg.ready) nxgInit();
         const rKey = Math.round(radius * 4) / 4;
         let geo = _slashArcGeoCache.get(rKey);
         if (!geo) {
           geo = registerSharedAsset(
             new THREE.RingGeometry(
-              rKey * 0.42,
-              rKey,
-              24,
+              rKey * 0.34,
+              rKey * 1.08,
+              32,
               1,
-              -Math.PI * 0.42,
-              Math.PI * 0.84,
+              -Math.PI * 0.46,
+              Math.PI * 0.92,
             ).rotateX(-Math.PI / 2),
           );
           _slashArcGeoCache.set(rKey, geo);
         }
-        const mat = acquireFxMat(colorHex, 0.88, false);
+        const mat = nxgGlowMat("slash", colorHex, 1.0, 2.1);
         const mesh = new THREE.Mesh(geo, mat);
         mesh.position.set(pos.x, (pos.y || 0) + 1.55, pos.z);
         mesh.rotation.y = yaw - Math.PI / 2;
         scene.add(mesh);
         fxList.push({
           mesh,
-          pooledMat: mat,
           t: 0,
           dur: duration,
           update: (p) => {
-            const s = 0.78 + p * 0.42;
+            const s = 0.7 + (1 - (1 - p) * (1 - p)) * 0.52;
             mesh.scale.set(s, 1, s);
-            mesh.rotation.y += 0.14;
-            mat.opacity = 0.88 * (1 - p);
+            mesh.rotation.y += 0.16;
+            mat.opacity = (1 - p) * (1 - p);
+            if (p >= 1) nxgReleaseMat(mat);
           },
         });
       }
@@ -19125,82 +21112,174 @@ diffuseColor.rgb *= mix(0.58, 1.04, groundAO) * canopyShade;`,
       }
 
       function spawnShockwaveRing(x, z, maxRadius, colorHex, duration = 0.48) {
+        if (!nxg.ready) nxgInit();
         const gy = getTerrainHeightAt(x, z);
-        const mat = acquireFxMat(colorHex, 0.9, true);
-        const mesh = new THREE.Mesh(SHARED_GEO.ring, mat);
-        mesh.position.set(x, gy + 0.12, z);
+        const mat = nxgGlowMat("ring", colorHex, 1.0, 1.9);
+        mat.polygonOffset = true;
+        mat.polygonOffsetFactor = -2;
+        mat.polygonOffsetUnits = -2;
+        const mesh = new THREE.Mesh(SHARED_GEO.decal, mat);
+        mesh.position.set(x, gy + 0.16, z);
+        const rMax = maxRadius / 0.88;
+        mesh.scale.set(rMax * 0.12, 1, rMax * 0.12);
         scene.add(mesh);
         fxList.push({
           mesh,
-          pooledMat: mat,
           t: 0,
           dur: duration,
           update: (p) => {
-            const s = 1 + p * (maxRadius / 0.75);
+            const e = 1 - (1 - p) * (1 - p) * (1 - p);
+            const s = rMax * (0.12 + 0.88 * e);
             mesh.scale.set(s, 1, s);
-            mat.opacity = 0.9 * (1 - p);
+            mat.opacity = Math.pow(1 - p, 1.4);
+            if (p >= 1) nxgReleaseMat(mat);
           },
         });
+        if (maxRadius >= 3.5) {
+          nxgEmit(
+            { x, y: gy, z },
+            colorHex,
+            Math.min(22, 6 + Math.floor(maxRadius * 1.6)),
+            {
+              speed: maxRadius * 1.9,
+              up: 3.5,
+              life: Math.max(0.4, duration),
+              size: 0.34,
+              gravity: 9,
+              spread: maxRadius * 0.18,
+              yOff: 0.35,
+            },
+          );
+        }
+        if (maxRadius >= 5.5)
+          nxgFlash(
+            x,
+            gy + 2.6,
+            z,
+            colorHex,
+            12 + maxRadius * 1.6,
+            10 + maxRadius * 2.2,
+            0.32,
+          );
       }
 
       function spawnGroundRuneDecal(x, z, radius, colorHex, duration = 1.6) {
+        if (!nxg.ready) nxgInit();
         const gy = getTerrainHeightAt(x, z);
-        const mat = acquireFxMat(colorHex, 0.42, true);
+        const mat = nxgGlowMat("rune", colorHex, 0.0, 1.5);
+        mat.polygonOffset = true;
+        mat.polygonOffsetFactor = -2;
+        mat.polygonOffsetUnits = -2;
         const mesh = new THREE.Mesh(SHARED_GEO.decal, mat);
-        mesh.scale.set(radius, 1, radius);
-        mesh.position.set(x, gy + 0.1, z);
+        mesh.scale.set(radius * 1.08, 1, radius * 1.08);
+        mesh.position.set(x, gy + 0.13, z);
+        mesh.rotation.y = Math.random() * 6.28;
+        const spin = (Math.random() < 0.5 ? -1 : 1) * 0.011;
         scene.add(mesh);
         fxList.push({
           mesh,
-          pooledMat: mat,
           t: 0,
           dur: duration,
           update: (p) => {
-            mat.opacity = 0.42 * (1 - p);
+            mesh.rotation.y += spin;
+            mat.opacity = 0.82 * Math.min(1, p * 9) * Math.pow(1 - p, 0.7);
+            if (p >= 1) nxgReleaseMat(mat);
           },
         });
       }
 
       function spawnOrbitalSkyBeam(x, z, radius, colorHex, duration = 0.85) {
-        const mat = acquireFxMat(colorHex, 0.92, false);
-        const mesh = new THREE.Mesh(SHARED_GEO.beam, mat);
-        mesh.scale.set(radius, 1, radius);
-        mesh.position.set(x, 19, z);
-        scene.add(mesh);
+        if (!nxg.ready) nxgInit();
+        const gy = getTerrainHeightAt(x, z);
+        const group = new THREE.Group();
+        const outerMat = nxgGlowMat("beam", colorHex, 0.9, 1.6);
+        const coreMat = nxgGlowMat("beam", 0xffffff, 0.95, 2.4);
+        const flareMat = nxgGlowMat("glow", colorHex, 0.9, 2.0);
+        outerMat.polygonOffset =
+          coreMat.polygonOffset =
+          flareMat.polygonOffset =
+            false;
+        const outer = new THREE.Mesh(SHARED_GEO.beam, outerMat);
+        const core = new THREE.Mesh(SHARED_GEO.beam, coreMat);
+        const flare = new THREE.Mesh(SHARED_GEO.decal, flareMat);
+        outer.position.y = 19;
+        core.position.y = 19;
+        flare.position.y = gy + 0.2;
+        group.add(outer, core, flare);
+        group.position.set(x, 0, z);
+        scene.add(group);
         fxList.push({
-          mesh,
-          pooledMat: mat,
+          mesh: group,
           t: 0,
           dur: duration,
           update: (p) => {
-            const s = radius * (1 + p * 0.35);
-            mesh.scale.set(s, 1, s);
-            mat.opacity = 0.92 * (1 - p);
+            const grow = 1 - Math.pow(1 - Math.min(1, p * 5), 2);
+            const s = radius * (0.25 + 0.75 * grow) * (1 + p * 0.3);
+            outer.scale.set(s, 1, s);
+            core.scale.set(s * 0.42, 1, s * 0.42);
+            flare.scale.set(s * 2.4, 1, s * 2.4);
+            const fade = Math.pow(1 - p, 1.3);
+            outerMat.opacity = 0.9 * fade;
+            coreMat.opacity = 0.95 * fade;
+            flareMat.opacity = 0.9 * fade;
+            if (p >= 1) {
+              nxgReleaseMat(outerMat);
+              nxgReleaseMat(coreMat);
+              nxgReleaseMat(flareMat);
+            }
           },
         });
+        nxgEmit({ x, y: gy, z }, colorHex, 26, {
+          speed: radius * 1.3,
+          up: 16,
+          life: duration * 1.1,
+          size: 0.46,
+          gravity: -3,
+          spread: radius * 0.7,
+          yOff: 0.3,
+        });
+        nxgFlash(
+          x,
+          gy + 4,
+          z,
+          colorHex,
+          40 + radius * 4,
+          22 + radius * 3,
+          Math.min(0.7, duration),
+        );
       }
 
       function spawnParticleBurst(pos, colorHex, count = 16) {
-        const mat = getCachedBasicMat(colorHex, false, 1.0, false);
-        for (let i = 0; i < count; i++) {
-          const m = new THREE.Mesh(SHARED_GEO.octa, mat);
-          m.position.set(pos.x, pos.y + 1.4, pos.z);
-          scene.add(m);
-          const ang = Math.random() * Math.PI * 2;
-          const spd = 4 + Math.random() * 10;
-          const vy = 4 + Math.random() * 8;
-          fxList.push({
-            mesh: m,
-            t: 0,
-            dur: 0.45 + Math.random() * 0.25,
-            update: (p) => {
-              m.position.x += Math.cos(ang) * spd * 0.016;
-              m.position.z += Math.sin(ang) * spd * 0.016;
-              m.position.y += (vy - p * 16) * 0.016;
-              m.scale.setScalar(1 - p);
-            },
-          });
-        }
+        if (!nxg.ready) nxgInit();
+        const n = Math.min(54, Math.round(count * 1.8));
+        nxgEmit(pos, colorHex, n, {
+          speed: 11,
+          up: 9,
+          life: 0.72,
+          size: 0.42,
+          gravity: 17,
+          spread: 0.3,
+          yOff: 1.4,
+        });
+        nxgEmit(pos, colorHex, 2, {
+          speed: 0.6,
+          up: 0.6,
+          life: 0.3,
+          size: 2.6 + count * 0.05,
+          gravity: 0,
+          spread: 0.1,
+          yOff: 1.4,
+        });
+        if (count >= 22)
+          nxgFlash(
+            pos.x,
+            (pos.y || 0) + 2.2,
+            pos.z,
+            colorHex,
+            16 + count * 0.4,
+            20,
+            0.26,
+          );
       }
 
       const _projScratch = new THREE.Vector3();
@@ -19462,7 +21541,7 @@ diffuseColor.rgb *= mix(0.58, 1.04, groundAO) * canopyShade;`,
           // Brushed anisotropic metal grain + engraved filigree border lines
           for (let y = 0; y < size; y += 2) {
             ctx.fillStyle =
-              y % 4 === 0 ? "rgba(255,255,255,0.045)" : "rgba(0,0,0,0.055)";
+              y % 4 === 0 ? "rgba(255,255,255,0.014)" : "rgba(0,0,0,0.018)";
             ctx.fillRect(0, y, size, 1);
           }
           if (isUltraMax) {
@@ -21007,6 +23086,33 @@ diffuseColor.rgb *= mix(0.58, 1.04, groundAO) * canopyShade;`,
         isPreview = false,
         isHudPortrait = false,
       ) {
+        const built = _buildSculptedHeroMeshBase(
+          heroCfg,
+          team,
+          isPlayer,
+          isPreview,
+          isHudPortrait,
+        );
+        try {
+          nxgPolishHero(
+            built,
+            heroCfg,
+            team,
+            isPlayer,
+            isPreview,
+            isHudPortrait,
+          );
+        } catch (e) {}
+        return built;
+      }
+
+      function _buildSculptedHeroMeshBase(
+        heroCfg,
+        team,
+        isPlayer,
+        isPreview = false,
+        isHudPortrait = false,
+      ) {
         const root = new THREE.Group();
         const hid = heroCfg.id;
         const isFem = [
@@ -21739,7 +23845,7 @@ diffuseColor.rgb *= mix(0.58, 1.04, groundAO) * canopyShade;`,
           );
 
           const face = buildRefinedHeroFace(
-            0xfde68a,
+            0xf0c4a2,
             0x38bdf8,
             0xb45309,
             "aurelius",
@@ -21849,7 +23955,7 @@ diffuseColor.rgb *= mix(0.58, 1.04, groundAO) * canopyShade;`,
           });
 
           const face = buildRefinedHeroFace(
-            0xfde68a,
+            0xf0c4a2,
             0xf97316,
             0xdc2626,
             "ignis",
@@ -21933,7 +24039,7 @@ diffuseColor.rgb *= mix(0.58, 1.04, groundAO) * canopyShade;`,
           capePivot.add(buildDrapedCapeMesh(1.06, 1.56, 1.85, 4, cloakMat));
 
           const face = buildRefinedHeroFace(
-            0xfef3c7,
+            0xf7dcc6,
             0x22d3ee,
             0xe2e8f0,
             "sylphira",
@@ -22328,7 +24434,7 @@ diffuseColor.rgb *= mix(0.58, 1.04, groundAO) * canopyShade;`,
           });
 
           const face = buildRefinedHeroFace(
-            0xfef3c7,
+            0xf7dcc6,
             0x38bdf8,
             0xfacc15,
             "sylphira",
@@ -22461,7 +24567,7 @@ diffuseColor.rgb *= mix(0.58, 1.04, groundAO) * canopyShade;`,
           });
 
           const face = buildRefinedHeroFace(
-            0xfde68a,
+            0xf0c4a2,
             0xf43f5e,
             0x1e1b4b,
             "ignis",
@@ -22962,7 +25068,7 @@ diffuseColor.rgb *= mix(0.58, 1.04, groundAO) * canopyShade;`,
           });
 
           const face = buildRefinedHeroFace(
-            0xfde68a,
+            0xf0c4a2,
             0xfb923c,
             0x78350f,
             "aurelius",
@@ -23729,6 +25835,56 @@ diffuseColor.rgb *= mix(0.58, 1.04, groundAO) * canopyShade;`,
           rElX = -0.35;
           capeX = 0.35;
           wingFlapZ = 0.18;
+          parts.castClock = (parts.castClock || 0) + dt;
+          const cw = Math.min(1, parts.castClock / 0.17);
+          const rel = cw * cw * (3 - 2 * cw);
+          const ck = parts.castKey || "R";
+          if (ck === "Q") {
+            // One-handed forward thrust
+            targetTorsoY = -0.55 + rel * 0.95;
+            targetTorsoX = 0.1 + rel * 0.1;
+            targetHipZ = rel * 0.22;
+            rShX = -0.5 - rel * 1.15;
+            rShZ = 0.1;
+            rElX = -1.2 + rel * 1.05;
+            lShX = 0.45 - rel * 0.25;
+            lShZ = -0.42;
+            lElX = -0.75;
+            capeX = 0.3 + rel * 0.25;
+          } else if (ck === "W") {
+            // Sweeping off-hand arc
+            targetTorsoY = 0.6 - rel * 1.05;
+            targetTorsoX = 0.16;
+            targetHipY -= 0.1 * rel;
+            lShX = -1.35;
+            lShZ = -1.25 + rel * 1.15;
+            lElX = -0.25;
+            rShX = 0.25;
+            rShZ = 0.45;
+            rElX = -0.7;
+          } else if (ck === "E") {
+            // Brace, then burst outward
+            targetTorsoX = 0.22 - rel * 0.4;
+            targetHipY -= 0.12 * (1 - rel);
+            lShX = -0.9 + rel * 0.2;
+            lShZ = 0.35 - rel * 1.45;
+            lElX = -1.5 + rel * 1.3;
+            rShX = -0.9 + rel * 0.2;
+            rShZ = -0.35 + rel * 1.45;
+            rElX = -1.5 + rel * 1.3;
+            capeX = 0.2 + rel * 0.45;
+          } else {
+            // Ultimate: rise and channel overhead
+            targetHipY += 0.16 * rel;
+            targetTorsoX = -0.12 - rel * 0.14;
+            targetHeadX = -0.3 * rel;
+            lShX = -2.2 - rel * 0.35;
+            rShX = -2.2 - rel * 0.35;
+            lShZ = -0.35 - (1 - rel) * 0.5;
+            rShZ = 0.35 + (1 - rel) * 0.5;
+            capeX = 0.35 + rel * 0.3;
+            wingFlapZ = 0.3;
+          }
         } else if (state === "PORTRAIT") {
           const breath = Math.sin(time * 2.2);
           targetHipY = baseHipY + breath * 0.015;
@@ -23761,9 +25917,15 @@ diffuseColor.rgb *= mix(0.58, 1.04, groundAO) * canopyShade;`,
             lShZ = -0.24 - breath * 0.03;
             rShZ = 0.24 + breath * 0.03;
           } else {
+            const shift = Math.sin(time * 0.55);
             targetHipY = baseHipY + breath * 0.03;
+            targetHipX = shift * 0.05;
+            targetHipRotZ = turnRoll + shift * 0.022;
             targetTorsoX = breath * 0.03;
-            targetHeadY = Math.sin(time * 1.1) * 0.14;
+            targetTorsoY = Math.sin(time * 0.42) * 0.07;
+            targetHeadY = Math.sin(time * 1.1) * 0.14 - shift * 0.05;
+            lShX = Math.sin(time * 0.9) * 0.05;
+            rShX = -Math.sin(time * 0.9) * 0.05;
             lShZ = -0.14 - breath * 0.03;
             rShZ = 0.14 + breath * 0.03;
             wingFlapZ = breath * 0.05;
@@ -23829,13 +25991,30 @@ diffuseColor.rgb *= mix(0.58, 1.04, groundAO) * canopyShade;`,
         parts.hips.rotation.x += (targetHipRotX - parts.hips.rotation.x) * k;
         parts.hips.rotation.y += (targetHipRotY - parts.hips.rotation.y) * k;
         parts.hips.rotation.z += (targetHipRotZ - parts.hips.rotation.z) * k;
-        parts.torso.rotation.x += (targetTorsoX - parts.torso.rotation.x) * k;
+        nxgSpring(
+          parts,
+          "tx",
+          parts.torso.rotation,
+          "x",
+          targetTorsoX,
+          dt,
+          20,
+          0.66,
+        );
         if (state === "CELEBRATE" || state === "WHIRLWIND")
           parts.torso.rotation.y = targetTorsoY;
         else
           parts.torso.rotation.y += (targetTorsoY - parts.torso.rotation.y) * k;
-        parts.neckPivot.rotation.x +=
-          (targetHeadX - parts.neckPivot.rotation.x) * k;
+        nxgSpring(
+          parts,
+          "nx",
+          parts.neckPivot.rotation,
+          "x",
+          targetHeadX,
+          dt,
+          17,
+          0.7,
+        );
         parts.neckPivot.rotation.y +=
           (targetHeadY - parts.neckPivot.rotation.y) * k;
         parts.neckPivot.rotation.z +=
@@ -23852,17 +26031,30 @@ diffuseColor.rgb *= mix(0.58, 1.04, groundAO) * canopyShade;`,
           parts.rightAnkle.rotation.x +=
             (rAnkleX - parts.rightAnkle.rotation.x) * k;
 
-        parts.leftShoulder.rotation.x +=
-          (lShX - parts.leftShoulder.rotation.x) * k;
-        parts.leftShoulder.rotation.z +=
-          (lShZ - parts.leftShoulder.rotation.z) * k;
-        parts.leftElbow.rotation.x += (lElX - parts.leftElbow.rotation.x) * k;
-
-        parts.rightShoulder.rotation.x +=
-          (rShX - parts.rightShoulder.rotation.x) * k;
-        parts.rightShoulder.rotation.z +=
-          (rShZ - parts.rightShoulder.rotation.z) * k;
-        parts.rightElbow.rotation.x += (rElX - parts.rightElbow.rotation.x) * k;
+        nxgSpring(parts, "lsx", parts.leftShoulder.rotation, "x", lShX, dt);
+        nxgSpring(parts, "lsz", parts.leftShoulder.rotation, "z", lShZ, dt);
+        nxgSpring(
+          parts,
+          "lex",
+          parts.leftElbow.rotation,
+          "x",
+          lElX,
+          dt,
+          27,
+          0.66,
+        );
+        nxgSpring(parts, "rsx", parts.rightShoulder.rotation, "x", rShX, dt);
+        nxgSpring(parts, "rsz", parts.rightShoulder.rotation, "z", rShZ, dt);
+        nxgSpring(
+          parts,
+          "rex",
+          parts.rightElbow.rotation,
+          "x",
+          rElX,
+          dt,
+          27,
+          0.66,
+        );
 
         if (parts.leftWing) {
           parts.leftWing.rotation.y +=
@@ -23883,7 +26075,9 @@ diffuseColor.rgb *= mix(0.58, 1.04, groundAO) * canopyShade;`,
         }
         const isUmaxAnim =
           typeof userSettings !== "undefined" &&
-          userSettings.qualityPreset === "ultramax";
+          (userSettings.qualityPreset === "ultramax" ||
+            userSettings.qualityPreset === "ultra" ||
+            userSettings.qualityPreset === "high");
         if (parts.capePivot) {
           const isMoving = state === "RUN" || state === "WHIRLWIND";
           const clothWave =
@@ -28430,301 +30624,8 @@ diffuseColor.rgb *= mix(0.58, 1.04, groundAO) * canopyShade;`,
           const group = new THREE.Group();
           const isRad = this.team === "radiant";
 
-          if (this.type === "tower") {
-            const isCitadel = this.name.includes("Citadel");
-            const sc = isCitadel ? 1.26 : 1.02;
-            const teamCol = isCitadel
-              ? isRad
-                ? 0xfacc15
-                : 0xf97316
-              : isRad
-                ? 0x10b981
-                : 0xf43f5e;
-            const stoneMat = new THREE.MeshStandardMaterial({
-              map: marblePBR.map,
-              bumpMap: marblePBR.bumpMap,
-              bumpScale: 0.24,
-              roughness: 0.48,
-              metalness: 0.24,
-              color: isRad ? 0xe2e8f0 : 0x475569,
-            });
-            const trimMetalMat = new THREE.MeshStandardMaterial({
-              color: isRad ? 0xfacc15 : 0xe11d48,
-              metalness: 0.86,
-              roughness: 0.2,
-            });
-            const coreMat = new THREE.MeshStandardMaterial({
-              color: teamCol,
-              emissive: teamCol,
-              emissiveIntensity: 1.38,
-              roughness: 0.2,
-              metalness: 0.3,
-            });
-
-            attachContactShadow(group, 3.1 * sc);
-
-            const towerPts = [
-              new THREE.Vector2(2.95 * sc, 0),
-              new THREE.Vector2(2.65 * sc, 1.1 * sc),
-              new THREE.Vector2(1.85 * sc, 2.3 * sc),
-              new THREE.Vector2(1.52 * sc, 5.6 * sc),
-              new THREE.Vector2(2.25 * sc, 6.3 * sc),
-              new THREE.Vector2(1.92 * sc, 6.7 * sc),
-              new THREE.Vector2(0, 6.7 * sc),
-            ];
-            const spire = new THREE.Mesh(
-              new THREE.LatheGeometry(towerPts, 8),
-              stoneMat,
-            );
-            spire.castShadow = true;
-            spire.receiveShadow = true;
-            group.add(spire);
-
-            // 4 Angled Stone Flying-Buttress Fins & Crown Pylons
-            for (let b = 0; b < 4; b++) {
-              const ang = (b / 4) * Math.PI * 2 + Math.PI / 4;
-              const fin = new THREE.Mesh(
-                new THREE.BoxGeometry(0.46 * sc, 5.4 * sc, 1.35 * sc),
-                stoneMat,
-              );
-              fin.position.set(
-                Math.cos(ang) * 1.85 * sc,
-                2.7 * sc,
-                Math.sin(ang) * 1.85 * sc,
-              );
-              fin.rotation.y = -ang;
-              fin.rotation.z = 0.14;
-              fin.castShadow = true;
-              group.add(fin);
-
-              const crownHorn = new THREE.Mesh(
-                new THREE.ConeGeometry(0.32 * sc, 1.65 * sc, 4),
-                trimMetalMat,
-              );
-              crownHorn.position.set(
-                Math.cos(ang) * 1.88 * sc,
-                7.35 * sc,
-                Math.sin(ang) * 1.88 * sc,
-              );
-              crownHorn.rotation.y = -ang;
-              crownHorn.rotation.z = -0.22;
-              group.add(crownHorn);
-            }
-
-            // Gilded Waist & Crown Collars
-            [2.3, 6.2].forEach((cy) => {
-              const collar = new THREE.Mesh(
-                new THREE.TorusGeometry(
-                  (cy < 4 ? 1.88 : 2.26) * sc,
-                  0.12 * sc,
-                  8,
-                  24,
-                ),
-                trimMetalMat,
-              );
-              collar.rotation.x = Math.PI / 2;
-              collar.position.y = cy * sc;
-              group.add(collar);
-            });
-
-            // Levitating Arcane Crystal Core + Vertical Energy Conduit
-            const core = new THREE.Mesh(
-              new THREE.OctahedronGeometry(1.68 * sc, isCitadel ? 1 : 0),
-              coreMat,
-            );
-            core.position.y = 8.2 * sc;
-            group.add(core);
-            this.parts.crystal = core;
-            this.parts.crystalBaseY = 8.2 * sc;
-
-            const conduit = new THREE.Mesh(
-              new THREE.CylinderGeometry(
-                0.18 * sc,
-                0.42 * sc,
-                2.2 * sc,
-                12,
-                1,
-                true,
-              ),
-              new THREE.MeshBasicMaterial({
-                color: teamCol,
-                transparent: true,
-                opacity: 0.45,
-                side: THREE.DoubleSide,
-              }),
-            );
-            conduit.position.y = 7.2 * sc;
-            group.add(conduit);
-
-            const haloRing = new THREE.Mesh(
-              new THREE.TorusGeometry(2.42 * sc, 0.14 * sc, 8, 32),
-              new THREE.MeshStandardMaterial({
-                color: 0xfacc15,
-                emissive: 0xf59e0b,
-                emissiveIntensity: 1.35,
-                metalness: 0.7,
-              }),
-            );
-            haloRing.position.y = 8.2 * sc;
-            haloRing.rotation.x = Math.PI / 2.6;
-            group.add(haloRing);
-            this.parts.haloRing = haloRing;
-
-            const rangeRing = new THREE.Mesh(
-              new THREE.RingGeometry(this.atkRange - 0.18, this.atkRange, 64),
-              new THREE.MeshBasicMaterial({
-                color: teamCol,
-                side: THREE.DoubleSide,
-                transparent: true,
-                opacity: 0.18,
-              }),
-            );
-            rangeRing.rotation.x = -Math.PI / 2;
-            rangeRing.position.y = 0.06;
-            group.add(rangeRing);
-
-            const fortRadius = Math.max(18.5, this.atkRange);
-            const fortRing = new THREE.Mesh(
-              new THREE.RingGeometry(fortRadius - 0.28, fortRadius, 64),
-              new THREE.MeshBasicMaterial({
-                color: isRad ? 0x34d399 : 0xfb7185,
-                side: THREE.DoubleSide,
-                transparent: true,
-                opacity: 0.12,
-              }),
-            );
-            fortRing.rotation.x = -Math.PI / 2;
-            fortRing.position.y = 0.05;
-            group.add(fortRing);
-          } else if (this.type === "ancient") {
-            const ancCol = isRad ? 0x10b981 : 0xf43f5e;
-            const trimCol = isRad ? 0xfacc15 : 0xf97316;
-            const stoneMat = new THREE.MeshStandardMaterial({
-              map: marblePBR.map,
-              bumpMap: marblePBR.bumpMap,
-              bumpScale: 0.24,
-              roughness: 0.48,
-              metalness: 0.24,
-              color: isRad ? 0xe2e8f0 : 0x334155,
-            });
-            const trimMetalMat = new THREE.MeshStandardMaterial({
-              color: trimCol,
-              metalness: 0.88,
-              roughness: 0.18,
-            });
-
-            attachContactShadow(group, 6.4);
-
-            const daisPts = [
-              new THREE.Vector2(6.3, 0),
-              new THREE.Vector2(5.6, 1.1),
-              new THREE.Vector2(4.3, 2.1),
-              new THREE.Vector2(3.6, 2.9),
-              new THREE.Vector2(0, 2.9),
-            ];
-            const base = new THREE.Mesh(
-              new THREE.LatheGeometry(daisPts, 16),
-              stoneMat,
-            );
-            base.castShadow = true;
-            base.receiveShadow = true;
-            group.add(base);
-
-            // 4 Monumental Angled Sanctuary Buttress Pylons framing the Nexus
-            for (let p = 0; p < 4; p++) {
-              const ang = (p / 4) * Math.PI * 2 + Math.PI / 4;
-              const pylon = new THREE.Mesh(
-                new THREE.BoxGeometry(0.95, 7.6, 1.65),
-                stoneMat,
-              );
-              pylon.position.set(Math.cos(ang) * 4.5, 4.0, Math.sin(ang) * 4.5);
-              pylon.rotation.y = -ang;
-              pylon.rotation.z = 0.26;
-              pylon.castShadow = true;
-              group.add(pylon);
-
-              const capGem = new THREE.Mesh(
-                new THREE.OctahedronGeometry(0.55, 0),
-                new THREE.MeshStandardMaterial({
-                  color: ancCol,
-                  emissive: ancCol,
-                  emissiveIntensity: 1.8,
-                }),
-              );
-              capGem.position.set(
-                Math.cos(ang) * 3.55,
-                8.1,
-                Math.sin(ang) * 3.55,
-              );
-              group.add(capGem);
-            }
-
-            const nexus = new THREE.Mesh(
-              new THREE.OctahedronGeometry(3.35, 1),
-              new THREE.MeshStandardMaterial({
-                color: ancCol,
-                emissive: ancCol,
-                emissiveIntensity: 2.05,
-                roughness: 0.15,
-              }),
-            );
-            nexus.position.y = 6.6;
-            group.add(nexus);
-            this.parts.crystal = nexus;
-            this.parts.crystalBaseY = 6.6;
-
-            const ringMat1 = new THREE.MeshStandardMaterial({
-              color: trimCol,
-              emissive: trimCol,
-              emissiveIntensity: 1.35,
-              metalness: 0.8,
-            });
-            const ringMat2 = new THREE.MeshStandardMaterial({
-              color: ancCol,
-              emissive: ancCol,
-              emissiveIntensity: 1.45,
-              metalness: 0.7,
-            });
-
-            const orbitRing = new THREE.Mesh(
-              new THREE.TorusGeometry(4.9, 0.26, 10, 40),
-              ringMat1,
-            );
-            orbitRing.position.y = 6.6;
-            orbitRing.rotation.x = Math.PI / 3;
-            group.add(orbitRing);
-            this.parts.orbitRing = orbitRing;
-
-            const orbitRing2 = new THREE.Mesh(
-              new THREE.TorusGeometry(5.75, 0.22, 10, 40),
-              ringMat2,
-            );
-            orbitRing2.position.y = 6.6;
-            orbitRing2.rotation.y = Math.PI / 3;
-            group.add(orbitRing2);
-            this.parts.orbitRing2 = orbitRing2;
-
-            const wardDome = new THREE.Mesh(
-              new THREE.SphereGeometry(
-                7.4,
-                28,
-                20,
-                0,
-                Math.PI * 2,
-                0,
-                Math.PI * 0.52,
-              ),
-              new THREE.MeshBasicMaterial({
-                color: ancCol,
-                transparent: true,
-                opacity: 0.15,
-                wireframe: true,
-              }),
-            );
-            wardDome.position.y = 0.4;
-            group.add(wardDome);
-            this.parts.wardDome = wardDome;
-          }
+          if (this.type === "tower") nxgBuildTower(this, group, isRad);
+          else if (this.type === "ancient") nxgBuildAncient(this, group, isRad);
 
           group.traverse((obj) => {
             obj.userData.unit = this;
@@ -29934,9 +31835,10 @@ diffuseColor.rgb *= mix(0.58, 1.04, groundAO) * canopyShade;`,
           new THREE.CylinderGeometry(2.6, 3.6, 16, 32, 1, true),
           new THREE.MeshBasicMaterial({
             color: cfg.primaryHex,
+            map: nxg.tex.beam || null,
             transparent: true,
-            opacity: 0.085,
-            side: THREE.DoubleSide,
+            opacity: 0.2,
+            side: THREE.BackSide,
             depthWrite: false,
             blending: THREE.AdditiveBlending,
           }),
@@ -31278,6 +33180,44 @@ diffuseColor.rgb *= mix(0.58, 1.04, groundAO) * canopyShade;`,
         return key === "R" ? nextRank * 6 : nextRank * 2 - 1;
       }
 
+      const TALENT_TIERS = [10, 15, 20, 25];
+      const MAX_ATTR_RANK = 10;
+      let isCtrlHeld = false;
+
+      function getNextAvailableTalentTier(hero) {
+        if (
+          !hero ||
+          !hero.heroCfg ||
+          !hero.heroCfg.talents ||
+          (hero.skillPoints || 0) <= 0
+        )
+          return null;
+        for (let i = 0; i < TALENT_TIERS.length; i++) {
+          const tier = TALENT_TIERS[i];
+          if (
+            hero.level >= tier &&
+            (!hero.chosenTalents || !hero.chosenTalents[tier])
+          )
+            return tier;
+        }
+        return null;
+      }
+
+      function canHeroLevelAttributes(hero) {
+        return Boolean(
+          hero &&
+          (hero.skillPoints || 0) > 0 &&
+          (hero.attrBonusRank || 0) < MAX_ATTR_RANK,
+        );
+      }
+
+      function setCtrlQuickUpgradeVisuals(active) {
+        isCtrlHeld = Boolean(active);
+        const hud = document.getElementById("hud-layer");
+        if (hud) hud.classList.toggle("ctrl-upgrade-active", isCtrlHeld);
+        updateAbilityUpgradeButtons();
+      }
+
       function canHeroLevelAbility(hero, key) {
         if (!hero || hero.skillPoints <= 0) return false;
         const reqLvl = getRequiredHeroLevelForNextRank(hero, key);
@@ -31285,16 +33225,21 @@ diffuseColor.rgb *= mix(0.58, 1.04, groundAO) * canopyShade;`,
       }
 
       window.levelUpAttributes = function () {
-        if (
-          !playerHero ||
-          playerHero.skillPoints <= 0 ||
-          playerHero.attrBonusRank >= 10
-        )
-          return;
+        if (!canHeroLevelAttributes(playerHero)) {
+          if (playerHero && (playerHero.skillPoints || 0) <= 0) {
+            spawnFloatText(
+              playerHero.mesh.position,
+              "NEED 1 SKILL POINT!",
+              "#fb7185",
+              13,
+            );
+          }
+          return false;
+        }
         if (mpState.active && mpState.role === "guest") {
           sfx.play("levelup");
           mpSendToHost({ type: "CMD", cmd: "LEVEL_ATTR" });
-          return;
+          return true;
         }
         playerHero.skillPoints--;
         playerHero.attrBonusRank++;
@@ -31317,38 +33262,55 @@ diffuseColor.rgb *= mix(0.58, 1.04, groundAO) * canopyShade;`,
           15,
         );
         updateAbilityUpgradeButtons();
+        return true;
       };
 
       window.openTalentModal = function () {
         if (!playerHero || !playerHero.heroCfg) return;
         document.getElementById("talent-modal-title").textContent =
-          `${playerHero.name.toUpperCase()} — TALENT TREE`;
+          `${playerHero.name.toUpperCase()} — TALENT TREE (${playerHero.skillPoints || 0} SP)`;
         const container = document.getElementById("talent-tiers-container");
         container.innerHTML = "";
+        const sp = playerHero.skillPoints || 0;
+        const nextCtrlTier = getNextAvailableTalentTier(playerHero);
 
         [25, 20, 15, 10].forEach((tierLvl) => {
           const pair = playerHero.heroCfg.talents[tierLvl];
           const unlocked = playerHero.level >= tierLvl;
           const chosenId = playerHero.chosenTalents[tierLvl];
+          const canSpendTier = unlocked && !chosenId && sp > 0;
+          const isNextTier = tierLvl === nextCtrlTier;
 
           const row = document.createElement("div");
-          row.className = `grid grid-cols-[1fr_auto_1fr] items-center gap-2 p-2 rounded-xl border ${unlocked ? "bg-slate-900/90 border-amber-500/40" : "bg-slate-950/70 border-slate-800 opacity-65"}`;
+          row.className = `grid grid-cols-[1fr_auto_1fr] items-center gap-2 p-2 rounded-xl border ${
+            chosenId
+              ? "bg-amber-950/35 border-amber-400/60"
+              : canSpendTier
+                ? "bg-slate-900/95 border-amber-400/80 shadow-[0_0_16px_rgba(250,204,21,0.24)]"
+                : unlocked
+                  ? "bg-slate-900/85 border-amber-500/35"
+                  : "bg-slate-950/70 border-slate-800 opacity-65"
+          }`;
 
-          const makeBranchBtn = (opt) => {
+          const makeBranchBtn = (opt, idx) => {
             const isPicked = chosenId === opt.id;
-            const canPick = unlocked && !chosenId;
+            const canPick = canSpendTier;
+            const keyBadge = isNextTier
+              ? `<span class="ml-1.5 px-1.5 py-0.5 rounded bg-amber-300 text-slate-950 font-mono font-black text-[9px] shrink-0">CTRL+${idx + 1}</span>`
+              : "";
             return `<button ${canPick ? `onclick="window.pickTalent(${tierLvl}, '${opt.id}')"` : "disabled"}
-                        class="p-2.5 rounded-lg text-xs font-bold text-center border transition ${isPicked ? "bg-amber-500/25 border-amber-400 text-amber-200 shadow-[0_0_12px_rgba(250,204,21,0.3)]" : canPick ? "bg-slate-800 hover:bg-amber-950/60 border-amber-500/50 text-white cursor-pointer" : "bg-slate-950 border-slate-800 text-slate-500"}">
-                        ${opt.label}
+                        class="p-2.5 rounded-lg text-xs font-bold text-center border transition flex items-center justify-center gap-1 ${isPicked ? "bg-amber-500/25 border-amber-400 text-amber-200 shadow-[0_0_12px_rgba(250,204,21,0.3)]" : canPick ? "bg-slate-800 hover:bg-amber-950/60 border-amber-500/65 text-white cursor-pointer" : "bg-slate-950 border-slate-800 text-slate-500"}">
+                        <span>${opt.label}</span>
+                        ${isPicked ? '<i class="fa-solid fa-check text-amber-300 ml-1"></i>' : keyBadge}
                     </button>`;
           };
 
           row.innerHTML = `
-                    ${makeBranchBtn(pair[0])}
+                    ${makeBranchBtn(pair[0], 0)}
                     <div class="w-10 h-10 rounded-full ${unlocked ? "bg-amber-500 text-slate-950" : "bg-slate-800 text-slate-400"} font-cinzel font-black text-xs flex items-center justify-center border-2 border-slate-950 shadow">
                         Lv${tierLvl}
                     </div>
-                    ${makeBranchBtn(pair[1])}
+                    ${makeBranchBtn(pair[1], 1)}
                 `;
           container.appendChild(row);
         });
@@ -31362,16 +33324,27 @@ diffuseColor.rgb *= mix(0.58, 1.04, groundAO) * canopyShade;`,
           playerHero.level < tierLvl ||
           playerHero.chosenTalents[tierLvl]
         )
-          return;
+          return false;
+        if ((playerHero.skillPoints || 0) <= 0) {
+          spawnFloatText(
+            playerHero.mesh.position,
+            "NEED 1 SKILL POINT!",
+            "#fb7185",
+            14,
+          );
+          return false;
+        }
         if (mpState.active && mpState.role === "guest") {
+          sfx.play("levelup");
           mpSendToHost({ type: "CMD", cmd: "PICK_TALENT", tierLvl, talentId });
           document.getElementById("talent-modal").classList.add("hidden");
-          return;
+          return true;
         }
         const pair = playerHero.heroCfg.talents[tierLvl];
         const opt = pair.find((o) => o.id === talentId);
-        if (!opt) return;
+        if (!opt) return false;
 
+        playerHero.skillPoints--;
         playerHero.chosenTalents[tierLvl] = talentId;
         opt.apply(playerHero);
         sfx.play("levelup");
@@ -31381,36 +33354,91 @@ diffuseColor.rgb *= mix(0.58, 1.04, groundAO) * canopyShade;`,
           "#facc15",
           16,
         );
+        spawnShockwaveRing(
+          playerHero.mesh.position.x,
+          playerHero.mesh.position.z,
+          3.8,
+          0xfacc15,
+          0.55,
+        );
         updateAbilityUpgradeButtons();
-        window.openTalentModal();
+        const modal = document.getElementById("talent-modal");
+        if (modal && !modal.classList.contains("hidden")) {
+          window.openTalentModal();
+        }
+        return true;
+      };
+
+      window.quickPickNextTalentBranch = function (branchIdx) {
+        if (!playerHero || !playerHero.heroCfg) return false;
+        const tierLvl = getNextAvailableTalentTier(playerHero);
+        if (!tierLvl) {
+          spawnFloatText(
+            playerHero.mesh.position,
+            (playerHero.skillPoints || 0) <= 0
+              ? "NO SKILL POINTS!"
+              : "NO TALENT TIER UNLOCKED!",
+            "#fb7185",
+            13,
+          );
+          return false;
+        }
+        const pair = playerHero.heroCfg.talents[tierLvl];
+        const chosen = pair && pair[branchIdx];
+        if (!chosen) return false;
+        return window.pickTalent(tierLvl, chosen.id);
       };
 
       function updateAbilityUpgradeButtons() {
         if (!playerHero) return;
+        const sp = playerHero.skillPoints || 0;
         const banner = document.getElementById("skill-points-banner");
-        if (playerHero.skillPoints > 0) {
+        if (sp > 0) {
           banner.classList.remove("hidden");
-          document.getElementById("skill-points-count").textContent =
-            playerHero.skillPoints;
+          document.getElementById("skill-points-count").textContent = sp;
         } else {
           banner.classList.add("hidden");
         }
 
         const attrBtn = document.getElementById("lvlup-ATTR");
-        if (playerHero.skillPoints > 0 && playerHero.attrBonusRank < 10)
-          attrBtn.classList.remove("hidden");
+        const statsCard = document.getElementById("btn-stats-cmd");
+        const canStats = canHeroLevelAttributes(playerHero);
+        if (canStats) attrBtn.classList.remove("hidden");
         else attrBtn.classList.add("hidden");
+        if (statsCard)
+          statsCard.classList.toggle(
+            "ctrl-eligible-card",
+            isCtrlHeld && canStats,
+          );
         document.getElementById("attr-rank-text").textContent =
-          `${playerHero.attrBonusRank}/10`;
+          `${playerHero.attrBonusRank}/${MAX_ATTR_RANK}`;
+
+        const nextTalentTier = getNextAvailableTalentTier(playerHero);
+        const canTalent = nextTalentTier !== null;
+        const talUpBtn = document.getElementById("lvlup-TALENT");
+        const talCard = document.getElementById("btn-open-talents");
+        const talDot = document.getElementById("talent-notif-dot");
+        if (talUpBtn) talUpBtn.classList.toggle("hidden", !canTalent);
+        if (talCard)
+          talCard.classList.toggle(
+            "ctrl-eligible-card",
+            isCtrlHeld && canTalent,
+          );
+        if (talDot) talDot.classList.toggle("hidden", !canTalent);
 
         ["Q", "W", "E", "R"].forEach((k) => {
           const lvl = playerHero.abilityLevels[k] || 0;
           const maxR = getAbilityMaxRank(k);
           const btn = document.getElementById(`lvlup-${k}`);
           const cardBtn = document.getElementById(`ab-btn-${k}`);
-          if (canHeroLevelAbility(playerHero, k))
-            btn.classList.remove("hidden");
+          const canUpSkill = canHeroLevelAbility(playerHero, k);
+          if (canUpSkill) btn.classList.remove("hidden");
           else btn.classList.add("hidden");
+          if (cardBtn)
+            cardBtn.classList.toggle(
+              "ctrl-eligible-card",
+              isCtrlHeld && canUpSkill,
+            );
 
           if (cardBtn) {
             cardBtn.classList.toggle("opacity-55", lvl === 0);
@@ -34101,6 +36129,10 @@ diffuseColor.rgb *= mix(0.58, 1.04, groundAO) * canopyShade;`,
       };
 
       window.selectAbilityUI = function (key) {
+        if (isCtrlHeld || (window.event && window.event.ctrlKey)) {
+          window.levelUpAbility(key);
+          return;
+        }
         if (
           !playerHero ||
           playerHero.dead ||
@@ -34417,15 +36449,19 @@ diffuseColor.rgb *= mix(0.58, 1.04, groundAO) * canopyShade;`,
         const grp = new THREE.Group();
         grp.position.set(cfg.x, gy + 0.14, cfg.z);
 
+        if (!nxg.ready) nxgInit();
         const outerRing = new THREE.Mesh(
           new THREE.RingGeometry(cfg.radius - 0.35, cfg.radius, 48),
           new THREE.MeshBasicMaterial({
             color: cfg.colorHex,
             side: THREE.DoubleSide,
             transparent: true,
-            opacity: 0.85,
+            opacity: 0.72,
+            depthWrite: false,
+            blending: THREE.AdditiveBlending,
           }),
         );
+        outerRing.material.color.multiplyScalar(1.2);
         outerRing.rotation.x = -Math.PI / 2;
         grp.add(outerRing);
 
@@ -34433,12 +36469,15 @@ diffuseColor.rgb *= mix(0.58, 1.04, groundAO) * canopyShade;`,
           new THREE.CircleGeometry(cfg.radius * 0.94, 36),
           new THREE.MeshBasicMaterial({
             color: cfg.secondaryHex || cfg.colorHex,
+            map: nxg.tex.rune,
             side: THREE.DoubleSide,
             transparent: true,
-            opacity: 0.2,
+            opacity: 0.42,
             depthWrite: false,
+            blending: THREE.AdditiveBlending,
           }),
         );
+        innerDisk.material.color.multiplyScalar(1.35);
         innerDisk.rotation.x = -Math.PI / 2;
         innerDisk.position.y = 0.02;
         grp.add(innerDisk);
@@ -34773,6 +36812,7 @@ diffuseColor.rgb *= mix(0.58, 1.04, groundAO) * canopyShade;`,
           }
         }
         caster.castAnim = 0.45;
+        nxgCastFx(caster, key);
 
         if (caster.isPlayer) {
           if (key === "R") {
@@ -40107,7 +42147,7 @@ diffuseColor.rgb *= mix(0.58, 1.04, groundAO) * canopyShade;`,
                       : u.type === "tower"
                         ? 9.2
                         : u.type === "hero"
-                          ? 4.3
+                          ? 4.95
                           : 3.0;
           const sc = projectToScreen(u.mesh.position, yOff);
           const isVis =
@@ -41148,7 +43188,7 @@ diffuseColor.rgb *= mix(0.58, 1.04, groundAO) * canopyShade;`,
             ttMeta.innerHTML = `<span class="text-sky-300"><i class="fa-solid fa-droplet mr-1"></i>${sk.mana} Mana</span><span class="text-amber-300"><i class="fa-solid fa-clock mr-1"></i>${effCd}s CD</span><span class="text-emerald-300">${sk.targetType === "self" ? "Self / Aura" : "Targeted"}</span>`;
             ttDesc.textContent = sk.desc;
             if (canHeroLevelAbility(playerHero, tipId)) {
-              ttHint.textContent = `Click [+1] above to ${lvl === 0 ? "learn" : "upgrade"} • Press [${tipId}] to cast`;
+              ttHint.textContent = `[Ctrl+${tipId}], Ctrl+Click, or [+1] to ${lvl === 0 ? "learn" : "upgrade"} • [${tipId}] to cast`;
             } else if (lvl === 0) {
               ttHint.textContent = reqLvl
                 ? `Requires Hero Level ${reqLvl} & 1 Skill Point`
@@ -41164,26 +43204,28 @@ diffuseColor.rgb *= mix(0.58, 1.04, groundAO) * canopyShade;`,
             const unlocked = [10, 15, 20, 25].filter(
               (l) => playerHero.chosenTalents[l],
             ).length;
+            const nextTier = getNextAvailableTalentTier(playerHero);
             ttTitle.textContent = "Hero Talent Tree";
             ttBadge.textContent = "T";
             ttRank.textContent = `${unlocked} / 4 Chosen`;
-            ttMeta.innerHTML = `<span class="text-amber-300">Tiers: Lv 10 • 15 • 20 • 25</span>`;
+            ttMeta.innerHTML = `<span class="text-amber-300">Cost: 1 Skill Point • Tiers: Lv 10, 15, 20, 25</span>`;
             ttDesc.textContent =
-              "Choose permanent specialization upgrades as your Champion reaches milestone levels.";
-            ttHint.textContent = "Click or press [T] to open Talent Tree";
+              "Spend 1 Skill Point per milestone tier to unlock permanent specialization perks.";
+            ttHint.textContent = nextTier
+              ? `Lv ${nextTier} Ready! Press [Ctrl+1] Left or [Ctrl+2] Right • [T] to view tree`
+              : "Press [T] to open Talent Tree • Quick-pick: [Ctrl+1] / [Ctrl+2]";
             return true;
           }
           if (tipId === "stats") {
             ttTitle.textContent = "Attribute Bonus";
-            ttBadge.textContent = "STATS";
-            ttRank.textContent = `Rank ${playerHero.attrBonusRank} / 7`;
+            ttBadge.textContent = "CTRL+U";
+            ttRank.textContent = `Rank ${playerHero.attrBonusRank} / ${MAX_ATTR_RANK}`;
             ttMeta.innerHTML = `<span class="text-emerald-300">+2 STR • +2 AGI • +2 INT per rank</span>`;
             ttDesc.textContent =
               "Grants +44 Max HP, +28 Max Mana, +4 Attack Damage, +0.4 Armor, and +3% Attack Speed.";
-            ttHint.textContent =
-              playerHero.skillPoints > 0 && playerHero.attrBonusRank < 7
-                ? "Click to spend 1 Upgrade Point (+2 All Stats)"
-                : "Earn Upgrade Points by leveling up";
+            ttHint.textContent = canHeroLevelAttributes(playerHero)
+              ? "Click, press [Ctrl+U], or Ctrl+Click to spend 1 Skill Point (+2 All Stats)"
+              : "Earn Skill Points by leveling up";
             return true;
           }
           if (tipId === "attrs") {
@@ -43460,7 +45502,61 @@ diffuseColor.rgb *= mix(0.58, 1.04, groundAO) * canopyShade;`,
           }
         }
 
+        if (e.key === "Control") {
+          setCtrlQuickUpgradeVisuals(true);
+          return;
+        }
+
         const k = e.key.toUpperCase();
+        const talentModalEl = document.getElementById("talent-modal");
+        const isTalentModalOpen =
+          talentModalEl && !talentModalEl.classList.contains("hidden");
+
+        // Ctrl + Q / W / E / R -> Quick-Upgrade Skill using 1 Skill Point (without casting)
+        if (
+          e.ctrlKey &&
+          !e.altKey &&
+          !e.metaKey &&
+          ["Q", "W", "E", "R"].includes(k)
+        ) {
+          e.preventDefault();
+          window.levelUpAbility(k);
+          return;
+        }
+
+        // Ctrl + U or Ctrl + G -> Quick-Upgrade Attributes (+2 All Stats) using 1 Skill Point
+        if (e.ctrlKey && !e.altKey && !e.metaKey && (k === "U" || k === "G")) {
+          e.preventDefault();
+          window.levelUpAttributes();
+          return;
+        }
+
+        // Ctrl + 1 / Ctrl + 2 -> Instant Left / Right Talent Branch unlock using 1 Skill Point
+        if (
+          e.ctrlKey &&
+          !e.altKey &&
+          !e.metaKey &&
+          (e.key === "1" || e.key === "2")
+        ) {
+          e.preventDefault();
+          window.quickPickNextTalentBranch(e.key === "1" ? 0 : 1);
+          return;
+        }
+
+        // When Talent Modal is open, 1 / ArrowLeft or 2 / ArrowRight picks Left / Right Talent branch
+        if (isTalentModalOpen && !e.ctrlKey && !e.altKey && !e.metaKey) {
+          if (e.key === "1" || e.key === "ArrowLeft") {
+            e.preventDefault();
+            window.quickPickNextTalentBranch(0);
+            return;
+          }
+          if (e.key === "2" || e.key === "ArrowRight") {
+            e.preventDefault();
+            window.quickPickNextTalentBranch(1);
+            return;
+          }
+        }
+
         if (["Q", "W", "E", "R"].includes(k)) {
           e.preventDefault();
           attackMovePrimed = false;
@@ -43485,7 +45581,12 @@ diffuseColor.rgb *= mix(0.58, 1.04, groundAO) * canopyShade;`,
           }
           return;
         }
-        if (["1", "2", "3", "4", "5", "6"].includes(e.key)) {
+        if (
+          ["1", "2", "3", "4", "5", "6"].includes(e.key) &&
+          !e.ctrlKey &&
+          !e.altKey &&
+          !e.metaKey
+        ) {
           useInventorySlot(parseInt(e.key, 10) - 1);
           return;
         }
@@ -43502,9 +45603,8 @@ diffuseColor.rgb *= mix(0.58, 1.04, groundAO) * canopyShade;`,
         } else if ((k === "S" || k === "H") && !e.ctrlKey) {
           window.stopHeroCommand();
         } else if (k === "T") {
-          const tm = document.getElementById("talent-modal");
-          if (tm.classList.contains("hidden")) window.openTalentModal();
-          else tm.classList.add("hidden");
+          if (isTalentModalOpen) talentModalEl.classList.add("hidden");
+          else window.openTalentModal();
         } else if (k === "B") {
           const modal = document.getElementById("shop-modal");
           if (modal.classList.contains("hidden")) {
@@ -43535,7 +45635,19 @@ diffuseColor.rgb *= mix(0.58, 1.04, groundAO) * canopyShade;`,
         if (e.key === "ArrowRight") panKeys.right = true;
       });
 
+      document
+        .getElementById("hud-attr-box")
+        ?.addEventListener("click", (e) => {
+          if (e.ctrlKey || isCtrlHeld) {
+            e.stopPropagation();
+            window.levelUpAttributes();
+          }
+        });
+
       window.addEventListener("keyup", (e) => {
+        if (e.key === "Control") {
+          setCtrlQuickUpgradeVisuals(false);
+        }
         if (e.key.toUpperCase() === "A") {
           isAKeyHeld = false;
           updateCanvasCursorState();
@@ -43558,6 +45670,7 @@ diffuseColor.rgb *= mix(0.58, 1.04, groundAO) * canopyShade;`,
         }
       });
       window.addEventListener("blur", () => {
+        setCtrlQuickUpgradeVisuals(false);
         isAKeyHeld = false;
         panKeys.up = panKeys.down = panKeys.left = panKeys.right = false;
         updateCanvasCursorState();
@@ -43829,10 +45942,29 @@ diffuseColor.rgb *= mix(0.58, 1.04, groundAO) * canopyShade;`,
                     ? 112
                     : 135;
         const scaleMult = (userSettings.renderScale || defaultScale) / 100;
-        const effectiveDpr = Math.max(
+        let effectiveDpr = Math.max(
           0.45,
-          Math.min(window.devicePixelRatio || 1, dprCap) * scaleMult,
+          Math.min(window.devicePixelRatio || 1, dprCap) *
+            scaleMult *
+            nxg.dynResScale,
         );
+        if (userSettings.dynResEnabled !== false) {
+          // Pixel budget per preset: a 4K or high-DPI screen never renders more pixels than the tier is meant to carry
+          const pxBudget = isUltraMax
+            ? 8.4e6
+            : preset === "ultra"
+              ? 5.6e6
+              : preset === "high"
+                ? 4.2e6
+                : preset === "balanced"
+                  ? 3.0e6
+                  : preset === "performance"
+                    ? 2.0e6
+                    : 1.2e6;
+          const cssPx = Math.max(1, window.innerWidth * window.innerHeight);
+          if (cssPx * effectiveDpr * effectiveDpr > pxBudget)
+            effectiveDpr = Math.max(0.45, Math.sqrt(pxBudget / cssPx));
+        }
         const bloomScale = isUltraMax
           ? 0.6
           : preset === "ultra"
@@ -44008,6 +46140,7 @@ diffuseColor.rgb *= mix(0.58, 1.04, groundAO) * canopyShade;`,
               : isBalanced
                 ? 0.64
                 : 0.54;
+        if (nxg.ready) nxgApplyQuality(userSettings.qualityPreset);
         window.updateGraphicsSettings();
         renderer.shadowMap.needsUpdate = true;
 
@@ -44147,6 +46280,7 @@ diffuseColor.rgb *= mix(0.58, 1.04, groundAO) * canopyShade;`,
         renderer.shadowMap.enabled = userSettings.shadowsEnabled;
         sunLight.castShadow = userSettings.shadowsEnabled;
         renderer.shadowMap.needsUpdate = true;
+        if (nxg.ready) nxgSyncSettings();
       };
 
       window.autoTuneGraphicsForHardware = function () {
@@ -44315,9 +46449,9 @@ diffuseColor.rgb *= mix(0.58, 1.04, groundAO) * canopyShade;`,
           selectEl.classList.remove("hidden");
         }
         previewStageGroup.visible = true;
-        stageKeyLight.intensity = 4.2;
-        stageFillLight.intensity = 2.2;
-        stageRimLight.intensity = 3.8;
+        stageKeyLight.intensity = 230;
+        stageFillLight.intensity = 46;
+        stageRimLight.intensity = 340;
         ensureChampionShowcaseReady(true);
         const h = HERO_ROSTER[selectedHeroId];
         if (h) {
@@ -44411,9 +46545,9 @@ diffuseColor.rgb *= mix(0.58, 1.04, groundAO) * canopyShade;`,
         updateCanvasCursorState();
         sfx.setMusicScene("intro");
         previewStageGroup.visible = true;
-        stageKeyLight.intensity = 4.2;
-        stageFillLight.intensity = 2.2;
-        stageRimLight.intensity = 3.8;
+        stageKeyLight.intensity = 230;
+        stageFillLight.intensity = 46;
+        stageRimLight.intensity = 340;
         worldUiLayer.style.display = "none";
         const titleEl = document.getElementById("title-intro-overlay");
         if (titleEl) titleEl.classList.add("hidden");
@@ -44783,9 +46917,12 @@ diffuseColor.rgb *= mix(0.58, 1.04, groundAO) * canopyShade;`,
         ) {
           renderer.shadowMap.needsUpdate = true;
         }
+        nxgTick(dt);
         if (
           composer &&
-          (userSettings.bloomEnabled || userSettings.cinematicEnabled)
+          (userSettings.bloomEnabled ||
+            userSettings.cinematicEnabled ||
+            userSettings.aoEnabled)
         )
           composer.render();
         else renderer.render(scene, camera);
@@ -44801,16 +46938,18 @@ diffuseColor.rgb *= mix(0.58, 1.04, groundAO) * canopyShade;`,
         syncInfinityLockUI();
         if (isTouchCapableDevice()) {
           window.toggleMobileTouchPad(true);
-          window.setGraphicsQuality("balanced");
+          window.setGraphicsQuality(nxgStartupPreset(true));
         } else {
           window.toggleMobileTouchPad(false);
-          window.setGraphicsQuality("balanced");
+          window.setGraphicsQuality(nxgStartupPreset(false));
         }
 
         // Stage 1: Core visible Title Screen world (sky dome + arena terrain)
         initAtmosphericSkyDome();
         const tSky = performance.now();
         buildArenaEnvironment();
+        nxgInit();
+        nxgRestorePrefs();
         const tArena = performance.now();
 
         // Hide Sky-Altar stage during Title Screen so GPU skips unused altar draw calls
