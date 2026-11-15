@@ -9,7 +9,7 @@
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="mobile-web-app-capable" content="yes" />
     <title>
-      Infinite War • Grandmaster Sovereign Multiplayer Edition (v134)
+      Infinite War • Grandmaster Sovereign Multiplayer Edition (v135)
     </title>
     <link rel="preconnect" href="https://unpkg.com" crossorigin />
     <link rel="preconnect" href="https://cdn.tailwindcss.com" crossorigin />
@@ -1547,7 +1547,7 @@
             class="dota-stone-panel px-2.5 py-1.5 rounded-xl text-[11px] sm:text-xs font-mono font-black text-amber-300 border border-amber-400/65 shadow-lg tracking-wider"
             title="Game Version"
           >
-            v134
+            v135
           </span>
         </div>
       </div>
@@ -4336,8 +4336,8 @@
                 MULTIPLAYER ARENA LOBBY
               </h2>
               <p class="text-xs text-slate-300">
-                4-Player Optimized (2v2 / Co-op) • Cross-Tab LAN • Online P2P
-                Room Code
+                5v5 Arena (Up to 10 Players) • Cross-Tab LAN • Online P2P Room
+                Code
               </p>
             </div>
           </div>
@@ -4721,7 +4721,7 @@
             <div class="flex flex-wrap items-center justify-between gap-1.5">
               <span
                 class="font-cinzel font-bold text-amber-300 uppercase tracking-wider"
-                >Arena Roster & Live Rooms (4P Ready)</span
+                >Arena Roster & Live Rooms (10P • 5v5 Ready)</span
               >
               <div class="flex items-center gap-1.5">
                 <button
@@ -4729,9 +4729,9 @@
                   id="btn-mp-autobalance"
                   onclick="window.autoBalanceMpTeams()"
                   class="hidden px-2 py-0.5 rounded bg-amber-500/20 hover:bg-amber-500/30 border border-amber-400/50 text-amber-200 font-cinzel font-bold text-[10px] transition"
-                  title="Evenly split connected players into Radiant vs Dire (2v2)"
+                  title="Evenly split connected players into Radiant vs Dire (up to 5v5)"
                 >
-                  <i class="fa-solid fa-scale-balanced mr-1"></i>Balance 2v2
+                  <i class="fa-solid fa-scale-balanced mr-1"></i>Balance 5v5
                 </button>
                 <span
                   id="mp-room-badge"
@@ -8362,15 +8362,20 @@
               (!packet.snap || !packet.snap.full)) ||
             packet.type === "PING_REQ" ||
             packet.type === "PING_PONG";
-          const mayNeedChunk =
-            (packet.type === "WORLD_SNAP" && packet.snap && packet.snap.full) ||
-            packet.type === "LOBBY_SYNC";
-          const raw = mayNeedChunk ? JSON.stringify(packet) : null;
-          const est = raw ? raw.length : estimatePacketBytes(packet);
+          const raw = JSON.stringify(packet);
+          const est = raw.length;
           mpState.conns.forEach((conn, key) => {
-            if (useFastChannel) {
+            if (useFastChannel && est <= 12000) {
               const fastDc = mpState.fastDataChannels.get(key);
-              if (fastDc && mpSendNativeFastDc(fastDc, packet, est)) return;
+              if (fastDc && fastDc.readyState === "open") {
+                if (fastDc.bufferedAmount <= 24576) {
+                  try {
+                    mpState.bytesSent = (mpState.bytesSent || 0) + est;
+                    fastDc.send(raw);
+                  } catch (e) {}
+                }
+                return;
+              }
             }
             mpSendOverConn(conn, packet, raw, est);
           });
@@ -8546,7 +8551,7 @@
         });
         const modeTag = mpState.players.size >= 2 ? ` • ${radP}v${direP}` : "";
         if (badge)
-          badge.textContent = `${mpState.role.toUpperCase()} • ROOM [${mpState.roomCode}] (${mpState.players.size}/4P${modeTag})`;
+          badge.textContent = `${mpState.role.toUpperCase()} • ROOM [${mpState.roomCode}] (${mpState.players.size}/10P${modeTag})`;
         if (btnLabel)
           btnLabel.textContent = `Room ${mpState.roomCode} (${mpState.players.size}P)`;
         if (launchBtn) {
@@ -9212,7 +9217,7 @@
                 if (roleLabel === "host") {
                   setMpConnStatus(
                     "connected",
-                    `Connected (${pairType}) • ${mpState.conns.size}/3 Guests (${mpState.conns.size + 1}P Total)`,
+                    `Connected (${pairType}) • ${mpState.conns.size}/9 Guests (${mpState.conns.size + 1}P Total)`,
                   );
                 } else {
                   setMpConnStatus(
@@ -9282,7 +9287,7 @@
               mpState.conns.set(conn.peer, conn);
               setMpConnStatus(
                 "connected",
-                `Remote Players Connected: ${mpState.conns.size}/3 Guests (${mpState.conns.size + 1}P Total)`,
+                `Remote Players Connected: ${mpState.conns.size}/9 Guests (${mpState.conns.size + 1}P Total)`,
               );
               mpSendOverConn(conn, {
                 type: "LOBBY_SYNC",
@@ -9338,7 +9343,7 @@
               if (mpState.conns.size > 0) {
                 setMpConnStatus(
                   "connected",
-                  `Remote Players Connected: ${mpState.conns.size}/3 Guests (${mpState.conns.size + 1}P Total)`,
+                  `Remote Players Connected: ${mpState.conns.size}/9 Guests (${mpState.conns.size + 1}P Total)`,
                 );
               } else {
                 setMpConnStatus(
@@ -9738,7 +9743,28 @@
           return;
         }
 
+        if (msg.type === "ROOM_FULL" && mpState.role === "guest") {
+          window.leaveMultiplayerRoom();
+          setMpConnStatus("error", "Room is full (10/10 players maximum).");
+          return;
+        }
         if (msg.type === "JOIN_REQ" && mpState.role === "host") {
+          if (
+            mpState.players.size >= 10 &&
+            !mpState.players.has(msg.senderId)
+          ) {
+            const pendingConn = Array.from(mpState.conns.values()).find(
+              (c) => !c._playerId,
+            );
+            if (pendingConn) {
+              mpSendOverConn(pendingConn, {
+                type: "ROOM_FULL",
+                senderId: mpState.myId,
+                roomCode: mpState.roomCode,
+              });
+            }
+            return;
+          }
           const pRec = { ...msg.player, id: msg.senderId, isHost: false };
           mpState.players.set(msg.senderId, pRec);
           mpBroadcast({
@@ -11183,12 +11209,40 @@
                 playerHero.itemCooldowns[ik] - dt,
               );
           }
+          if (playerHero.tpChannel) {
+            playerHero.tpChannel.timer = Math.max(
+              0,
+              playerHero.tpChannel.timer - dt,
+            );
+            const tpBox = getHudEl("tp-channel-box");
+            if (tpBox) {
+              tpBox.classList.remove("hidden");
+              const pct = Math.min(
+                100,
+                ((playerHero.tpChannel.duration - playerHero.tpChannel.timer) /
+                  playerHero.tpChannel.duration) *
+                  100,
+              );
+              const fill = getHudEl("tp-channel-fill");
+              const secEl = getHudEl("tp-channel-sec");
+              if (fill) fill.style.width = `${pct.toFixed(1)}%`;
+              if (secEl)
+                secEl.textContent = playerHero.tpChannel.timer.toFixed(1);
+            }
+            if (playerHero.tpChannel.timer <= 0 || playerHero.dead) {
+              playerHero.tpChannel = null;
+              const tpBox = getHudEl("tp-channel-box");
+              if (tpBox) tpBox.classList.add("hidden");
+            }
+          }
         }
 
         // 3. Smooth 60 FPS critical-damped interpolation, ongoing hero ability visuals & skeletal animations
         const interpAlpha = 1 - Math.exp(-18.0 * dt);
         for (let i = 0; i < units.length; i++) {
           const u = units[i];
+          if (u.hitFlashTimer > 0)
+            u.hitFlashTimer = Math.max(0, u.hitFlashTimer - dt);
           if (u.swingAnim > 0) u.swingAnim = Math.max(0, u.swingAnim - dt);
           if (u.castAnim > 0) u.castAnim = Math.max(0, u.castAnim - dt);
           if (u.celebrateTimer > 0)
@@ -11922,24 +11976,30 @@
           const remoteCount = Math.max(1, mpState.conns.size);
           const targetInterval =
             mpState.transport === "online"
-              ? remoteCount >= 2
-                ? 0.09
-                : 0.075
+              ? remoteCount >= 5
+                ? 0.1
+                : remoteCount >= 2
+                  ? 0.085
+                  : 0.075
               : 0.05;
           mpState.syncAccum += dt;
           mpState.heartbeatAccum = (mpState.heartbeatAccum || 0) + dt;
           if (mpState.syncAccum >= targetInterval) {
-            // Check DataChannel buffer congestion BEFORE mutating lastEntitySig so deltas are never silently lost
-            let congested = false;
+            // Only pause if ALL remote peers are simultaneously congested; otherwise mpBroadcast skips slow peers individually
+            let openPeers = 0;
+            let congestedPeers = 0;
             mpState.conns.forEach((conn, key) => {
               const fastDc = mpState.fastDataChannels.get(key);
               const dc =
                 fastDc && fastDc.readyState === "open"
                   ? fastDc
                   : conn.dataChannel || conn._dc;
-              if (dc && dc.bufferedAmount > 16384) congested = true;
+              if (dc && dc.readyState === "open") {
+                openPeers++;
+                if (dc.bufferedAmount > 24576) congestedPeers++;
+              }
             });
-            if (!congested) {
+            if (openPeers === 0 || congestedPeers < openPeers) {
               mpState.syncAccum = 0;
               const snap = buildAuthoritativeSnapshot();
               const hasChanges = Boolean(
@@ -34388,6 +34448,7 @@ diffuseColor.rgb *= mix(0.58, 1.04, groundAO) * canopyShade;`,
         let currentVisibleKey = null;
         let hudAccum = 0;
         let inspAccum = 0;
+        let portraitClock = 0;
         let hudRenderedDead = false;
         let lastInspectedUnitId = null;
         const RT_SIZE = 192;
@@ -34683,6 +34744,7 @@ diffuseColor.rgb *= mix(0.58, 1.04, groundAO) * canopyShade;`,
         }
 
         function update(dt, clockTime) {
+          portraitClock += Math.min(0.1, Math.max(0, dt || 0));
           if (!userSettings.portraits3dEnabled) {
             const hudC = document.getElementById("hud-portrait-canvas");
             const iconEl = document.getElementById("hud-portrait-icon");
@@ -34739,7 +34801,7 @@ diffuseColor.rgb *= mix(0.58, 1.04, groundAO) * canopyShade;`,
                   playerHero.heroCfg,
                   playerHero.team,
                   hudC,
-                  clockTime,
+                  portraitClock,
                   stepDt,
                   playerHero.hitFlashTimer > 0,
                   false,
@@ -34772,7 +34834,7 @@ diffuseColor.rgb *= mix(0.58, 1.04, groundAO) * canopyShade;`,
                 inspectedUnit.heroCfg,
                 inspectedUnit.team,
                 inspC,
-                clockTime + 1.7,
+                portraitClock + 1.7,
                 stepDt,
                 inspectedUnit.hitFlashTimer > 0,
                 inspectedUnit.dead,
@@ -34822,12 +34884,18 @@ diffuseColor.rgb *= mix(0.58, 1.04, groundAO) * canopyShade;`,
         document.getElementById("hud-portrait-name").textContent =
           radCfg.shortName;
 
+        const hudTeam =
+          playerHero && playerHero.team
+            ? playerHero.team
+            : mpState.active
+              ? mpState.myTeam
+              : "radiant";
         const hudC = document.getElementById("hud-portrait-canvas");
         if (
           hudC &&
           portraitStudio.renderRigToCanvas(
             radCfg,
-            "radiant",
+            hudTeam,
             hudC,
             0.2,
             0.016,
@@ -37456,6 +37524,14 @@ diffuseColor.rgb *= mix(0.58, 1.04, groundAO) * canopyShade;`,
             statusText.textContent = `MP HOST • ${mpState.roomCode} (${mpState.players.size}P)${mpState.iceModeLabel ? " • " + mpState.iceModeLabel : ""}`;
           if (p2Pill) p2Pill.classList.add("hidden");
 
+          const SPAWN_OFFSETS_5V5 = [
+            [0, 0],
+            [5.5, -3.5],
+            [-3.5, 5.5],
+            [9.5, 2.0],
+            [2.0, 9.5],
+          ];
+          const usedHeroIds = new Set();
           let radCount = 0;
           let direCount = 0;
           mpState.players.forEach((p) => {
@@ -37463,14 +37539,15 @@ diffuseColor.rgb *= mix(0.58, 1.04, groundAO) * canopyShade;`,
             const hCfg =
               HERO_ROSTER[isMe ? selectedHeroId : p.heroId] ||
               HERO_ROSTER.aurelius;
+            usedHeroIds.add(hCfg.id);
             const team = p.team === "dire" ? "dire" : "radiant";
-            const idx = team === "radiant" ? radCount++ : direCount++;
-            const sx =
-              (team === "radiant" ? -108 : 108) +
-              (idx % 2 === 0 ? 0 : team === "radiant" ? 5 : -5);
-            const sz =
-              (team === "radiant" ? 108 : -108) +
-              (idx % 2 === 0 ? 0 : team === "radiant" ? 5 : -5);
+            const idx = Math.min(
+              4,
+              team === "radiant" ? radCount++ : direCount++,
+            );
+            const [ox, oz] = SPAWN_OFFSETS_5V5[idx];
+            const sx = team === "radiant" ? -112 + ox : 112 - ox;
+            const sz = team === "radiant" ? 112 - oz : -112 + oz;
             const heroEnt = new MobaEntity({
               name: `${hCfg.name} (${p.name})`,
               team,
@@ -37499,47 +37576,38 @@ diffuseColor.rgb *= mix(0.58, 1.04, groundAO) * canopyShade;`,
             units.push(heroEnt);
           });
 
-          if (mpState.fillBots && direCount === 0) {
-            const dBot = new MobaEntity({
-              name: `${direCfg1.name} [${prof.label}]`,
-              team: "dire",
-              type: "hero",
-              isPlayer: false,
-              heroCfg: direCfg1,
-              x: 108,
-              z: -108,
-              ...scaleBotStatsByDifficulty(direCfg1.stats),
-              radius: 1.4,
-              gold: 650,
-              goldBounty: [280, 340],
-              xpBounty: 280,
-            });
-            dBot.atkSpeedMult += prof.atkSpdBonus;
-            dBot.abilityLevels.Q = 1;
-            dBot.skillPoints = 0;
-            units.push(dBot);
-            aiHeroes.push(dBot);
-          }
-          if (mpState.fillBots && radCount === 0) {
-            const rBot = new MobaEntity({
-              name: `${allyCfg.name} [${prof.label}]`,
-              team: "radiant",
-              type: "hero",
-              isPlayer: false,
-              heroCfg: allyCfg,
-              x: -108,
-              z: 108,
-              ...scaleBotStatsByDifficulty(allyCfg.stats),
-              radius: 1.4,
-              gold: 650,
-              goldBounty: [280, 340],
-              xpBounty: 280,
-            });
-            rBot.atkSpeedMult += prof.atkSpdBonus;
-            rBot.abilityLevels.Q = 1;
-            rBot.skillPoints = 0;
-            units.push(rBot);
-            aiHeroes.push(rBot);
+          if (mpState.fillBots) {
+            const botPool = Object.values(HERO_ROSTER).filter(
+              (h) => !usedHeroIds.has(h.id),
+            );
+            let poolIdx = 0;
+            const spawnTeamBot = (team, slotIdx) => {
+              const bCfg = botPool[poolIdx++ % botPool.length] || direCfg1;
+              const [ox, oz] = SPAWN_OFFSETS_5V5[Math.min(4, slotIdx)];
+              const sx = team === "radiant" ? -112 + ox : 112 - ox;
+              const sz = team === "radiant" ? 112 - oz : -112 + oz;
+              const bot = new MobaEntity({
+                name: `${bCfg.name} [${prof.label}]`,
+                team,
+                type: "hero",
+                isPlayer: false,
+                heroCfg: bCfg,
+                x: sx,
+                z: sz,
+                ...scaleBotStatsByDifficulty(bCfg.stats),
+                radius: 1.4,
+                gold: 650,
+                goldBounty: [280, 340],
+                xpBounty: 280,
+              });
+              bot.atkSpeedMult += prof.atkSpdBonus;
+              bot.abilityLevels.Q = 1;
+              bot.skillPoints = 0;
+              units.push(bot);
+              aiHeroes.push(bot);
+            };
+            while (radCount < 5) spawnTeamBot("radiant", radCount++);
+            while (direCount < 5) spawnTeamBot("dire", direCount++);
           }
         } else if (mpState.active && mpState.transport === "local2p") {
           if (statusPill) statusPill.classList.remove("hidden");
@@ -43966,13 +44034,12 @@ diffuseColor.rgb *= mix(0.58, 1.04, groundAO) * canopyShade;`,
         for (let i = 0; i < 6; i++) {
           const it = unit.inventory[i];
           const slot = document.createElement("div");
-          slot.className = `w-7 h-7 rounded bg-slate-950 border ${it ? "border-amber-500/65" : "border-slate-800"} flex items-center justify-center relative`;
+          slot.dataset.hudTip = `insp_inv_${i}`;
+          slot.className = `w-7 h-7 rounded bg-slate-950 border ${it ? "border-amber-500/65 hover:border-amber-300 cursor-pointer" : "border-slate-800 hover:border-slate-600"} flex items-center justify-center relative transition`;
           if (it) {
-            slot.innerHTML = `<i class="fa-solid ${it.icon} ${it.color} text-xs"></i>`;
-            slot.title = `Slot ${i + 1}: ${it.name} — ${it.desc}`;
+            slot.innerHTML = `<i class="fa-solid ${it.icon} ${it.color} text-xs pointer-events-none"></i>`;
           } else {
-            slot.innerHTML = `<span class="text-[8px] font-mono text-slate-700">${i + 1}</span>`;
-            slot.title = `Slot ${i + 1}: Empty`;
+            slot.innerHTML = `<span class="text-[8px] font-mono text-slate-700 pointer-events-none">${i + 1}</span>`;
           }
           invGrid.appendChild(slot);
         }
@@ -45335,6 +45402,29 @@ diffuseColor.rgb *= mix(0.58, 1.04, groundAO) * canopyShade;`,
               "Drag or Alt+Click to swap • Right-Click to sell for 60% gold";
             return true;
           }
+          if (tipId.startsWith("insp_inv_")) {
+            if (!inspectedUnit || inspectedUnit.type !== "hero") return false;
+            const idx = parseInt(tipId.split("_")[2], 10);
+            const it = inspectedUnit.inventory[idx];
+            if (!it) {
+              ttTitle.textContent = `${inspectedUnit.name} • Slot ${idx + 1}`;
+              ttBadge.textContent = "EMPTY";
+              ttRank.textContent = "Unoccupied";
+              ttMeta.innerHTML = `<span class="text-slate-400">Inspected Hero Inventory</span>`;
+              ttDesc.textContent = "This inventory slot is currently empty.";
+              ttHint.textContent = "Inspecting hero loadout";
+              return true;
+            }
+            ttTitle.textContent = it.name;
+            ttBadge.textContent = `Slot ${idx + 1}`;
+            ttRank.textContent = it.active ? "Active Relic" : "Passive Relic";
+            ttMeta.innerHTML = `<span class="text-amber-300"><i class="fa-solid fa-coins mr-1"></i>${it.cost || 0}g Value</span><span class="text-slate-300">${inspectedUnit.name}</span>`;
+            ttDesc.textContent = it.desc;
+            ttHint.textContent = it.active
+              ? "Active item owned by inspected hero"
+              : "Grants permanent passive bonuses to owner";
+            return true;
+          }
           if (tipId === "dragon") {
             ttTitle.textContent = "Elder Sky Dragon Active";
             ttBadge.textContent = "BOSS";
@@ -45394,6 +45484,28 @@ diffuseColor.rgb *= mix(0.58, 1.04, groundAO) * canopyShade;`,
           }
         });
         document.addEventListener("click", (e) => {
+          const inspItemSlot = e.target.closest('[data-hud-tip^="insp_inv_"]');
+          if (inspItemSlot) {
+            e.stopPropagation();
+            if (
+              activeTarget === inspItemSlot &&
+              !tt.classList.contains("hidden")
+            ) {
+              activeTarget = null;
+              tt.classList.add("hidden");
+            } else {
+              activeTarget = inspItemSlot;
+              showTooltipFor(inspItemSlot);
+              clearTimeout(touchTipTimer);
+              touchTipTimer = setTimeout(() => {
+                if (activeTarget === inspItemSlot) {
+                  activeTarget = null;
+                  tt.classList.add("hidden");
+                }
+              }, 3800);
+            }
+            return;
+          }
           const dragonBtn = e.target.closest("#dragon-hud-badge");
           if (dragonBtn) {
             e.stopPropagation();
@@ -45612,6 +45724,20 @@ diffuseColor.rgb *= mix(0.58, 1.04, groundAO) * canopyShade;`,
 
         if (mpState.active && mpState.role === "guest") {
           mpSendToHost({ type: "CMD", cmd: "TP_DEST", destId: chosen.id });
+          playerHero.tpChannel = {
+            timer: 2.5,
+            duration: 2.5,
+            dest: new THREE.Vector3(chosen.x, 0, chosen.z),
+            label: chosen.shortLabel,
+          };
+          sfx.play("spell_shield_nova");
+          spawnOrbitalSkyBeam(
+            playerHero.mesh.position.x,
+            playerHero.mesh.position.z,
+            3.6,
+            0x22d3ee,
+            2.5,
+          );
           spawnFloatText(
             playerHero.mesh.position,
             `Teleporting to ${chosen.shortLabel}...`,
