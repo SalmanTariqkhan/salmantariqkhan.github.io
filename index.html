@@ -9,7 +9,7 @@
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="mobile-web-app-capable" content="yes" />
     <title>
-      Infinite War • Grandmaster Sovereign Multiplayer Edition (v128)
+      Infinite War • Grandmaster Sovereign Multiplayer Edition (v134)
     </title>
     <link rel="preconnect" href="https://unpkg.com" crossorigin />
     <link rel="preconnect" href="https://cdn.tailwindcss.com" crossorigin />
@@ -1547,7 +1547,7 @@
             class="dota-stone-panel px-2.5 py-1.5 rounded-xl text-[11px] sm:text-xs font-mono font-black text-amber-300 border border-amber-400/65 shadow-lg tracking-wider"
             title="Game Version"
           >
-            v128
+            v134
           </span>
         </div>
       </div>
@@ -2376,10 +2376,10 @@
 
             <div
               id="hud-kda-pill"
-              class="dota-stone-panel rounded-xl h-9 px-2.5 xl:px-3 flex items-center gap-2 xl:gap-3 text-xs shadow-[0_10px_28px_rgba(0,0,0,0.85)] tabular-nums whitespace-nowrap"
+              class="dota-stone-panel rounded-xl h-9 px-2.5 xl:px-3 flex items-center justify-between gap-2 xl:gap-3 text-xs shadow-[0_10px_28px_rgba(0,0,0,0.85)] tabular-nums whitespace-nowrap"
             >
               <div
-                class="flex items-center gap-1"
+                class="flex items-center gap-1 shrink-0"
                 title="Kills / Deaths / Assists"
               >
                 <span
@@ -2388,38 +2388,40 @@
                 >
                 <span
                   id="hud-kda"
-                  class="font-mono font-extrabold text-emerald-400"
+                  class="font-mono font-extrabold text-emerald-400 inline-block min-w-[54px] lg:min-w-[66px] text-center"
                   >0 / 0 / 0</span
                 >
               </div>
-              <div class="h-4 w-[1px] bg-slate-700/80"></div>
-              <div class="flex items-center gap-1" title="Last Hits">
+              <div class="h-4 w-[1px] bg-slate-700/80 shrink-0"></div>
+              <div class="flex items-center gap-1 shrink-0" title="Last Hits">
                 <i class="fa-solid fa-khanda text-amber-400 text-[11px]"></i>
                 <span class="text-[10px] font-cinzel font-bold text-slate-400"
                   >LH</span
                 >
                 <span
                   id="hud-lh"
-                  class="font-mono font-extrabold text-amber-300"
+                  class="font-mono font-extrabold text-amber-300 inline-block min-w-[16px] lg:min-w-[22px] text-right"
                   >0</span
                 >
               </div>
-              <div class="h-4 w-[1px] bg-slate-700/80"></div>
+              <div class="h-4 w-[1px] bg-slate-700/80 shrink-0"></div>
               <div
-                class="flex items-center gap-1.5"
+                class="flex items-center gap-1.5 shrink-0"
                 title="Real-Time Frame Rate & Network Ping (RTT)"
               >
                 <span
                   id="hud-fps"
-                  class="font-mono font-bold text-cyan-300 text-[10px] sm:text-[11px]"
+                  class="font-mono font-bold text-cyan-300 text-[10px] sm:text-[11px] inline-block w-[54px] text-right shrink-0"
                   >120 FPS</span
                 >
-                <span id="hud-ping-sep" class="text-slate-600 text-[10px]"
+                <span
+                  id="hud-ping-sep"
+                  class="text-slate-600 text-[10px] shrink-0"
                   >•</span
                 >
                 <span
                   id="hud-ping"
-                  class="font-mono font-bold text-emerald-400 text-[10px] sm:text-[11px]"
+                  class="font-mono font-bold text-emerald-400 text-[10px] sm:text-[11px] inline-block min-w-[36px] lg:w-[46px] text-center shrink-0"
                   title="Multiplayer Round-Trip Latency (Ping)"
                   >LOCAL</span
                 >
@@ -3837,7 +3839,9 @@
                 <div class="font-cinzel font-bold text-amber-300">
                   Sovereign Overture
                 </div>
-                <div class="text-[10px] text-slate-400">Horns & Choir (Am)</div>
+                <div class="text-[10px] text-slate-400">
+                  8-Bar Symphony (Am)
+                </div>
               </button>
               <button
                 type="button"
@@ -3849,7 +3853,7 @@
                   Tactical Clash
                 </div>
                 <div class="text-[10px] text-slate-400">
-                  Strings & Drums (Em)
+                  Adaptive Battle (Em)
                 </div>
               </button>
               <button
@@ -3862,7 +3866,7 @@
                   Ancient Sanctuary
                 </div>
                 <div class="text-[10px] text-slate-400">
-                  Harp & Celesta (Dm)
+                  Harp & Solo Flute (Dm)
                 </div>
               </button>
             </div>
@@ -9919,7 +9923,7 @@
           } else if (
             msg.cmd === "LEVEL_ATTR" &&
             actor.skillPoints > 0 &&
-            actor.attrBonusRank < 10
+            actor.attrBonusRank < MAX_ATTR_RANK
           ) {
             actor.skillPoints--;
             actor.attrBonusRank++;
@@ -12151,9 +12155,11 @@
           this.sfxVolumeScale = 1.0;
           this.voiceVolumeScale = 1.0;
           this.musicGain = null;
+          this.musicBus = null;
           this.musicStarted = false;
           this.musicMode = "intro";
           this.musicTrackPreference = "auto";
+          this.combatIntensity = 0.28;
           this._musicStep = 0;
           this._musicTimer = null;
           this.initialized = false;
@@ -12161,6 +12167,11 @@
           this.lastCategoryVoiceTime = new Map();
           this.speechEndsAt = 0;
           this.announcerSpeakingUntil = 0;
+          this._isAnnouncerUtterance = false;
+          this._announcerStartedAt = 0;
+          this._announcerQueue = [];
+          this._postAnnouncerHeroAction = null;
+          this._announcerFallbackTimer = null;
           this.availableVoices = [];
           this._recentLines = new Map();
           this._activeUtter = null;
@@ -12258,7 +12269,7 @@
         }
 
         _targetMusicGain() {
-          return this.musicEnabled ? 0.115 * this.musicVolumeScale : 0.0;
+          return this.musicEnabled ? 0.145 * this.musicVolumeScale : 0.0;
         }
 
         setMusicEnabled(val) {
@@ -12315,6 +12326,120 @@
           }
         }
 
+        _computeCombatIntensity() {
+          if (typeof inHeroSelect !== "undefined" && inHeroSelect) return 0.25;
+          if (
+            typeof playerHero === "undefined" ||
+            !playerHero ||
+            playerHero.dead
+          )
+            return 0.3;
+          let tension = 0.22;
+          const pPos = playerHero.mesh.position;
+          if (playerHero.hp / Math.max(1, playerHero.maxHp) < 0.45)
+            tension += 0.25;
+          if (typeof units !== "undefined" && Array.isArray(units)) {
+            for (let i = 0; i < units.length; i++) {
+              const u = units[i];
+              if (!u || u.dead || u === playerHero) continue;
+              const d = u.mesh.position.distanceTo(pPos);
+              if (d < 28 && u.team !== playerHero.team) {
+                if (u.type === "hero") tension += 0.38;
+                else if (
+                  u.type === "boss" ||
+                  u.type === "dragon" ||
+                  u.type === "kong" ||
+                  u.type === "redman" ||
+                  u.type === "sneakygolem"
+                )
+                  tension += 0.42;
+                else if (u.type === "tower" || u.type === "ancient")
+                  tension += 0.24;
+                else tension += 0.05;
+              }
+            }
+          }
+          if (typeof escalationTier === "number" && escalationTier >= 4) {
+            tension += Math.min(0.18, (escalationTier - 3) * 0.03);
+          }
+          return Math.min(1.0, Math.max(0.2, tension));
+        }
+
+        _createMusicPan(panVal) {
+          if (typeof this.ctx.createStereoPanner === "function") {
+            const p = this.ctx.createStereoPanner();
+            p.pan.value = Math.max(-0.85, Math.min(0.85, panVal));
+            return p;
+          }
+          return null;
+        }
+
+        _schedulePercussionHit(t, kind, vol = 0.1) {
+          if (!this.ctx || !this.musicBus) return;
+          if (kind === "timpani" || kind === "wardrum" || kind === "subkick") {
+            const osc = this.ctx.createOscillator();
+            const filt = this.ctx.createBiquadFilter();
+            const g = this.ctx.createGain();
+            osc.type = "sine";
+            const startHz =
+              kind === "wardrum" ? 98 : kind === "timpani" ? 82 : 70;
+            const endHz =
+              kind === "wardrum" ? 38 : kind === "timpani" ? 35 : 32;
+            const dur = kind === "timpani" ? 0.72 : 0.48;
+            osc.frequency.setValueAtTime(startHz, t);
+            osc.frequency.exponentialRampToValueAtTime(endHz, t + dur * 0.85);
+            filt.type = "lowpass";
+            filt.frequency.setValueAtTime(240, t);
+            g.gain.setValueAtTime(0.0001, t);
+            g.gain.linearRampToValueAtTime(vol, t + 0.015);
+            g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+            osc.connect(filt);
+            filt.connect(g);
+            g.connect(this.musicBus);
+            osc.onended = () => {
+              try {
+                osc.disconnect();
+                filt.disconnect();
+                g.disconnect();
+              } catch (e) {}
+            };
+            osc.start(t);
+            osc.stop(t + dur + 0.04);
+          } else if (
+            kind === "brush" ||
+            kind === "cymbal" ||
+            kind === "snare"
+          ) {
+            if (!this.sharedNoiseBuffer) return;
+            const src = this.ctx.createBufferSource();
+            src.buffer = this.sharedNoiseBuffer;
+            const filt = this.ctx.createBiquadFilter();
+            const g = this.ctx.createGain();
+            const dur =
+              kind === "cymbal" ? 1.15 : kind === "snare" ? 0.24 : 0.14;
+            filt.type = kind === "snare" ? "bandpass" : "highpass";
+            filt.frequency.setValueAtTime(kind === "snare" ? 1150 : 2800, t);
+            if (kind === "snare") filt.Q.value = 1.1;
+            g.gain.setValueAtTime(0.0001, t);
+            g.gain.linearRampToValueAtTime(
+              vol,
+              t + (kind === "cymbal" ? 0.18 : 0.012),
+            );
+            g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+            src.connect(filt);
+            filt.connect(g);
+            g.connect(this.musicBus);
+            src.onended = () => {
+              try {
+                src.disconnect();
+                filt.disconnect();
+                g.disconnect();
+              } catch (e) {}
+            };
+            src.start(t, Math.random() * 0.8, dur + 0.05);
+          }
+        }
+
         startAmbientOrchestralMusic() {
           if (this.musicStarted || !this.ctx) return;
           this.musicStarted = true;
@@ -12330,10 +12455,35 @@
           this.musicGain = this.ctx.createGain();
           this.musicGain.gain.value = this._targetMusicGain();
           this.musicGain.connect(this.outNode);
+
+          const warmShelf = this.ctx.createBiquadFilter();
+          warmShelf.type = "lowpass";
+          warmShelf.frequency.value = 3800;
+          warmShelf.Q.value = 0.55;
+          warmShelf.connect(this.musicGain);
+          this.musicBus = warmShelf;
+
+          const delayNode = this.ctx.createDelay(1.0);
+          delayNode.delayTime.value = 0.34;
+          const delayFilt = this.ctx.createBiquadFilter();
+          delayFilt.type = "lowpass";
+          delayFilt.frequency.value = 1350;
+          const delayFb = this.ctx.createGain();
+          delayFb.gain.value = 0.24;
+          const delayWet = this.ctx.createGain();
+          delayWet.gain.value = 0.18;
+
+          this.musicBus.connect(delayNode);
+          delayNode.connect(delayFilt);
+          delayFilt.connect(delayFb);
+          delayFb.connect(delayNode);
+          delayFilt.connect(delayWet);
+          delayWet.connect(this.musicGain);
+
           if (this.reverbNode) {
             const mRev = this.ctx.createGain();
-            mRev.gain.value = 0.24;
-            this.musicGain.connect(mRev);
+            mRev.gain.value = 0.3;
+            this.musicBus.connect(mRev);
             mRev.connect(this.reverbNode);
           }
 
@@ -12342,77 +12492,132 @@
 
         _runMusicScheduler() {
           if (!this.ctx || !this.musicGain) return;
+          if (!this.musicBus) this.musicBus = this.musicGain;
           if (this._musicTimer) {
             clearInterval(this._musicTimer);
             this._musicTimer = null;
           }
 
-          // 1. INTRO / CHAMPION ALTAR THEME: Majestic A-Minor / Dorian Sovereign Overture
-          // Am9 -> Fmaj7 -> C/E -> G6 -> E7sus4 -> Fmaj7
+          // 1. INTRO / CHAMPION ALTAR THEME: 8-Bar Symphonic A-Minor / Dorian Sovereign Overture
           const introProgressions = [
             {
               bass: 55.0, // A1
-              chord: [110.0, 164.81, 220.0, 261.63, 329.63],
+              chord: [110.0, 164.81, 220.0, 261.63, 329.63, 493.88],
               horn: [
-                { f: 440.0, start: 0.0, dur: 1.5 },
-                { f: 523.25, start: 1.55, dur: 1.35 },
-                { f: 659.25, start: 2.95, dur: 1.45 },
+                { f: 440.0, start: 0.0, dur: 1.45 },
+                { f: 523.25, start: 1.5, dur: 1.35 },
+                { f: 659.25, start: 2.9, dur: 1.5 },
               ],
-              bell: [659.25, 880.0, 987.77, 1318.51],
+              bell: [659.25, 880.0, 987.77, 1318.51, 987.77, 880.0],
+              cymbal: false,
             },
             {
               bass: 43.65, // F1
-              chord: [87.31, 130.81, 174.61, 220.0, 329.63],
+              chord: [87.31, 130.81, 174.61, 220.0, 329.63, 392.0],
               horn: [
                 { f: 587.33, start: 0.0, dur: 1.4 },
-                { f: 523.25, start: 1.45, dur: 1.45 },
-                { f: 440.0, start: 2.95, dur: 1.45 },
+                { f: 523.25, start: 1.45, dur: 1.4 },
+                { f: 440.0, start: 2.9, dur: 1.5 },
               ],
-              bell: [523.25, 659.25, 880.0, 1046.5],
+              bell: [523.25, 659.25, 880.0, 1046.5, 880.0, 659.25],
+              cymbal: false,
             },
             {
               bass: 65.41, // C2
-              chord: [130.81, 196.0, 261.63, 329.63, 392.0],
+              chord: [130.81, 196.0, 261.63, 329.63, 392.0, 587.33],
               horn: [
-                { f: 392.0, start: 0.0, dur: 1.5 },
-                { f: 493.88, start: 1.55, dur: 1.35 },
-                { f: 587.33, start: 2.95, dur: 1.45 },
+                { f: 392.0, start: 0.0, dur: 1.45 },
+                { f: 493.88, start: 1.5, dur: 1.35 },
+                { f: 587.33, start: 2.9, dur: 1.5 },
               ],
-              bell: [587.33, 783.99, 987.77, 1174.66],
+              bell: [587.33, 783.99, 987.77, 1174.66, 987.77, 783.99],
+              cymbal: false,
             },
             {
-              bass: 82.41, // E2
-              chord: [123.47, 164.81, 246.94, 329.63, 415.3],
+              bass: 49.0, // G1
+              chord: [98.0, 146.83, 196.0, 246.94, 329.63, 392.0],
               horn: [
-                { f: 659.25, start: 0.0, dur: 1.8 },
-                { f: 587.33, start: 1.85, dur: 1.15 },
+                { f: 659.25, start: 0.0, dur: 1.75 },
+                { f: 587.33, start: 1.8, dur: 1.15 },
+                { f: 493.88, start: 3.0, dur: 1.4 },
+              ],
+              bell: [587.33, 739.99, 987.77, 1174.66, 1318.51, 987.77],
+              cymbal: true,
+            },
+            {
+              bass: 73.42, // D2 (Phrase B Answer)
+              chord: [146.83, 220.0, 261.63, 329.63, 440.0, 523.25],
+              horn: [
+                { f: 523.25, start: 0.0, dur: 1.35 },
+                { f: 659.25, start: 1.4, dur: 1.45 },
+                { f: 783.99, start: 2.9, dur: 1.5 },
+              ],
+              bell: [659.25, 783.99, 1046.5, 1318.51, 1046.5, 783.99],
+              cymbal: false,
+            },
+            {
+              bass: 65.41, // C2 (Am/C)
+              chord: [130.81, 164.81, 220.0, 261.63, 329.63, 440.0],
+              horn: [
+                { f: 880.0, start: 0.0, dur: 1.65 },
+                { f: 783.99, start: 1.7, dur: 1.2 },
+                { f: 659.25, start: 2.95, dur: 1.45 },
+              ],
+              bell: [659.25, 880.0, 1046.5, 1318.51, 1174.66, 880.0],
+              cymbal: false,
+            },
+            {
+              bass: 43.65, // F1 (Fmaj7#11)
+              chord: [87.31, 130.81, 174.61, 246.94, 329.63, 440.0],
+              horn: [
+                { f: 587.33, start: 0.0, dur: 1.45 },
+                { f: 659.25, start: 1.5, dur: 1.35 },
+                { f: 493.88, start: 2.9, dur: 1.5 },
+              ],
+              bell: [493.88, 659.25, 880.0, 987.77, 1318.51, 987.77],
+              cymbal: false,
+            },
+            {
+              bass: 82.41, // E2 (Cadence)
+              chord: [123.47, 164.81, 246.94, 329.63, 415.3, 493.88],
+              horn: [
+                { f: 659.25, start: 0.0, dur: 1.9 },
+                { f: 587.33, start: 1.95, dur: 1.05 },
                 { f: 493.88, start: 3.05, dur: 1.35 },
               ],
-              bell: [659.25, 830.61, 987.77, 1318.51],
+              bell: [659.25, 830.61, 987.77, 1318.51, 1661.22, 1318.51],
+              cymbal: true,
             },
           ];
 
-          // 2. IN-GAME ARENA THEME: E-Minor / Dorian Tactical Battle Score (distinct rhythm & instrumentation)
-          // Em9 -> Cmaj7 -> Am11 -> B7sus4
+          // 2. IN-GAME ARENA THEME: 8-Bar E-Minor / Dorian Dynamic Battle Score
           const arenaProgressions = [
             {
               bass: 82.41, // E2
               pulse: [82.41, 82.41, 123.47, 82.41, 98.0, 82.41, 123.47, 110.0],
-              chord: [164.81, 246.94, 293.66, 369.99],
+              chord: [164.81, 246.94, 293.66, 369.99, 493.88],
               lead: [
-                { f: 329.63, start: 0.2, dur: 0.9 },
-                { f: 392.0, start: 1.15, dur: 0.85 },
-                { f: 493.88, start: 2.05, dur: 1.65 },
+                { f: 329.63, start: 0.18, dur: 0.9 },
+                { f: 392.0, start: 1.12, dur: 0.85 },
+                { f: 493.88, start: 2.02, dur: 1.65 },
+              ],
+              heroCounter: [
+                { f: 659.25, start: 0.5, dur: 1.3 },
+                { f: 739.99, start: 2.0, dur: 1.6 },
               ],
             },
             {
               bass: 65.41, // C2
               pulse: [65.41, 65.41, 98.0, 65.41, 82.41, 65.41, 98.0, 110.0],
-              chord: [130.81, 196.0, 246.94, 329.63],
+              chord: [130.81, 196.0, 246.94, 329.63, 392.0],
               lead: [
                 { f: 440.0, start: 0.15, dur: 0.9 },
                 { f: 392.0, start: 1.1, dur: 0.9 },
                 { f: 329.63, start: 2.05, dur: 1.65 },
+              ],
+              heroCounter: [
+                { f: 587.33, start: 0.45, dur: 1.35 },
+                { f: 493.88, start: 1.95, dur: 1.65 },
               ],
             },
             {
@@ -12420,11 +12625,15 @@
               pulse: [
                 110.0, 110.0, 164.81, 110.0, 130.81, 110.0, 164.81, 146.83,
               ],
-              chord: [146.83, 220.0, 261.63, 392.0],
+              chord: [146.83, 220.0, 261.63, 392.0, 440.0],
               lead: [
-                { f: 392.0, start: 0.2, dur: 0.85 },
-                { f: 440.0, start: 1.1, dur: 0.85 },
-                { f: 587.33, start: 2.0, dur: 1.7 },
+                { f: 392.0, start: 0.18, dur: 0.85 },
+                { f: 440.0, start: 1.08, dur: 0.85 },
+                { f: 587.33, start: 1.98, dur: 1.7 },
+              ],
+              heroCounter: [
+                { f: 659.25, start: 0.4, dur: 1.4 },
+                { f: 783.99, start: 1.95, dur: 1.65 },
               ],
             },
             {
@@ -12432,42 +12641,167 @@
               pulse: [
                 123.47, 123.47, 185.0, 123.47, 146.83, 123.47, 164.81, 185.0,
               ],
-              chord: [164.81, 246.94, 329.63, 369.99],
+              chord: [164.81, 246.94, 329.63, 369.99, 493.88],
               lead: [
                 { f: 493.88, start: 0.15, dur: 1.0 },
                 { f: 440.0, start: 1.2, dur: 0.85 },
                 { f: 369.99, start: 2.1, dur: 1.6 },
               ],
+              heroCounter: [
+                { f: 739.99, start: 0.4, dur: 1.5 },
+                { f: 659.25, start: 2.0, dur: 1.6 },
+              ],
+            },
+            {
+              bass: 82.41, // E2 (Phrase B)
+              pulse: [
+                82.41, 123.47, 164.81, 123.47, 98.0, 123.47, 146.83, 123.47,
+              ],
+              chord: [164.81, 246.94, 329.63, 392.0, 493.88],
+              lead: [
+                { f: 493.88, start: 0.15, dur: 0.85 },
+                { f: 587.33, start: 1.05, dur: 0.85 },
+                { f: 659.25, start: 1.95, dur: 1.75 },
+              ],
+              heroCounter: [
+                { f: 783.99, start: 0.45, dur: 1.4 },
+                { f: 880.0, start: 1.95, dur: 1.65 },
+              ],
+            },
+            {
+              bass: 61.74, // B1 (Gmaj7/B)
+              pulse: [61.74, 98.0, 123.47, 98.0, 73.42, 98.0, 123.47, 110.0],
+              chord: [146.83, 196.0, 246.94, 369.99, 440.0],
+              lead: [
+                { f: 587.33, start: 0.18, dur: 0.9 },
+                { f: 493.88, start: 1.12, dur: 0.85 },
+                { f: 440.0, start: 2.02, dur: 1.65 },
+              ],
+              heroCounter: [
+                { f: 739.99, start: 0.4, dur: 1.45 },
+                { f: 659.25, start: 1.95, dur: 1.65 },
+              ],
+            },
+            {
+              bass: 65.41, // C2 (Cmaj9)
+              pulse: [65.41, 98.0, 130.81, 98.0, 82.41, 98.0, 130.81, 146.83],
+              chord: [130.81, 196.0, 246.94, 293.66, 392.0],
+              lead: [
+                { f: 392.0, start: 0.15, dur: 0.85 },
+                { f: 493.88, start: 1.05, dur: 0.85 },
+                { f: 587.33, start: 1.95, dur: 1.75 },
+              ],
+              heroCounter: [
+                { f: 659.25, start: 0.45, dur: 1.4 },
+                { f: 783.99, start: 1.95, dur: 1.65 },
+              ],
+            },
+            {
+              bass: 61.74, // B1 (Cadence)
+              pulse: [
+                61.74, 123.47, 146.83, 123.47, 92.5, 123.47, 146.83, 164.81,
+              ],
+              chord: [146.83, 246.94, 311.13, 369.99, 493.88],
+              lead: [
+                { f: 493.88, start: 0.15, dur: 1.1 },
+                { f: 440.0, start: 1.3, dur: 0.85 },
+                { f: 329.63, start: 2.2, dur: 1.5 },
+              ],
+              heroCounter: [
+                { f: 739.99, start: 0.45, dur: 1.5 },
+                { f: 659.25, start: 2.05, dur: 1.6 },
+              ],
             },
           ];
 
+          // 3. MYSTIC / ANCIENT SANCTUARY THEME: 8-Bar D Dorian / Lydian Harp, Celesta & Solo Flute
           const mysticProgressions = [
             {
-              bass: 73.42,
-              chord: [146.83, 220.0, 261.63, 329.63],
+              bass: 73.42, // D2
+              chord: [146.83, 220.0, 261.63, 329.63, 440.0],
               arp: [
                 293.66, 349.23, 440.0, 523.25, 659.25, 523.25, 440.0, 349.23,
               ],
+              flute: [
+                { f: 587.33, start: 0.3, dur: 1.85 },
+                { f: 659.25, start: 2.3, dur: 2.1 },
+              ],
             },
             {
-              bass: 58.27,
-              chord: [116.54, 174.61, 220.0, 293.66],
+              bass: 58.27, // Bb1
+              chord: [116.54, 174.61, 220.0, 293.66, 392.0],
               arp: [
                 233.08, 293.66, 349.23, 440.0, 587.33, 440.0, 349.23, 293.66,
               ],
-            },
-            {
-              bass: 98.0,
-              chord: [146.83, 196.0, 233.08, 349.23],
-              arp: [
-                293.66, 392.0, 466.16, 587.33, 698.46, 587.33, 466.16, 392.0,
+              flute: [
+                { f: 523.25, start: 0.25, dur: 1.9 },
+                { f: 440.0, start: 2.3, dur: 2.1 },
               ],
             },
             {
-              bass: 110.0,
-              chord: [164.81, 220.0, 293.66, 329.63],
+              bass: 98.0, // G2
+              chord: [146.83, 196.0, 233.08, 349.23, 440.0],
+              arp: [
+                293.66, 392.0, 466.16, 587.33, 698.46, 587.33, 466.16, 392.0,
+              ],
+              flute: [
+                { f: 466.16, start: 0.3, dur: 1.8 },
+                { f: 587.33, start: 2.25, dur: 2.15 },
+              ],
+            },
+            {
+              bass: 110.0, // A2
+              chord: [164.81, 220.0, 293.66, 329.63, 440.0],
               arp: [
                 329.63, 440.0, 587.33, 659.25, 880.0, 659.25, 587.33, 440.0,
+              ],
+              flute: [
+                { f: 659.25, start: 0.25, dur: 2.0 },
+                { f: 523.25, start: 2.4, dur: 2.0 },
+              ],
+            },
+            {
+              bass: 73.42, // D2 (Phrase B)
+              chord: [146.83, 220.0, 293.66, 349.23, 523.25],
+              arp: [
+                293.66, 440.0, 523.25, 659.25, 880.0, 659.25, 523.25, 440.0,
+              ],
+              flute: [
+                { f: 880.0, start: 0.3, dur: 1.95 },
+                { f: 783.99, start: 2.4, dur: 2.0 },
+              ],
+            },
+            {
+              bass: 65.41, // C2
+              chord: [130.81, 196.0, 261.63, 329.63, 493.88],
+              arp: [
+                261.63, 329.63, 392.0, 493.88, 659.25, 493.88, 392.0, 329.63,
+              ],
+              flute: [
+                { f: 659.25, start: 0.25, dur: 1.9 },
+                { f: 587.33, start: 2.3, dur: 2.1 },
+              ],
+            },
+            {
+              bass: 58.27, // Bb1
+              chord: [116.54, 174.61, 220.0, 329.63, 440.0],
+              arp: [
+                233.08, 349.23, 440.0, 523.25, 659.25, 523.25, 440.0, 349.23,
+              ],
+              flute: [
+                { f: 523.25, start: 0.3, dur: 1.85 },
+                { f: 659.25, start: 2.3, dur: 2.1 },
+              ],
+            },
+            {
+              bass: 55.0, // A1
+              chord: [110.0, 164.81, 220.0, 277.18, 329.63],
+              arp: [
+                220.0, 277.18, 329.63, 440.0, 554.37, 440.0, 329.63, 277.18,
+              ],
+              flute: [
+                { f: 554.37, start: 0.25, dur: 2.15 },
+                { f: 587.33, start: 2.55, dur: 1.85 },
               ],
             },
           ];
@@ -12478,7 +12812,7 @@
 
           this._lastScheduledBarAt = 0;
           const scheduleBar = () => {
-            if (!this.ctx || !this.musicGain || this.ctx.state !== "running")
+            if (!this.ctx || !this.musicBus || this.ctx.state !== "running")
               return;
             const nowCtx = this.ctx.currentTime;
             if (
@@ -12489,312 +12823,588 @@
             this._lastScheduledBarAt = nowCtx;
             const t0 = nowCtx + 0.06;
 
+            const rawIntensity = this._computeCombatIntensity();
+            this.combatIntensity =
+              this.combatIntensity * 0.65 + rawIntensity * 0.35;
+            const inten = this.combatIntensity;
+
             if (this.musicMode === "intro") {
               const prog =
                 introProgressions[this._musicStep % introProgressions.length];
 
-              // A. Deep Cathedral Contrabass Pedal
-              const bassOsc = this.ctx.createOscillator();
-              const bassFilt = this.ctx.createBiquadFilter();
-              const bassG = this.ctx.createGain();
-              bassOsc.type = "triangle";
-              bassOsc.frequency.setValueAtTime(prog.bass, t0);
-              bassFilt.type = "lowpass";
-              bassFilt.frequency.setValueAtTime(195, t0);
-              bassG.gain.setValueAtTime(0.0001, t0);
-              bassG.gain.linearRampToValueAtTime(0.2, t0 + 0.85);
-              bassG.gain.setValueAtTime(0.18, t0 + barDur - 0.95);
-              bassG.gain.exponentialRampToValueAtTime(
-                0.0001,
-                t0 + barDur + 0.22,
-              );
-              bassOsc.connect(bassFilt);
-              bassFilt.connect(bassG);
-              bassG.connect(this.musicGain);
-              bassOsc.onended = () => {
-                try {
-                  bassOsc.disconnect();
-                  bassFilt.disconnect();
-                  bassG.disconnect();
-                } catch (e) {}
-              };
-              bassOsc.start(t0);
-              bassOsc.stop(t0 + barDur + 0.26);
+              // A. Deep Cathedral Contrabass & Fifth Harmonic Pedal
+              [1.0, 1.5].forEach((mult, bLayer) => {
+                const bassOsc = this.ctx.createOscillator();
+                const bassFilt = this.ctx.createBiquadFilter();
+                const bassG = this.ctx.createGain();
+                bassOsc.type = bLayer === 0 ? "triangle" : "sine";
+                bassOsc.frequency.setValueAtTime(prog.bass * mult, t0);
+                bassFilt.type = "lowpass";
+                bassFilt.frequency.setValueAtTime(bLayer === 0 ? 185 : 260, t0);
+                const peak = bLayer === 0 ? 0.2 : 0.07;
+                bassG.gain.setValueAtTime(0.0001, t0);
+                bassG.gain.linearRampToValueAtTime(peak, t0 + 0.85);
+                bassG.gain.setValueAtTime(peak * 0.9, t0 + barDur - 0.95);
+                bassG.gain.exponentialRampToValueAtTime(
+                  0.0001,
+                  t0 + barDur + 0.24,
+                );
+                bassOsc.connect(bassFilt);
+                bassFilt.connect(bassG);
+                bassG.connect(this.musicBus);
+                bassOsc.onended = () => {
+                  try {
+                    bassOsc.disconnect();
+                    bassFilt.disconnect();
+                    bassG.disconnect();
+                  } catch (e) {}
+                };
+                bassOsc.start(t0);
+                bassOsc.stop(t0 + barDur + 0.28);
+              });
 
-              // B. Shimmering Celestial Choir & Strings Pad
+              // B. Stereo-Panned Shimmering Celestial Choir & Strings Ensemble
               prog.chord.forEach((freq, idx) => {
                 const osc = this.ctx.createOscillator();
                 const filt = this.ctx.createBiquadFilter();
                 const g = this.ctx.createGain();
+                const pan = this._createMusicPan(
+                  (idx / Math.max(1, prog.chord.length - 1) - 0.5) * 1.15,
+                );
                 osc.type = idx % 2 === 0 ? "sine" : "triangle";
                 osc.frequency.setValueAtTime(freq, t0);
-                osc.detune.setValueAtTime((idx - 2) * 7, t0);
+                osc.detune.setValueAtTime((idx - 2.5) * 6.5, t0);
                 filt.type = "lowpass";
-                filt.frequency.setValueAtTime(840, t0);
+                filt.frequency.setValueAtTime(620, t0);
+                filt.frequency.linearRampToValueAtTime(980, t0 + barDur * 0.5);
+                filt.frequency.linearRampToValueAtTime(700, t0 + barDur);
 
                 g.gain.setValueAtTime(0.0001, t0);
-                g.gain.linearRampToValueAtTime(0.052, t0 + 1.1);
-                g.gain.setValueAtTime(0.048, t0 + barDur - 1.0);
+                g.gain.linearRampToValueAtTime(0.046, t0 + 1.15);
+                g.gain.setValueAtTime(0.042, t0 + barDur - 1.0);
                 g.gain.exponentialRampToValueAtTime(0.0001, t0 + barDur + 0.28);
 
                 osc.connect(filt);
                 filt.connect(g);
-                g.connect(this.musicGain);
+                if (pan) {
+                  g.connect(pan);
+                  pan.connect(this.musicBus);
+                } else {
+                  g.connect(this.musicBus);
+                }
                 osc.onended = () => {
                   try {
                     osc.disconnect();
                     filt.disconnect();
                     g.disconnect();
+                    if (pan) pan.disconnect();
                   } catch (e) {}
                 };
                 osc.start(t0);
                 osc.stop(t0 + barDur + 0.32);
               });
 
-              // C. Warm French Horn Sovereign Melody (pure triangle + sine blend — zero sawtooth buzz)
+              // C. Expressive French Horn Sovereign Melody with Warm Vibrato
               prog.horn.forEach((note) => {
                 const nt = t0 + note.start;
                 const horn = this.ctx.createOscillator();
                 const hornBody = this.ctx.createOscillator();
+                const vib = this.ctx.createOscillator();
+                const vibGain = this.ctx.createGain();
                 const hFilt = this.ctx.createBiquadFilter();
                 const hg = this.ctx.createGain();
+                const pan = this._createMusicPan(-0.14);
 
                 horn.type = "triangle";
                 hornBody.type = "sine";
                 horn.frequency.setValueAtTime(note.f, nt);
                 hornBody.frequency.setValueAtTime(note.f * 0.5, nt);
 
+                vib.type = "sine";
+                vib.frequency.setValueAtTime(5.1, nt);
+                vibGain.gain.setValueAtTime(0.0, nt);
+                vibGain.gain.linearRampToValueAtTime(2.6, nt + 0.35);
+                vib.connect(vibGain);
+                vibGain.connect(horn.frequency);
+
                 hFilt.type = "lowpass";
-                hFilt.frequency.setValueAtTime(420, nt);
+                hFilt.frequency.setValueAtTime(440, nt);
                 hFilt.frequency.linearRampToValueAtTime(
-                  880,
+                  960,
                   nt + note.dur * 0.38,
                 );
-                hFilt.frequency.linearRampToValueAtTime(520, nt + note.dur);
+                hFilt.frequency.linearRampToValueAtTime(540, nt + note.dur);
 
                 hg.gain.setValueAtTime(0.0001, nt);
-                hg.gain.linearRampToValueAtTime(0.048, nt + 0.2);
-                hg.gain.setValueAtTime(0.042, nt + note.dur - 0.25);
+                hg.gain.linearRampToValueAtTime(0.052, nt + 0.2);
+                hg.gain.setValueAtTime(0.045, nt + note.dur - 0.25);
                 hg.gain.exponentialRampToValueAtTime(
                   0.0001,
-                  nt + note.dur + 0.2,
+                  nt + note.dur + 0.22,
                 );
 
                 horn.connect(hFilt);
                 hornBody.connect(hFilt);
                 hFilt.connect(hg);
-                hg.connect(this.musicGain);
+                if (pan) {
+                  hg.connect(pan);
+                  pan.connect(this.musicBus);
+                } else {
+                  hg.connect(this.musicBus);
+                }
 
                 horn.onended = () => {
                   try {
                     horn.disconnect();
                     hornBody.disconnect();
+                    vib.disconnect();
+                    vibGain.disconnect();
                     hFilt.disconnect();
                     hg.disconnect();
+                    if (pan) pan.disconnect();
                   } catch (e) {}
                 };
                 horn.start(nt);
                 hornBody.start(nt);
-                horn.stop(nt + note.dur + 0.22);
-                hornBody.stop(nt + note.dur + 0.22);
+                vib.start(nt);
+                horn.stop(nt + note.dur + 0.24);
+                hornBody.stop(nt + note.dur + 0.24);
+                vib.stop(nt + note.dur + 0.24);
               });
 
-              // D. Crystalline Altar Chime / Dulcimer Sparkles
+              // D. Stereo-Alternating Crystalline Altar Harp & Celesta
               const bellStep = barDur / prog.bell.length;
               prog.bell.forEach((bFreq, bIdx) => {
-                const bt = t0 + bIdx * bellStep + 0.15;
+                const bt = t0 + bIdx * bellStep + 0.12;
                 const bell = this.ctx.createOscillator();
+                const overtone = this.ctx.createOscillator();
                 const bg = this.ctx.createGain();
+                const og = this.ctx.createGain();
+                const pan = this._createMusicPan(bIdx % 2 === 0 ? 0.34 : -0.34);
                 bell.type = "sine";
+                overtone.type = "triangle";
                 bell.frequency.setValueAtTime(bFreq, bt);
+                overtone.frequency.setValueAtTime(bFreq * 2.0, bt);
+                og.gain.value = 0.16;
+
                 bg.gain.setValueAtTime(0.0001, bt);
-                bg.gain.linearRampToValueAtTime(0.032, bt + 0.03);
+                bg.gain.linearRampToValueAtTime(0.034, bt + 0.025);
                 bg.gain.exponentialRampToValueAtTime(
                   0.0001,
-                  bt + bellStep * 1.4,
+                  bt + bellStep * 1.65,
                 );
+
                 bell.connect(bg);
-                bg.connect(this.musicGain);
+                overtone.connect(og);
+                og.connect(bg);
+                if (pan) {
+                  bg.connect(pan);
+                  pan.connect(this.musicBus);
+                } else {
+                  bg.connect(this.musicBus);
+                }
                 bell.onended = () => {
                   try {
                     bell.disconnect();
+                    overtone.disconnect();
                     bg.disconnect();
+                    og.disconnect();
+                    if (pan) pan.disconnect();
                   } catch (e) {}
                 };
                 bell.start(bt);
-                bell.stop(bt + bellStep * 1.45);
+                overtone.start(bt);
+                bell.stop(bt + bellStep * 1.7);
+                overtone.stop(bt + bellStep * 1.7);
               });
 
-              // E. Ceremonial Heartbeat Timpani
-              [0, barDur * 0.5].forEach((offset, dIdx) => {
-                const dt = t0 + offset;
-                const drum = this.ctx.createOscillator();
-                const dg = this.ctx.createGain();
-                drum.type = "sine";
-                drum.frequency.setValueAtTime(dIdx === 0 ? 78 : 66, dt);
-                drum.frequency.exponentialRampToValueAtTime(36, dt + 0.58);
-                dg.gain.setValueAtTime(dIdx === 0 ? 0.11 : 0.07, dt);
-                dg.gain.exponentialRampToValueAtTime(0.0001, dt + 0.64);
-                drum.connect(dg);
-                dg.connect(this.musicGain);
-                drum.onended = () => {
-                  try {
-                    drum.disconnect();
-                    dg.disconnect();
-                  } catch (e) {}
-                };
-                drum.start(dt);
-                drum.stop(dt + 0.68);
-              });
+              // E. Ceremonial Heartbeat Timpani & Phrase Cymbal Swells
+              this._schedulePercussionHit(t0, "timpani", 0.115);
+              this._schedulePercussionHit(t0 + barDur * 0.5, "timpani", 0.075);
+              if (prog.cymbal) {
+                this._schedulePercussionHit(
+                  t0 + barDur * 0.72,
+                  "cymbal",
+                  0.026,
+                );
+              }
             } else if (this.musicMode === "arena") {
               const prog =
                 arenaProgressions[this._musicStep % arenaProgressions.length];
 
-              // A. Tactical Low-String Rhythmic Ostinato Pulse
+              // A. Tactical Spiccato Low-String Ostinato
               const pStep = barDur / prog.pulse.length;
+              const ostCutoffBase = 230 + inten * 240;
               prog.pulse.forEach((pFreq, pIdx) => {
                 const pt = t0 + pIdx * pStep;
                 const ost = this.ctx.createOscillator();
                 const filt = this.ctx.createBiquadFilter();
                 const pg = this.ctx.createGain();
-                ost.type = "sawtooth";
+                const pan = this._createMusicPan(pIdx % 2 === 0 ? -0.18 : 0.18);
+                ost.type = inten > 0.55 ? "sawtooth" : "triangle";
                 ost.frequency.setValueAtTime(pFreq, pt);
                 filt.type = "lowpass";
-                filt.frequency.setValueAtTime(pIdx % 2 === 0 ? 310 : 230, pt);
+                filt.frequency.setValueAtTime(
+                  pIdx % 2 === 0 ? ostCutoffBase * 1.25 : ostCutoffBase * 0.88,
+                  pt,
+                );
 
-                const accent = pIdx === 0 || pIdx === 4 ? 0.14 : 0.085;
-                pg.gain.setValueAtTime(0.001, pt);
-                pg.gain.linearRampToValueAtTime(accent, pt + 0.04);
-                pg.gain.exponentialRampToValueAtTime(0.001, pt + pStep * 0.92);
+                const accent =
+                  (pIdx === 0 || pIdx === 4 ? 0.13 : 0.078) *
+                  (0.85 + inten * 0.3);
+                pg.gain.setValueAtTime(0.0001, pt);
+                pg.gain.linearRampToValueAtTime(accent, pt + 0.032);
+                pg.gain.exponentialRampToValueAtTime(0.0001, pt + pStep * 0.9);
 
                 ost.connect(filt);
                 filt.connect(pg);
-                pg.connect(this.musicGain);
+                if (pan) {
+                  pg.connect(pan);
+                  pan.connect(this.musicBus);
+                } else {
+                  pg.connect(this.musicBus);
+                }
+                ost.onended = () => {
+                  try {
+                    ost.disconnect();
+                    filt.disconnect();
+                    pg.disconnect();
+                    if (pan) pan.disconnect();
+                  } catch (e) {}
+                };
                 ost.start(pt);
-                ost.stop(pt + pStep);
+                ost.stop(pt + pStep + 0.02);
               });
 
-              // B. Atmospheric Dark-Emerald / Crimson String Pad
+              // B. Stereo-Spread Dark-Emerald / Crimson String Ensemble
               prog.chord.forEach((freq, idx) => {
                 const osc = this.ctx.createOscillator();
                 const filt = this.ctx.createBiquadFilter();
                 const g = this.ctx.createGain();
+                const pan = this._createMusicPan(
+                  (idx / Math.max(1, prog.chord.length - 1) - 0.5) * 1.1,
+                );
                 osc.type = idx % 2 === 0 ? "triangle" : "sine";
                 osc.frequency.setValueAtTime(freq, t0);
-                osc.detune.setValueAtTime((idx - 1.5) * 5, t0);
+                osc.detune.setValueAtTime((idx - 2) * 5.5, t0);
                 filt.type = "lowpass";
-                filt.frequency.setValueAtTime(680, t0);
+                filt.frequency.setValueAtTime(620 + inten * 320, t0);
 
-                g.gain.setValueAtTime(0.001, t0);
-                g.gain.linearRampToValueAtTime(0.058, t0 + 0.9);
-                g.gain.setValueAtTime(0.054, t0 + barDur - 0.9);
-                g.gain.exponentialRampToValueAtTime(0.001, t0 + barDur + 0.25);
+                g.gain.setValueAtTime(0.0001, t0);
+                g.gain.linearRampToValueAtTime(0.052, t0 + 0.9);
+                g.gain.setValueAtTime(0.048, t0 + barDur - 0.9);
+                g.gain.exponentialRampToValueAtTime(0.0001, t0 + barDur + 0.25);
 
                 osc.connect(filt);
                 filt.connect(g);
-                g.connect(this.musicGain);
+                if (pan) {
+                  g.connect(pan);
+                  pan.connect(this.musicBus);
+                } else {
+                  g.connect(this.musicBus);
+                }
+                osc.onended = () => {
+                  try {
+                    osc.disconnect();
+                    filt.disconnect();
+                    g.disconnect();
+                    if (pan) pan.disconnect();
+                  } catch (e) {}
+                };
                 osc.start(t0);
                 osc.stop(t0 + barDur + 0.3);
               });
 
-              // C. Expressive Wooden Flute / Solo Cello Battle Motif
+              // C. Expressive Solo Cello / War-Flute Battle Melody with Vibrato
               prog.lead.forEach((note) => {
                 const nt = t0 + note.start;
                 const leadOsc = this.ctx.createOscillator();
                 const subOsc = this.ctx.createOscillator();
+                const vib = this.ctx.createOscillator();
+                const vibG = this.ctx.createGain();
                 const lFilt = this.ctx.createBiquadFilter();
                 const lg = this.ctx.createGain();
+                const pan = this._createMusicPan(-0.12);
 
                 leadOsc.type = "triangle";
                 subOsc.type = "sine";
                 leadOsc.frequency.setValueAtTime(note.f, nt);
                 subOsc.frequency.setValueAtTime(note.f * 0.5, nt);
 
-                lFilt.type = "lowpass";
-                lFilt.frequency.setValueAtTime(1050, nt);
+                vib.type = "sine";
+                vib.frequency.setValueAtTime(5.4, nt);
+                vibG.gain.setValueAtTime(0.0, nt);
+                vibG.gain.linearRampToValueAtTime(2.4, nt + 0.25);
+                vib.connect(vibG);
+                vibG.connect(leadOsc.frequency);
 
-                lg.gain.setValueAtTime(0.001, nt);
-                lg.gain.linearRampToValueAtTime(0.056, nt + 0.1);
-                lg.gain.setValueAtTime(0.048, nt + note.dur - 0.18);
+                lFilt.type = "lowpass";
+                lFilt.frequency.setValueAtTime(980 + inten * 350, nt);
+
+                lg.gain.setValueAtTime(0.0001, nt);
+                lg.gain.linearRampToValueAtTime(0.054, nt + 0.1);
+                lg.gain.setValueAtTime(0.046, nt + note.dur - 0.18);
                 lg.gain.exponentialRampToValueAtTime(
-                  0.0008,
-                  nt + note.dur + 0.15,
+                  0.0001,
+                  nt + note.dur + 0.16,
                 );
 
                 leadOsc.connect(lFilt);
                 subOsc.connect(lFilt);
                 lFilt.connect(lg);
-                lg.connect(this.musicGain);
+                if (pan) {
+                  lg.connect(pan);
+                  pan.connect(this.musicBus);
+                } else {
+                  lg.connect(this.musicBus);
+                }
 
+                leadOsc.onended = () => {
+                  try {
+                    leadOsc.disconnect();
+                    subOsc.disconnect();
+                    vib.disconnect();
+                    vibG.disconnect();
+                    lFilt.disconnect();
+                    lg.disconnect();
+                    if (pan) pan.disconnect();
+                  } catch (e) {}
+                };
                 leadOsc.start(nt);
                 subOsc.start(nt);
+                vib.start(nt);
                 leadOsc.stop(nt + note.dur + 0.2);
                 subOsc.stop(nt + note.dur + 0.2);
+                vib.stop(nt + note.dur + 0.2);
               });
 
-              // D. Crisp Tactical War-Drum Accents
-              [0, barDur * 0.5, barDur * 0.75].forEach((offset, dIdx) => {
-                const dt = t0 + offset;
-                const drum = this.ctx.createOscillator();
-                const dg = this.ctx.createGain();
-                drum.type = "sine";
-                drum.frequency.setValueAtTime(dIdx === 0 ? 94 : 74, dt);
-                drum.frequency.exponentialRampToValueAtTime(40, dt + 0.42);
-                dg.gain.setValueAtTime(dIdx === 0 ? 0.13 : 0.075, dt);
-                dg.gain.exponentialRampToValueAtTime(0.001, dt + 0.46);
-                drum.connect(dg);
-                dg.connect(this.musicGain);
-                drum.start(dt);
-                drum.stop(dt + 0.5);
-              });
-            }
+              // D. Dynamic Heroic Brass Counter-Melody
+              if (inten > 0.44 && Array.isArray(prog.heroCounter)) {
+                const cGainScale = Math.min(1.0, (inten - 0.44) / 0.45);
+                prog.heroCounter.forEach((cn) => {
+                  const nt = t0 + cn.start;
+                  const hOsc = this.ctx.createOscillator();
+                  const hFilt = this.ctx.createBiquadFilter();
+                  const hg = this.ctx.createGain();
+                  const pan = this._createMusicPan(0.22);
+                  hOsc.type = "triangle";
+                  hOsc.frequency.setValueAtTime(cn.f, nt);
+                  hFilt.type = "lowpass";
+                  hFilt.frequency.setValueAtTime(820, nt);
+                  hFilt.frequency.linearRampToValueAtTime(
+                    1320,
+                    nt + cn.dur * 0.4,
+                  );
+                  const peak = 0.036 * cGainScale;
+                  hg.gain.setValueAtTime(0.0001, nt);
+                  hg.gain.linearRampToValueAtTime(peak, nt + 0.16);
+                  hg.gain.exponentialRampToValueAtTime(
+                    0.0001,
+                    nt + cn.dur + 0.18,
+                  );
+                  hOsc.connect(hFilt);
+                  hFilt.connect(hg);
+                  if (pan) {
+                    hg.connect(pan);
+                    pan.connect(this.musicBus);
+                  } else {
+                    hg.connect(this.musicBus);
+                  }
+                  hOsc.onended = () => {
+                    try {
+                      hOsc.disconnect();
+                      hFilt.disconnect();
+                      hg.disconnect();
+                      if (pan) pan.disconnect();
+                    } catch (e) {}
+                  };
+                  hOsc.start(nt);
+                  hOsc.stop(nt + cn.dur + 0.22);
+                });
+              }
 
-            if (this.musicMode === "mystic") {
+              // E. Crisp Tactical War-Drum & Dynamic Combat Percussion
+              this._schedulePercussionHit(
+                t0,
+                "wardrum",
+                0.125 * (0.85 + inten * 0.3),
+              );
+              this._schedulePercussionHit(
+                t0 + barDur * 0.5,
+                "wardrum",
+                0.085 * (0.85 + inten * 0.3),
+              );
+              this._schedulePercussionHit(
+                t0 + barDur * 0.75,
+                "wardrum",
+                0.075 * (0.85 + inten * 0.3),
+              );
+              if (inten > 0.48) {
+                this._schedulePercussionHit(
+                  t0 + barDur * 0.25,
+                  "brush",
+                  0.018 * inten,
+                );
+                this._schedulePercussionHit(
+                  t0 + barDur * 0.75,
+                  "snare",
+                  0.022 * inten,
+                );
+              }
+            } else if (this.musicMode === "mystic") {
               const prog =
                 mysticProgressions[this._musicStep % mysticProgressions.length];
+
+              // A. Deep Sanctuary Sub-Pedal
               const padOsc = this.ctx.createOscillator();
               const padG = this.ctx.createGain();
               padOsc.type = "sine";
               padOsc.frequency.setValueAtTime(prog.bass, t0);
-              padG.gain.setValueAtTime(0.001, t0);
-              padG.gain.linearRampToValueAtTime(0.22, t0 + 0.9);
-              padG.gain.exponentialRampToValueAtTime(0.001, t0 + barDur + 0.2);
+              padG.gain.setValueAtTime(0.0001, t0);
+              padG.gain.linearRampToValueAtTime(0.2, t0 + 0.9);
+              padG.gain.exponentialRampToValueAtTime(
+                0.0001,
+                t0 + barDur + 0.24,
+              );
               padOsc.connect(padG);
-              padG.connect(this.musicGain);
+              padG.connect(this.musicBus);
+              padOsc.onended = () => {
+                try {
+                  padOsc.disconnect();
+                  padG.disconnect();
+                } catch (e) {}
+              };
               padOsc.start(t0);
-              padOsc.stop(t0 + barDur + 0.25);
+              padOsc.stop(t0 + barDur + 0.28);
 
+              // B. Stereo-Panned Ethereal Strings & Choir Pad
               prog.chord.forEach((freq, idx) => {
                 const osc = this.ctx.createOscillator();
+                const filt = this.ctx.createBiquadFilter();
                 const g = this.ctx.createGain();
+                const pan = this._createMusicPan(
+                  (idx / Math.max(1, prog.chord.length - 1) - 0.5) * 1.2,
+                );
                 osc.type = idx % 2 === 0 ? "triangle" : "sine";
                 osc.frequency.setValueAtTime(freq, t0);
-                g.gain.setValueAtTime(0.001, t0);
-                g.gain.linearRampToValueAtTime(0.068, t0 + 1.1);
-                g.gain.exponentialRampToValueAtTime(0.001, t0 + barDur + 0.3);
-                osc.connect(g);
-                g.connect(this.musicGain);
+                osc.detune.setValueAtTime((idx - 2) * 6, t0);
+                filt.type = "lowpass";
+                filt.frequency.setValueAtTime(760, t0);
+                g.gain.setValueAtTime(0.0001, t0);
+                g.gain.linearRampToValueAtTime(0.052, t0 + 1.15);
+                g.gain.exponentialRampToValueAtTime(0.0001, t0 + barDur + 0.3);
+                osc.connect(filt);
+                filt.connect(g);
+                if (pan) {
+                  g.connect(pan);
+                  pan.connect(this.musicBus);
+                } else {
+                  g.connect(this.musicBus);
+                }
+                osc.onended = () => {
+                  try {
+                    osc.disconnect();
+                    filt.disconnect();
+                    g.disconnect();
+                    if (pan) pan.disconnect();
+                  } catch (e) {}
+                };
                 osc.start(t0);
                 osc.stop(t0 + barDur + 0.35);
               });
 
+              // C. Stereo-Plucked Celestial Harp Arpeggio
               const stepDur = barDur / prog.arp.length;
               prog.arp.forEach((noteFreq, nIdx) => {
                 const nt = t0 + nIdx * stepDur;
                 const harp = this.ctx.createOscillator();
+                const shimmer = this.ctx.createOscillator();
                 const hg = this.ctx.createGain();
+                const sg = this.ctx.createGain();
+                const pan = this._createMusicPan(Math.sin(nIdx * 0.9) * 0.45);
                 harp.type = "sine";
+                shimmer.type = "triangle";
                 harp.frequency.setValueAtTime(noteFreq, nt);
-                hg.gain.setValueAtTime(0.001, nt);
-                hg.gain.linearRampToValueAtTime(0.072, nt + 0.03);
+                shimmer.frequency.setValueAtTime(noteFreq * 2.0, nt);
+                sg.gain.value = 0.14;
+                hg.gain.setValueAtTime(0.0001, nt);
+                hg.gain.linearRampToValueAtTime(0.056, nt + 0.025);
                 hg.gain.exponentialRampToValueAtTime(
-                  0.0008,
-                  nt + stepDur * 2.1,
+                  0.0001,
+                  nt + stepDur * 2.2,
                 );
                 harp.connect(hg);
-                hg.connect(this.musicGain);
+                shimmer.connect(sg);
+                sg.connect(hg);
+                if (pan) {
+                  hg.connect(pan);
+                  pan.connect(this.musicBus);
+                } else {
+                  hg.connect(this.musicBus);
+                }
+                harp.onended = () => {
+                  try {
+                    harp.disconnect();
+                    shimmer.disconnect();
+                    hg.disconnect();
+                    sg.disconnect();
+                    if (pan) pan.disconnect();
+                  } catch (e) {}
+                };
                 harp.start(nt);
-                harp.stop(nt + stepDur * 2.2);
+                shimmer.start(nt);
+                harp.stop(nt + stepDur * 2.3);
+                shimmer.stop(nt + stepDur * 2.3);
+              });
+
+              // D. Expressive Sanctuary Solo Flute Melody with Gentle Vibrato
+              prog.flute.forEach((fn) => {
+                const nt = t0 + fn.start;
+                const fl = this.ctx.createOscillator();
+                const vib = this.ctx.createOscillator();
+                const vibG = this.ctx.createGain();
+                const fFilt = this.ctx.createBiquadFilter();
+                const fg = this.ctx.createGain();
+                const pan = this._createMusicPan(-0.18);
+                fl.type = "sine";
+                fl.frequency.setValueAtTime(fn.f, nt);
+                vib.type = "sine";
+                vib.frequency.setValueAtTime(5.6, nt);
+                vibG.gain.setValueAtTime(0.0, nt);
+                vibG.gain.linearRampToValueAtTime(3.0, nt + 0.45);
+                vib.connect(vibG);
+                vibG.connect(fl.frequency);
+                fFilt.type = "lowpass";
+                fFilt.frequency.setValueAtTime(1450, nt);
+                fg.gain.setValueAtTime(0.0001, nt);
+                fg.gain.linearRampToValueAtTime(0.044, nt + 0.28);
+                fg.gain.setValueAtTime(0.038, nt + fn.dur - 0.3);
+                fg.gain.exponentialRampToValueAtTime(
+                  0.0001,
+                  nt + fn.dur + 0.25,
+                );
+                fl.connect(fFilt);
+                fFilt.connect(fg);
+                if (pan) {
+                  fg.connect(pan);
+                  pan.connect(this.musicBus);
+                } else {
+                  fg.connect(this.musicBus);
+                }
+                fl.onended = () => {
+                  try {
+                    fl.disconnect();
+                    vib.disconnect();
+                    vibG.disconnect();
+                    fFilt.disconnect();
+                    fg.disconnect();
+                    if (pan) pan.disconnect();
+                  } catch (e) {}
+                };
+                fl.start(nt);
+                vib.start(nt);
+                fl.stop(nt + fn.dur + 0.3);
+                vib.stop(nt + fn.dur + 0.3);
               });
             }
 
@@ -13151,9 +13761,59 @@
           this.playCharacterCue(heroCfg, emotion);
         }
 
-        stopSpeech(keepSubtitle = false) {
+        isAnnouncerActive() {
+          const now = performance.now();
+          if (this._isAnnouncerUtterance) {
+            const synthBusy =
+              "speechSynthesis" in window &&
+              (window.speechSynthesis.speaking ||
+                window.speechSynthesis.pending);
+            if (synthBusy || now < this.announcerSpeakingUntil) {
+              return true;
+            }
+            this._isAnnouncerUtterance = false;
+            this.announcerSpeakingUntil = 0;
+          }
+          if (now < this.announcerSpeakingUntil) return true;
+          if (this._announcerQueue && this._announcerQueue.length > 0)
+            return true;
+          return false;
+        }
+
+        _releaseAnnouncerLock(completedNormally = true) {
+          clearTimeout(this._announcerFallbackTimer);
+          this._announcerFallbackTimer = null;
+          this._isAnnouncerUtterance = false;
+          this.announcerSpeakingUntil = 0;
+
+          if (this._announcerQueue && this._announcerQueue.length > 0) {
+            const next = this._announcerQueue.shift();
+            setTimeout(() => {
+              this.announceSpree(next.spokenText, next.tier, {
+                ...next.opts,
+                _fromQueue: true,
+              });
+            }, 120);
+            return;
+          }
+
+          if (typeof this._postAnnouncerHeroAction === "function") {
+            const fn = this._postAnnouncerHeroAction;
+            this._postAnnouncerHeroAction = null;
+            setTimeout(
+              () => {
+                if (!this.isAnnouncerActive()) fn();
+              },
+              completedNormally ? 240 : 120,
+            );
+          }
+        }
+
+        stopSpeech(keepSubtitle = false, clearAnnouncerQueue = true) {
           this._speechSerial = (this._speechSerial || 0) + 1;
           clearTimeout(this._speechQueueTimer);
+          clearTimeout(this._announcerFallbackTimer);
+          this._announcerFallbackTimer = null;
           const hadSpeech =
             Boolean(this._activeUtter) ||
             ("speechSynthesis" in window &&
@@ -13162,6 +13822,12 @@
           this._activeUtter = null;
           window.__activeHeroUtterance = null;
           this.speechEndsAt = 0;
+          this._isAnnouncerUtterance = false;
+          this.announcerSpeakingUntil = 0;
+          if (clearAnnouncerQueue) {
+            this._announcerQueue = [];
+            this._postAnnouncerHeroAction = null;
+          }
           if (hadSpeech && "speechSynthesis" in window) {
             try {
               window.speechSynthesis.cancel();
@@ -13179,6 +13845,7 @@
         }
 
         _showSubtitle(speakerLabel, text, isAnnouncer = false) {
+          if (!isAnnouncer && this.isAnnouncerActive()) return;
           const box = document.getElementById("voice-subtitle-box");
           if (box) {
             const spEl = document.getElementById("voice-speaker-name");
@@ -13210,27 +13877,46 @@
           }
 
           clearTimeout(window._voiceSubTimer);
-          window._voiceSubTimer = setTimeout(
-            () => {
-              if (box) {
-                box.classList.remove("opacity-100");
-                box.classList.add("opacity-0");
-              }
-            },
-            isAnnouncer ? 3600 : 3000,
-          );
+          const subDurationMs = isAnnouncer
+            ? Math.max(3800, text.length * 78 + 1200)
+            : 3000;
+          window._voiceSubTimer = setTimeout(() => {
+            if (box) {
+              box.classList.remove("opacity-100");
+              box.classList.add("opacity-0");
+            }
+          }, subDurationMs);
         }
 
         _speakUtterance(text, opts) {
           if (!("speechSynthesis" in window)) return;
+          const isAnnouncer = !!opts.isAnnouncer;
+          if (!isAnnouncer && this.isAnnouncerActive()) return;
+
           const wasActive =
             Boolean(this._activeUtter) ||
             window.speechSynthesis.speaking ||
             window.speechSynthesis.pending;
-          this.stopSpeech(true);
+          this.stopSpeech(true, isAnnouncer ? false : true);
           const mySerial = ++this._speechSerial;
-          const estMs = Math.min(4600, Math.max(1500, text.length * 74));
+          const estMs = isAnnouncer
+            ? Math.min(12000, Math.max(3200, text.length * 78 + 1100))
+            : Math.min(4600, Math.max(1500, text.length * 74));
           this.speechEndsAt = performance.now() + estMs;
+          if (isAnnouncer) {
+            this._isAnnouncerUtterance = true;
+            this._announcerStartedAt = performance.now();
+            this.announcerSpeakingUntil = performance.now() + estMs + 400;
+            clearTimeout(this._announcerFallbackTimer);
+            this._announcerFallbackTimer = setTimeout(() => {
+              if (
+                this._speechSerial === mySerial &&
+                this._isAnnouncerUtterance
+              ) {
+                this._releaseAnnouncerLock(false);
+              }
+            }, estMs + 600);
+          }
 
           const launchSpeech = () => {
             if (this._speechSerial !== mySerial) return;
@@ -13259,6 +13945,13 @@
                 window.__activeHeroUtterance = null;
                 this.speechEndsAt = 0;
                 this.duckAudioForSpeech(false);
+                if (isAnnouncer) {
+                  const elapsed =
+                    performance.now() - (this._announcerStartedAt || 0);
+                  if (elapsed >= 350) {
+                    this._releaseAnnouncerLock(true);
+                  }
+                }
               };
               utter.onerror = () => {
                 if (this._speechSerial !== mySerial) return;
@@ -13266,6 +13959,9 @@
                 window.__activeHeroUtterance = null;
                 this.speechEndsAt = 0;
                 this.duckAudioForSpeech(false);
+                if (isAnnouncer) {
+                  this._releaseAnnouncerLock(false);
+                }
               };
 
               window.speechSynthesis.speak(utter);
@@ -13273,6 +13969,9 @@
               if (this._speechSerial === mySerial) {
                 this.speechEndsAt = 0;
                 this.duckAudioForSpeech(false);
+                if (isAnnouncer) {
+                  this._releaseAnnouncerLock(false);
+                }
               }
             }
           };
@@ -13309,7 +14008,18 @@
                 ? 2500
                 : 20000;
 
-          if (!force && now < this.announcerSpeakingUntil) return;
+          // Announcer voice always has strict priority over all champion voices
+          if (this.isAnnouncerActive()) {
+            if (opts.deferAfterAnnouncer) {
+              this._postAnnouncerHeroAction = () => {
+                this.speakHeroLine(heroCfg, lineOrArr, priority, emotion, {
+                  ...opts,
+                  deferAfterAnnouncer: false,
+                });
+              };
+            }
+            return;
+          }
 
           const isCurrentlySpeaking =
             ("speechSynthesis" in window && window.speechSynthesis.speaking) ||
@@ -13390,6 +14100,7 @@
             heroCfg.voice.cadence || "heroic",
           );
           this._speakUtterance(spokenText, {
+            isAnnouncer: false,
             pitch: Math.min(
               hqVoice ? 1.24 : 1.08,
               Math.max(hqVoice ? 0.76 : 0.92, gentlePitch * pitchMod),
@@ -13403,75 +14114,96 @@
           });
         }
 
-        announceSpree(spokenText, tier = 1) {
+        announceSpree(spokenText, tier = 1, opts = {}) {
           this.ensure();
-          if (this.sfxEnabled && this.ctx) {
-            const t = this.ctx.currentTime;
-            const sub = this.ctx.createOscillator();
-            const subG = this.ctx.createGain();
-            sub.type = "sine";
-            sub.frequency.setValueAtTime(108, t);
-            sub.frequency.exponentialRampToValueAtTime(36, t + 1.05);
-            subG.gain.setValueAtTime(0.36, t);
-            subG.gain.exponentialRampToValueAtTime(0.001, t + 1.1);
-            sub.connect(subG);
-            this.connectWithReverb(subG, 0.85);
-            sub.start(t);
-            sub.stop(t + 1.12);
+          if (!opts._fromQueue) {
+            if (this.sfxEnabled && this.ctx) {
+              const t = this.ctx.currentTime;
+              const sub = this.ctx.createOscillator();
+              const subG = this.ctx.createGain();
+              sub.type = "sine";
+              sub.frequency.setValueAtTime(108, t);
+              sub.frequency.exponentialRampToValueAtTime(36, t + 1.05);
+              subG.gain.setValueAtTime(0.36, t);
+              subG.gain.exponentialRampToValueAtTime(0.001, t + 1.1);
+              sub.connect(subG);
+              this.connectWithReverb(subG, 0.85);
+              sub.start(t);
+              sub.stop(t + 1.12);
 
-            const chord =
-              tier >= 4
-                ? [110.0, 164.81, 220.0, 277.18, 329.63, 440.0]
-                : tier >= 2
-                  ? [110.0, 164.81, 220.0, 329.63]
-                  : [130.81, 196.0, 261.63];
+              const chord =
+                tier >= 4
+                  ? [110.0, 164.81, 220.0, 277.18, 329.63, 440.0]
+                  : tier >= 2
+                    ? [110.0, 164.81, 220.0, 329.63]
+                    : [130.81, 196.0, 261.63];
 
-            chord.forEach((f, idx) => {
-              const osc = this.ctx.createOscillator();
-              const filt = this.ctx.createBiquadFilter();
-              const g = this.ctx.createGain();
-              osc.type = idx % 2 === 0 ? "sawtooth" : "triangle";
-              osc.frequency.setValueAtTime(f, t + idx * 0.035);
+              chord.forEach((f, idx) => {
+                const osc = this.ctx.createOscillator();
+                const filt = this.ctx.createBiquadFilter();
+                const g = this.ctx.createGain();
+                osc.type = idx % 2 === 0 ? "sawtooth" : "triangle";
+                osc.frequency.setValueAtTime(f, t + idx * 0.035);
 
-              filt.type = "lowpass";
-              filt.frequency.setValueAtTime(320, t + idx * 0.035);
-              filt.frequency.exponentialRampToValueAtTime(
-                tier >= 4 ? 1950 : 1450,
-                t + idx * 0.035 + 0.28,
+                filt.type = "lowpass";
+                filt.frequency.setValueAtTime(320, t + idx * 0.035);
+                filt.frequency.exponentialRampToValueAtTime(
+                  tier >= 4 ? 1950 : 1450,
+                  t + idx * 0.035 + 0.28,
+                );
+                filt.frequency.exponentialRampToValueAtTime(640, t + 1.15);
+
+                g.gain.setValueAtTime(0.001, t + idx * 0.035);
+                g.gain.linearRampToValueAtTime(0.082, t + idx * 0.035 + 0.08);
+                g.gain.exponentialRampToValueAtTime(0.001, t + 1.15);
+
+                osc.connect(filt);
+                filt.connect(g);
+                this.connectWithReverb(g, 0.78);
+                osc.start(t + idx * 0.035);
+                osc.stop(t + idx * 0.035 + 0.18 + 1.0);
+              });
+            }
+
+            if (this.sfxEnabled && this.ctx) {
+              this.playNoiseBurst(0.6, "lowpass", 240, 52, 0.46, 0.9);
+              this.playNoiseBurst(
+                tier >= 4 ? 1.5 : 1.0,
+                "highpass",
+                5200,
+                8200,
+                0.03,
+                0.95,
               );
-              filt.frequency.exponentialRampToValueAtTime(640, t + 1.15);
-
-              g.gain.setValueAtTime(0.001, t + idx * 0.035);
-              g.gain.linearRampToValueAtTime(0.082, t + idx * 0.035 + 0.08);
-              g.gain.exponentialRampToValueAtTime(0.001, t + 1.15);
-
-              osc.connect(filt);
-              filt.connect(g);
-              this.connectWithReverb(g, 0.78);
-              osc.start(t + idx * 0.035);
-              osc.stop(t + idx * 0.035 + 0.18 + 1.0);
-            });
+            }
           }
 
-          if (this.sfxEnabled && this.ctx) {
-            this.playNoiseBurst(0.6, "lowpass", 240, 52, 0.46, 0.9);
-            this.playNoiseBurst(
-              tier >= 4 ? 1.5 : 1.0,
-              "highpass",
-              5200,
-              8200,
-              0.03,
-              0.95,
-            );
-          }
-
-          if (this.voiceEnabled) {
-            this.announcerSpeakingUntil = performance.now() + 3400;
-            this._showSubtitle("GRANDMASTER ANNOUNCER:", spokenText, true);
+          if (this.voiceEnabled && spokenText) {
+            if (typeof opts.afterAnnouncer === "function") {
+              this._postAnnouncerHeroAction = opts.afterAnnouncer;
+            }
+            if (!opts._fromQueue && this.isAnnouncerActive()) {
+              if (this._announcerQueue.length < 4) {
+                this._announcerQueue.push({
+                  spokenText,
+                  tier,
+                  opts: { ...opts, afterAnnouncer: null },
+                });
+              }
+              return;
+            }
 
             const formatted = spokenText
               .replace(/!\s+/g, "! ")
               .replace(/\.\s+/g, ". ");
+            const estMs = Math.min(
+              12000,
+              Math.max(3200, formatted.length * 78 + 1100),
+            );
+            this._isAnnouncerUtterance = true;
+            this._announcerStartedAt = performance.now();
+            this.announcerSpeakingUntil = performance.now() + estMs + 400;
+            this._showSubtitle("GRANDMASTER ANNOUNCER:", spokenText, true);
 
             const deepVoice = this.pickSystemVoice(
               false,
@@ -13502,11 +14234,14 @@
             this._deepDuck = true;
 
             this._speakUtterance(formatted, {
+              isAnnouncer: true,
               pitch: announcerPitch,
               rate: announcerRate,
               volume: Math.min(1.0, 1.0 * this.voiceVolumeScale),
               voice: deepVoice,
             });
+          } else if (typeof opts.afterAnnouncer === "function") {
+            setTimeout(opts.afterAnnouncer, 400);
           }
         }
         connectWithReverb(node, wet = 0.35) {
@@ -31154,6 +31889,7 @@ diffuseColor.rgb *= mix(0.58, 1.04, groundAO) * canopyShade;`,
           this.turnRoll = 0;
           this.lowHpWarned = false;
 
+          this.recentHeroDamagers = new Map();
           this.targetPos = null;
           this.targetUnit = null;
           this.attackMovePos = null;
@@ -31426,17 +32162,33 @@ diffuseColor.rgb *= mix(0.58, 1.04, groundAO) * canopyShade;`,
           return this.moveSpeed * slow * buff * furySpd;
         }
 
-        gainXp(amt) {
-          if (this.type !== "hero" || this.dead) return;
+        recordHeroInvolvement(sourceHero) {
+          if (
+            this.type !== "hero" ||
+            !sourceHero ||
+            sourceHero.type !== "hero" ||
+            sourceHero.team === this.team
+          )
+            return;
+          if (!this.recentHeroDamagers) this.recentHeroDamagers = new Map();
+          this.recentHeroDamagers.set(sourceHero, matchTime);
+        }
+
+        gainXp(amt, allowDead = false) {
+          if (this.type !== "hero" || (this.dead && !allowDead)) return;
+          if (this.level >= MAX_HERO_LEVEL) {
+            this.xp = 0;
+            return;
+          }
           const diffMult =
             this.isPlayer || this.isRemoteHuman
               ? 1.0
               : AI_DIFFICULTY_PROFILES[aiDifficulty].xpMult;
           this.xp += amt * diffMult;
-          while (this.xp >= this.xpToNext && this.level < 25) {
+          while (this.xp >= this.xpToNext && this.level < MAX_HERO_LEVEL) {
             this.xp -= this.xpToNext;
             this.level++;
-            this.xpToNext = Math.floor(this.xpToNext * 1.22);
+            this.xpToNext = Math.floor(this.xpToNext * 1.185);
             this.skillPoints++;
 
             this.str += 3;
@@ -31465,7 +32217,11 @@ diffuseColor.rgb *= mix(0.58, 1.04, groundAO) * canopyShade;`,
                   },
                 );
               const ultUnlockNote =
-                this.level === 6 ? " • ULTIMATE UNLOCKED!" : "";
+                this.level === 6
+                  ? " • ULTIMATE UNLOCKED!"
+                  : this.level === MAX_HERO_LEVEL
+                    ? " • MAX LEVEL!"
+                    : "";
               spawnFloatText(
                 this.mesh.position,
                 `LEVEL ${this.level}!${ultUnlockNote}`,
@@ -31481,19 +32237,70 @@ diffuseColor.rgb *= mix(0.58, 1.04, groundAO) * canopyShade;`,
               );
               updateAbilityUpgradeButtons();
             } else if (!this.isRemoteHuman) {
+              let spent = false;
               for (const k of ["R", "Q", "W", "E"]) {
                 if (canHeroLevelAbility(this, k)) {
                   this.abilityLevels[k]++;
                   this.skillPoints--;
+                  spent = true;
                   break;
                 }
               }
+              if (
+                !spent &&
+                this.heroCfg &&
+                this.heroCfg.talents &&
+                this.skillPoints > 0
+              ) {
+                const nextTier = getNextAvailableTalentTier(this);
+                if (nextTier && this.heroCfg.talents[nextTier]) {
+                  const branch =
+                    this.heroCfg.talents[nextTier][Math.random() < 0.5 ? 0 : 1];
+                  if (branch) {
+                    this.skillPoints--;
+                    this.chosenTalents[nextTier] = branch.id;
+                    branch.apply(this);
+                    spent = true;
+                  }
+                }
+              }
+              if (!spent && canHeroLevelAttributes(this)) {
+                this.skillPoints--;
+                this.attrBonusRank++;
+                this.str += 2;
+                this.agi += 2;
+                this.int += 2;
+                this.maxHp += 44;
+                this.hp += 44;
+                this.maxMana += 28;
+                this.mana += 28;
+                this.atkDamage += 4;
+                this.armor += 0.4;
+                this.atkSpeedMult += 0.03;
+              }
             }
           }
+          if (this.level >= MAX_HERO_LEVEL) this.xp = 0;
         }
 
         takeDamage(rawDmg, attacker, isCrit = false) {
           if (this.dead || this.reincarnating || gameOver) return;
+
+          const sourceHero =
+            attacker && attacker.type === "hero"
+              ? attacker
+              : attacker &&
+                  attacker.summonOwner &&
+                  attacker.summonOwner.type === "hero"
+                ? attacker.summonOwner
+                : null;
+          if (
+            this.type === "hero" &&
+            sourceHero &&
+            sourceHero.team !== this.team
+          ) {
+            this.recordHeroInvolvement(sourceHero);
+          }
 
           if (this.type === "tower" && this.name.includes("Tier 2")) {
             const t1Alive = units.some(
@@ -31965,6 +32772,15 @@ diffuseColor.rgb *= mix(0.58, 1.04, groundAO) * canopyShade;`,
               : 12,
           );
 
+          const effectiveKiller =
+            killer && killer.type === "hero"
+              ? killer
+              : killer &&
+                  killer.summonOwner &&
+                  killer.summonOwner.type === "hero"
+                ? killer.summonOwner
+                : killer;
+
           units.forEach((u) => {
             if (
               u.type === "hero" &&
@@ -31998,13 +32814,17 @@ diffuseColor.rgb *= mix(0.58, 1.04, groundAO) * canopyShade;`,
                 u.hp = Math.min(u.maxHp, u.hp + 18);
               }
             }
-            if (u.type === "hero" && !u.dead && u.team !== this.team) {
+            if (
+              this.type !== "hero" &&
+              u.type === "hero" &&
+              !u.dead &&
+              u.team !== this.team
+            ) {
               if (
                 u.mesh.position.distanceTo(this.mesh.position) <= 42 ||
-                killer === u
+                effectiveKiller === u
               ) {
                 u.gainXp(this.xpBounty);
-                if (this.type === "hero" && u !== killer) u.assists++;
               }
             }
           });
@@ -32016,14 +32836,27 @@ diffuseColor.rgb *= mix(0.58, 1.04, groundAO) * canopyShade;`,
               )
             : this.goldBounty;
 
-          if (killer && killer.type === "hero") {
-            killer.gold += bounty;
-            if (["creep", "neutral", "tower", "dragon"].includes(this.type))
-              killer.lastHits++;
+          if (
+            this.type !== "hero" &&
+            effectiveKiller &&
+            effectiveKiller.type === "hero"
+          ) {
+            effectiveKiller.gold += bounty;
+            if (
+              [
+                "creep",
+                "neutral",
+                "tower",
+                "dragon",
+                "boss",
+                "sneakygolem",
+              ].includes(this.type)
+            )
+              effectiveKiller.lastHits++;
             if (
               mpState.active &&
               mpState.role === "host" &&
-              (killer.isPlayer || killer.isRemoteHuman)
+              (effectiveKiller.isPlayer || effectiveKiller.isRemoteHuman)
             ) {
               mpQueueFxEvent([
                 "T",
@@ -32034,25 +32867,12 @@ diffuseColor.rgb *= mix(0.58, 1.04, groundAO) * canopyShade;`,
                 17,
               ]);
             }
-            if (killer.isPlayer) {
+            if (effectiveKiller.isPlayer) {
               sfx.play("gold");
-              if (this.type === "hero" && killer.heroCfg)
+              if (effectiveKiller.heroCfg)
                 sfx.speakHeroLine(
-                  killer.heroCfg,
-                  killer.heroCfg.voice.kill,
-                  true,
-                  "triumph",
-                  {
-                    category: "kill",
-                    chime: true,
-                    minGapMs: 2500,
-                    catGapMs: 4000,
-                  },
-                );
-              else if (killer.heroCfg)
-                sfx.speakHeroLine(
-                  killer.heroCfg,
-                  killer.heroCfg.voice.gold,
+                  effectiveKiller.heroCfg,
+                  effectiveKiller.heroCfg.voice.gold,
                   false,
                   "normal",
                   {
@@ -32104,11 +32924,22 @@ diffuseColor.rgb *= mix(0.58, 1.04, groundAO) * canopyShade;`,
 
             const slayer =
               killer && killer.type === "hero" ? killer : playerHero;
+            const dScale =
+              getEscalationMults().goldBounty *
+              (getInfinityMonsterMult() > 1 ? 1.65 : 1.0);
+            const dragonRelicGold = Math.round(1200 * dScale);
+            const dragonRelicHp = Math.round(
+              650 * (1 + (escalationTier - 1) * 0.1),
+            );
+            const dragonRelicAtk = Math.round(
+              55 * (1 + (escalationTier - 1) * 0.1),
+            );
             if (slayer && !slayer.dead) {
-              slayer.gold += 1200;
-              slayer.maxHp += 650;
+              slayer.gold += dragonRelicGold;
+              slayer.maxHp += dragonRelicHp;
               slayer.hp = slayer.maxHp;
-              slayer.atkDamage = Math.round(slayer.atkDamage * 1.28) + 55;
+              slayer.atkDamage =
+                Math.round(slayer.atkDamage * 1.28) + dragonRelicAtk;
               slayer.spellAmpBonus += 0.28;
               slayer.hasRadiance = true;
               const emptyIdx = slayer.inventory.findIndex((s) => s === null);
@@ -32122,10 +32953,10 @@ diffuseColor.rgb *= mix(0.58, 1.04, groundAO) * canopyShade;`,
                   cost: 1800,
                   icon: "fa-dragon",
                   color: "text-orange-400",
-                  desc: "Apex Dragon Relic! Permanent +28% ATK, +650 HP, +28% Spell Amp & Dragonfire Aura!",
+                  desc: `Apex Dragon Relic! Permanent +28% ATK (+${dragonRelicAtk}), +${dragonRelicHp} HP, +28% Spell Amp & Dragonfire Aura!`,
                   stats: {
-                    maxHp: 650,
-                    atkDamage: 55,
+                    maxHp: dragonRelicHp,
+                    atkDamage: dragonRelicAtk,
                     spellAmpBonus: 0.28,
                     hasRadiance: true,
                   },
@@ -32135,7 +32966,7 @@ diffuseColor.rgb *= mix(0.58, 1.04, groundAO) * canopyShade;`,
             }
             showBanner(
               "ELDER SKY-DRAGON SLAIN!",
-              `${slayer ? slayer.name : "The Champion"} absorbs the ELDER DRAGON SOUL (+1,200g, +28% ATK, +650 HP & Dragonfire Aura)!`,
+              `${slayer ? slayer.name : "The Champion"} absorbs the ELDER DRAGON SOUL (+${dragonRelicGold.toLocaleString()}g, +28% ATK, +${dragonRelicHp} HP & Dragonfire Aura)!`,
               "text-orange-300",
             );
             return;
@@ -32209,28 +33040,235 @@ diffuseColor.rgb *= mix(0.58, 1.04, groundAO) * canopyShade;`,
             if (this.team === "radiant") direKills++;
             else radiantKills++;
 
-            if (killer && killer.type === "hero") {
-              killer.kills++;
-              killer.spreeCount++;
-              killer.celebrateTimer = 1.45;
-              spawnShockwaveRing(
-                killer.mesh.position.x,
-                killer.mesh.position.z,
-                5.2,
-                0xfacc15,
-                0.65,
+            // Collect all opposing heroes involved in this hero's death (damaged/CC'd within 18s, killer, or actively fighting within 26m)
+            const ASSIST_WINDOW = 18.0;
+            const involvedSet = new Set();
+            if (
+              effectiveKiller &&
+              effectiveKiller.type === "hero" &&
+              effectiveKiller.team !== this.team
+            ) {
+              involvedSet.add(effectiveKiller);
+            }
+            if (this.recentHeroDamagers) {
+              this.recentHeroDamagers.forEach((dmgTime, attackerHero) => {
+                if (
+                  attackerHero &&
+                  attackerHero.type === "hero" &&
+                  attackerHero.team !== this.team &&
+                  matchTime - dmgTime <= ASSIST_WINDOW
+                ) {
+                  involvedSet.add(attackerHero);
+                }
+              });
+              this.recentHeroDamagers.clear();
+            }
+            units.forEach((u) => {
+              if (u.type === "hero" && !u.dead && u.team !== this.team) {
+                if (u.mesh.position.distanceTo(this.mesh.position) <= 26.0) {
+                  involvedSet.add(u);
+                }
+              }
+            });
+
+            const involvedHeroes = Array.from(involvedSet);
+            const heroKiller =
+              effectiveKiller &&
+              effectiveKiller.type === "hero" &&
+              effectiveKiller.team !== this.team
+                ? effectiveKiller
+                : null;
+
+            if (involvedHeroes.length > 0) {
+              // Share Experience among all involved heroes
+              const totalXpPool = Math.round(
+                this.xpBounty * (involvedHeroes.length > 1 ? 1.15 : 1.0),
+              );
+              const sharedXp = Math.max(
+                1,
+                Math.round(totalXpPool / involvedHeroes.length),
               );
 
-              if (matchTime - killer.lastKillTimestamp <= 18.0)
-                killer.multiKillCount++;
-              else killer.multiKillCount = 1;
-              killer.lastKillTimestamp = matchTime;
+              // Share Gold among involved heroes (60% killer / 40% split among assists, or 100% split equally if a non-hero unit got the last hit)
+              let killerGoldShare = 0;
+              let assistGoldShare = 0;
+              if (heroKiller) {
+                if (involvedHeroes.length === 1) {
+                  killerGoldShare = bounty;
+                } else {
+                  killerGoldShare = Math.round(bounty * 0.6);
+                  const assistPool = Math.max(
+                    involvedHeroes.length - 1,
+                    bounty - killerGoldShare,
+                  );
+                  assistGoldShare = Math.max(
+                    1,
+                    Math.round(assistPool / (involvedHeroes.length - 1)),
+                  );
+                }
+              } else {
+                assistGoldShare = Math.max(
+                  1,
+                  Math.round(bounty / involvedHeroes.length),
+                );
+              }
 
-              handleHeroKillAnnouncements(killer, this, bounty);
+              const assistNames = [];
+              involvedHeroes.forEach((hUnit) => {
+                const isPrimaryKiller = heroKiller && hUnit === heroKiller;
+                const goldEarned = isPrimaryKiller
+                  ? killerGoldShare
+                  : assistGoldShare;
+                hUnit.gold += goldEarned;
+                hUnit.gainXp(sharedXp, true);
+                if (!isPrimaryKiller) {
+                  hUnit.assists++;
+                  assistNames.push(hUnit.name);
+                }
+
+                if (
+                  mpState.active &&
+                  mpState.role === "host" &&
+                  (hUnit.isPlayer || hUnit.isRemoteHuman)
+                ) {
+                  const popupPos = hUnit.dead
+                    ? this.mesh.position
+                    : hUnit.mesh.position;
+                  mpQueueFxEvent([
+                    "T",
+                    Math.round(popupPos.x),
+                    Math.round(popupPos.z),
+                    `+${goldEarned}g • +${sharedXp} XP`,
+                    "#facc15",
+                    16,
+                  ]);
+                }
+                if (hUnit.isPlayer) {
+                  sfx.play("gold");
+                  if (isPrimaryKiller && hUnit.heroCfg) {
+                    sfx.speakHeroLine(
+                      hUnit.heroCfg,
+                      hUnit.heroCfg.voice.kill,
+                      true,
+                      "triumph",
+                      {
+                        category: "kill",
+                        chime: true,
+                        minGapMs: 2500,
+                        catGapMs: 4000,
+                      },
+                    );
+                  }
+                  const anchorPos =
+                    isPrimaryKiller || hUnit.dead
+                      ? this.mesh.position
+                      : hUnit.mesh.position;
+                  const tagTxt = isPrimaryKiller
+                    ? `+${goldEarned}g • +${sharedXp} XP`
+                    : `ASSIST +${goldEarned}g • +${sharedXp} XP`;
+                  spawnFloatText(anchorPos, tagTxt, "#facc15", 17);
+                }
+              });
+
+              if (heroKiller) {
+                heroKiller.kills++;
+                heroKiller.spreeCount++;
+                heroKiller.celebrateTimer = 1.45;
+                spawnShockwaveRing(
+                  heroKiller.mesh.position.x,
+                  heroKiller.mesh.position.z,
+                  5.2,
+                  0xfacc15,
+                  0.65,
+                );
+
+                if (matchTime - heroKiller.lastKillTimestamp <= 18.0)
+                  heroKiller.multiKillCount++;
+                else heroKiller.multiKillCount = 1;
+                heroKiller.lastKillTimestamp = matchTime;
+
+                handleHeroKillAnnouncements(
+                  heroKiller,
+                  this,
+                  killerGoldShare,
+                  assistGoldShare,
+                  assistNames,
+                );
+              } else {
+                const killerLabel = effectiveKiller
+                  ? effectiveKiller.name
+                  : this.team === "dire"
+                    ? "Radiant Forces"
+                    : "Dire Forces";
+                const splitNames = involvedHeroes.map((h) => h.name).join(", ");
+                showBanner(
+                  `${this.name.toUpperCase()} SLAIN!`,
+                  `${killerLabel} struck the final blow • +${assistGoldShare}g & +${sharedXp} XP shared with ${splitNames}!`,
+                  this.team === "dire" ? "text-emerald-400" : "text-rose-400",
+                );
+              }
+            } else if (
+              effectiveKiller &&
+              effectiveKiller.team !== this.team &&
+              (effectiveKiller.team === "radiant" ||
+                effectiveKiller.team === "dire")
+            ) {
+              // Killed purely by a faction unit (creep, tower, guardian) without any hero involvement -> share gold equally across all heroes of that faction!
+              const winningFaction = effectiveKiller.team;
+              const factionHeroes = units.filter(
+                (u) => u.type === "hero" && u.team === winningFaction,
+              );
+              const factionShare =
+                factionHeroes.length > 0
+                  ? Math.max(1, Math.round(bounty / factionHeroes.length))
+                  : bounty;
+
+              factionHeroes.forEach((fHero) => {
+                fHero.gold += factionShare;
+                if (
+                  mpState.active &&
+                  mpState.role === "host" &&
+                  (fHero.isPlayer || fHero.isRemoteHuman)
+                ) {
+                  const popupPos = fHero.dead
+                    ? this.mesh.position
+                    : fHero.mesh.position;
+                  mpQueueFxEvent([
+                    "T",
+                    Math.round(popupPos.x),
+                    Math.round(popupPos.z),
+                    `+${factionShare}g (Faction Split)`,
+                    "#facc15",
+                    16,
+                  ]);
+                }
+                if (fHero.isPlayer) {
+                  sfx.play("gold");
+                  const anchorPos = fHero.dead
+                    ? this.mesh.position
+                    : fHero.mesh.position;
+                  spawnFloatText(
+                    anchorPos,
+                    `+${factionShare}g (Faction Split)`,
+                    "#facc15",
+                    17,
+                  );
+                }
+              });
+
+              const factionLabel =
+                winningFaction === "radiant" ? "Radiant" : "Dire";
+              showBanner(
+                `${this.name.toUpperCase()} SLAIN BY ${effectiveKiller.name.toUpperCase()}!`,
+                `${factionLabel} Faction Split: +${factionShare}g awarded to every ${factionLabel} hero!`,
+                winningFaction === "radiant"
+                  ? "text-emerald-400"
+                  : "text-rose-400",
+              );
             } else {
               showBanner(
                 `${this.name.toUpperCase()} SLAIN!`,
-                `${this.team === "dire" ? "Radiant" : "Dire"} claims +${bounty} Gold!`,
+                `${this.name} fell in battle!`,
                 this.team === "dire" ? "text-emerald-400" : "text-rose-400",
               );
             }
@@ -32299,6 +33337,7 @@ diffuseColor.rgb *= mix(0.58, 1.04, groundAO) * canopyShade;`,
           this.dead = false;
           this.deathAnimTimer = 0;
           this.lowHpWarned = false;
+          if (this.recentHeroDamagers) this.recentHeroDamagers.clear();
           this.hp = this.maxHp;
           this.mana = this.maxMana;
           this.shield = 0;
@@ -32333,7 +33372,13 @@ diffuseColor.rgb *= mix(0.58, 1.04, groundAO) * canopyShade;`,
         }
       }
 
-      function handleHeroKillAnnouncements(killer, victim, bounty) {
+      function handleHeroKillAnnouncements(
+        killer,
+        victim,
+        bounty,
+        assistGold = 0,
+        assistNames = [],
+      ) {
         const spreeTitles = {
           3: "KILLING SPREE!",
           4: "DOMINATING!",
@@ -32384,9 +33429,13 @@ diffuseColor.rgb *= mix(0.58, 1.04, groundAO) * canopyShade;`,
         if (mpState.active && mpState.role === "host") {
           mpQueueFxEvent(["B", killer.netId || killer.id, spoken, tier]);
         }
+        const assistNote =
+          assistNames && assistNames.length > 0 && assistGold > 0
+            ? ` (+${assistGold}g shared with ${assistNames.join(", ")})`
+            : "";
         showBanner(
           headline,
-          `${killer.name} claims +${bounty} Gold • Streak: ${killer.spreeCount}`,
+          `${killer.name} claims +${bounty}g${assistNote} • Streak: ${killer.spreeCount}`,
           colorCls,
         );
       }
@@ -33811,8 +34860,9 @@ diffuseColor.rgb *= mix(0.58, 1.04, groundAO) * canopyShade;`,
         return key === "R" ? nextRank * 6 : nextRank * 2 - 1;
       }
 
+      const MAX_HERO_LEVEL = 30;
       const TALENT_TIERS = [10, 15, 20, 25];
-      const MAX_ATTR_RANK = 10;
+      const MAX_ATTR_RANK = 11;
       let isCtrlHeld = false;
 
       function getNextAvailableTalentTier(hero) {
@@ -34120,13 +35170,17 @@ diffuseColor.rgb *= mix(0.58, 1.04, groundAO) * canopyShade;`,
       let radiantMegaCreeps = false;
       let direMegaCreeps = false;
 
-      function getEscalationMults() {
-        const t = escalationTier - 1;
+      function getEscalationMults(tierOverride = escalationTier) {
+        const t = Math.max(0, tierOverride - 1);
+        const goldScale = 1 + t * 0.25;
+        const xpScale = 1 + t * 0.28;
         return {
           hp: 1 + t * 0.28,
           dmg: 1 + t * 0.26,
           armor: t * 1.4,
-          bounty: 1 + t * 0.16,
+          bounty: goldScale,
+          goldBounty: goldScale,
+          xpBounty: xpScale,
         };
       }
 
@@ -34152,7 +35206,6 @@ diffuseColor.rgb *= mix(0.58, 1.04, groundAO) * canopyShade;`,
             z.z === lastDragonSpot.z
           )
             return false;
-          // Ensure safe distance from any standing tower or ancient
           return !units.some(
             (u) =>
               !u.dead &&
@@ -34167,6 +35220,8 @@ diffuseColor.rgb *= mix(0.58, 1.04, groundAO) * canopyShade;`,
         const gy = getTerrainHeightAt(spot.x, spot.z);
         const m = getEscalationMults();
         const infMon = getInfinityMonsterMult();
+        const infReward = infMon > 1 ? 1.65 : 1.0;
+        const dragonBonusGold = Math.round(1200 * m.goldBounty * infReward);
         elderDragonBoss = new MobaEntity({
           name: `ELDER SKY-DRAGON (Tier ${escalationTier})`,
           team: "neutral",
@@ -34183,10 +35238,10 @@ diffuseColor.rgb *= mix(0.58, 1.04, groundAO) * canopyShade;`,
           armor: Math.round((20 + m.armor) * (infMon > 1 ? 1.35 : 1.0)),
           radius: 3.4,
           goldBounty: [
-            Math.round(1150 * m.bounty),
-            Math.round(1300 * m.bounty),
+            Math.round(1150 * m.goldBounty * infReward),
+            Math.round(1300 * m.goldBounty * infReward),
           ],
-          xpBounty: Math.round(1250 * m.bounty),
+          xpBounty: Math.round(1250 * m.xpBounty * infReward),
         });
         elderDragonBoss.mesh.position.set(spot.x, gy + 24, spot.z);
         elderDragonBoss.dragonDescentTimer = 1.25;
@@ -34202,7 +35257,7 @@ diffuseColor.rgb *= mix(0.58, 1.04, groundAO) * canopyShade;`,
         triggerCameraShake(1.1);
         showBanner(
           "ELDER SKY-DRAGON APPEARS!",
-          `Apex World Boss landed in the ${spot.region} (${spot.x}, ${spot.z}) • Slay it for Elder Dragon Soul & +1,200g!`,
+          `Apex World Boss landed in the ${spot.region} (${spot.x}, ${spot.z}) • Slay it for Elder Dragon Soul & +${dragonBonusGold.toLocaleString()}g!`,
           "text-sky-300",
         );
       }
@@ -34216,6 +35271,7 @@ diffuseColor.rgb *= mix(0.58, 1.04, groundAO) * canopyShade;`,
         }
         const m = getEscalationMults();
         const infMon = getInfinityMonsterMult();
+        const infReward = infMon > 1 ? 1.65 : 1.0;
         roshanBoss = new MobaEntity({
           name: `ROSHAN (Tier ${escalationTier})`,
           team: "neutral",
@@ -34231,8 +35287,11 @@ diffuseColor.rgb *= mix(0.58, 1.04, groundAO) * canopyShade;`,
           moveSpeed: 10.2,
           armor: Math.round((20 + m.armor) * (infMon > 1 ? 1.35 : 1.0)),
           radius: 2.9,
-          goldBounty: [Math.round(450 * m.bounty), Math.round(520 * m.bounty)],
-          xpBounty: Math.round(880 * m.bounty),
+          goldBounty: [
+            Math.round(450 * m.goldBounty * infReward),
+            Math.round(520 * m.goldBounty * infReward),
+          ],
+          xpBounty: Math.round(880 * m.xpBounty * infReward),
         });
         units.push(roshanBoss);
       }
@@ -34242,6 +35301,7 @@ diffuseColor.rgb *= mix(0.58, 1.04, groundAO) * canopyShade;`,
         ppLabuSpawned[team] = true;
         const m = getEscalationMults();
         const infMon = getInfinityMonsterMult();
+        const infReward = infMon > 1 ? 1.65 : 1.0;
         const isRad = team === "radiant";
         const spawnX = isRad ? -125 : 125;
         const spawnZ = isRad ? 125 : -125;
@@ -34271,10 +35331,10 @@ diffuseColor.rgb *= mix(0.58, 1.04, groundAO) * canopyShade;`,
           armor: otherGuardArmor,
           radius: 3.3,
           goldBounty: [
-            Math.round(1100 * m.bounty),
-            Math.round(1250 * m.bounty),
+            Math.round(1100 * m.goldBounty * infReward),
+            Math.round(1250 * m.goldBounty * infReward),
           ],
-          xpBounty: Math.round(1200 * m.bounty),
+          xpBounty: Math.round(1200 * m.xpBounty * infReward),
         });
         ppLabuGuardians[team] = kong;
         units.push(kong);
@@ -34297,10 +35357,10 @@ diffuseColor.rgb *= mix(0.58, 1.04, groundAO) * canopyShade;`,
           armor: Math.round((23 + m.armor) * (infMon > 1 ? 1.35 : 1.0)),
           radius: 3.2,
           goldBounty: [
-            Math.round(1100 * m.bounty),
-            Math.round(1250 * m.bounty),
+            Math.round(1100 * m.goldBounty * infReward),
+            Math.round(1250 * m.goldBounty * infReward),
           ],
-          xpBounty: Math.round(1200 * m.bounty),
+          xpBounty: Math.round(1200 * m.xpBounty * infReward),
         });
         redManGuardians[team] = redMan;
         units.push(redMan);
@@ -34326,10 +35386,10 @@ diffuseColor.rgb *= mix(0.58, 1.04, groundAO) * canopyShade;`,
             armor: Math.round(otherGuardArmor * 1.35),
             radius: 5.8,
             goldBounty: [
-              Math.round(2200 * m.bounty),
-              Math.round(2500 * m.bounty),
+              Math.round(2200 * m.goldBounty * infReward),
+              Math.round(2500 * m.goldBounty * infReward),
             ],
-            xpBounty: Math.round(2400 * m.bounty),
+            xpBounty: Math.round(2400 * m.xpBounty * infReward),
           });
           sneakyGolem.golemSubduedAtOneHp = false;
           sneakyGolemGuardians[team] = sneakyGolem;
@@ -35351,6 +36411,7 @@ diffuseColor.rgb *= mix(0.58, 1.04, groundAO) * canopyShade;`,
         camp.alive = true;
         const m = getEscalationMults();
         const infMon = getInfinityMonsterMult();
+        const infReward = infMon > 1 ? 1.65 : 1.0;
         const makeMob = (cfg) =>
           new MobaEntity({
             ...cfg,
@@ -35365,10 +36426,10 @@ diffuseColor.rgb *= mix(0.58, 1.04, groundAO) * canopyShade;`,
               ((cfg.armor || 4) + m.armor) * (infMon > 1 ? 1.35 : 1.0),
             ),
             goldBounty: [
-              Math.round(cfg.goldBounty[0] * m.bounty),
-              Math.round(cfg.goldBounty[1] * m.bounty),
+              Math.round(cfg.goldBounty[0] * m.goldBounty * infReward),
+              Math.round(cfg.goldBounty[1] * m.goldBounty * infReward),
             ],
-            xpBounty: Math.round(cfg.xpBounty * m.bounty),
+            xpBounty: Math.round(cfg.xpBounty * m.xpBounty * infReward),
           });
 
         if (camp.kind === "wolf") {
@@ -36696,6 +37757,7 @@ diffuseColor.rgb *= mix(0.58, 1.04, groundAO) * canopyShade;`,
           const direPath = makeFlankPath(false, -f.side);
 
           const radMegaMult = radiantMegaCreeps ? 2.15 : 1.0;
+          const radMegaReward = radiantMegaCreeps ? 1.65 : 1.0;
           const radCreep = new MobaEntity({
             name: radiantMegaCreeps
               ? isR
@@ -36720,10 +37782,10 @@ diffuseColor.rgb *= mix(0.58, 1.04, groundAO) * canopyShade;`,
             ),
             radius: radiantMegaCreeps ? 1.25 : 0.9,
             goldBounty: [
-              Math.round((isR ? 48 : 38) * m.bounty),
-              Math.round((isR ? 58 : 48) * m.bounty),
+              Math.round((isR ? 48 : 38) * m.goldBounty * radMegaReward),
+              Math.round((isR ? 58 : 48) * m.goldBounty * radMegaReward),
             ],
-            xpBounty: Math.round((isR ? 65 : 52) * m.bounty),
+            xpBounty: Math.round((isR ? 65 : 52) * m.xpBounty * radMegaReward),
             waypoints: radPath,
           });
           radCreep.mesh.rotation.y = Math.atan2(
@@ -36733,6 +37795,7 @@ diffuseColor.rgb *= mix(0.58, 1.04, groundAO) * canopyShade;`,
           units.push(radCreep);
 
           const direMegaMult = direMegaCreeps ? 2.15 : 1.0;
+          const direMegaReward = direMegaCreeps ? 1.65 : 1.0;
           const direCreep = new MobaEntity({
             name: direMegaCreeps
               ? isR
@@ -36757,10 +37820,10 @@ diffuseColor.rgb *= mix(0.58, 1.04, groundAO) * canopyShade;`,
             ),
             radius: direMegaCreeps ? 1.25 : 0.9,
             goldBounty: [
-              Math.round((isR ? 48 : 38) * m.bounty),
-              Math.round((isR ? 58 : 48) * m.bounty),
+              Math.round((isR ? 48 : 38) * m.goldBounty * direMegaReward),
+              Math.round((isR ? 58 : 48) * m.goldBounty * direMegaReward),
             ],
-            xpBounty: Math.round((isR ? 65 : 52) * m.bounty),
+            xpBounty: Math.round((isR ? 65 : 52) * m.xpBounty * direMegaReward),
             waypoints: direPath,
           });
           direCreep.mesh.rotation.y = Math.atan2(
@@ -40793,13 +41856,50 @@ diffuseColor.rgb *= mix(0.58, 1.04, groundAO) * canopyShade;`,
         });
 
         if (matchTime >= nextEscalationTime) {
+          const prevM = getEscalationMults(escalationTier);
           escalationTier++;
+          const nextM = getEscalationMults(escalationTier);
           nextEscalationTime += 60.0;
           const badge = document.getElementById("escalation-badge");
           if (badge) badge.textContent = `Tier ${escalationTier}`;
+
+          const hpRatio = nextM.hp / prevM.hp;
+          const dmgRatio = nextM.dmg / prevM.dmg;
+          const goldRatio = nextM.goldBounty / prevM.goldBounty;
+          const xpRatio = nextM.xpBounty / prevM.xpBounty;
+          units.forEach((u) => {
+            if (
+              !u.dead &&
+              ["neutral", "boss", "dragon"].includes(u.type) &&
+              !u.targetUnit &&
+              u.hp >= u.maxHp * 0.96
+            ) {
+              u.maxHp = Math.round(u.maxHp * hpRatio);
+              u.hp = u.maxHp;
+              u.hpRegen *= hpRatio;
+              u.atkDamage = Math.round(u.atkDamage * dmgRatio);
+              u.armor = Math.round(u.armor + (nextM.armor - prevM.armor));
+              if (Array.isArray(u.goldBounty)) {
+                u.goldBounty = [
+                  Math.round(u.goldBounty[0] * goldRatio),
+                  Math.round(u.goldBounty[1] * goldRatio),
+                ];
+              } else if (typeof u.goldBounty === "number") {
+                u.goldBounty = Math.round(u.goldBounty * goldRatio);
+              }
+              if (typeof u.xpBounty === "number") {
+                u.xpBounty = Math.round(u.xpBounty * xpRatio);
+              }
+              u.name = u.name.replace(
+                /\(Tier \d+\)/,
+                `(Tier ${escalationTier})`,
+              );
+            }
+          });
+
           showBanner(
             `MONSTER ESCALATION: TIER ${escalationTier}`,
-            "Monsters, Bosses & Creeps now deal +26% more damage and have +28% HP!",
+            "Monsters, Bosses & Creeps now have +28% HP, +26% DMG, +25% Gold & +28% XP!",
             "text-orange-400",
           );
         }
@@ -42477,6 +43577,14 @@ diffuseColor.rgb *= mix(0.58, 1.04, groundAO) * canopyShade;`,
                     z.t = z.duration + 1;
                     break;
                   }
+                  if (
+                    u.type === "hero" &&
+                    z.owner &&
+                    z.owner.type === "hero" &&
+                    z.owner.team !== u.team
+                  ) {
+                    u.recordHeroInvolvement(z.owner);
+                  }
                   if (z.tickDmg) u.takeDamage(z.tickDmg * 0.35, z.owner, false);
                   if (z.zoneType === "chronosphere") {
                     u.stunTimer = Math.max(u.stunTimer, 0.45);
@@ -43349,7 +44457,7 @@ diffuseColor.rgb *= mix(0.58, 1.04, groundAO) * canopyShade;`,
           );
           setW(
             "hud-xp-fill",
-            `${((playerHero.xp / playerHero.xpToNext) * 100).toFixed(1)}%`,
+            `${playerHero.level >= MAX_HERO_LEVEL ? 100 : ((playerHero.xp / playerHero.xpToNext) * 100).toFixed(1)}%`,
           );
 
           const heroHpPct = `${((playerHero.hp / playerHero.maxHp) * 100).toFixed(1)}%`;
@@ -44133,7 +45241,7 @@ diffuseColor.rgb *= mix(0.58, 1.04, groundAO) * canopyShade;`,
           if (tipId === "attrs") {
             ttTitle.textContent = `${cfg.name} (${cfg.attr})`;
             ttBadge.textContent = cfg.rangeType.toUpperCase();
-            ttRank.textContent = `Lv ${playerHero.level}`;
+            ttRank.textContent = `Lv ${playerHero.level} / ${MAX_HERO_LEVEL}`;
             ttMeta.innerHTML = `<span class="text-rose-300">STR ${playerHero.str}</span><span class="text-emerald-300">AGI ${playerHero.agi}</span><span class="text-sky-300">INT ${playerHero.int}</span>`;
             ttDesc.textContent =
               "Strength boosts HP & Regen • Agility boosts Armor & Attack Speed • Intelligence boosts Mana & Spell Amp.";
@@ -45106,18 +46214,18 @@ diffuseColor.rgb *= mix(0.58, 1.04, groundAO) * canopyShade;`,
           card.className = `bg-gradient-to-br ${item.bg} border ${isLocked ? "border-slate-700/70 opacity-75" : "border-amber-500/25 hover:border-amber-400"} rounded-xl p-3 flex items-center justify-between gap-3 transition`;
 
           let badgeTag = item.consumeOnBuy
-            ? '<span class="ml-1.5 text-[9px] font-mono font-bold uppercase px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-300 border border-emerald-400/40">Instant Tome</span>'
+            ? '<span class="text-[10px] font-sans font-bold uppercase tracking-wide px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-300 border border-emerald-400/40">Instant Tome</span>'
             : item.shop === "secret"
-              ? `<span class="ml-1.5 text-[9px] font-mono font-bold uppercase px-1.5 py-0.5 rounded ${nearSecret ? "bg-purple-500/25 text-purple-200 border-purple-400/50" : "bg-purple-950/90 text-purple-300 border-purple-500/45"}">Secret Shop</span>`
+              ? `<span class="text-[10px] font-sans font-bold uppercase tracking-wide px-1.5 py-0.5 rounded ${nearSecret ? "bg-purple-500/25 text-purple-200 border-purple-400/50" : "bg-purple-950/90 text-purple-300 border-purple-500/45"}">Secret Shop</span>`
               : "";
 
           if (typeof item.cd === "number" && item.cd > 0) {
-            badgeTag += `<span class="ml-1.5 text-[9px] font-mono font-bold uppercase px-1.5 py-0.5 rounded bg-cyan-500/20 text-cyan-200 border border-cyan-400/45"><i class="fa-solid fa-clock mr-1"></i>${item.cd}s CD</span>`;
+            badgeTag += `<span class="text-[11px] font-sans font-extrabold tabular-nums tracking-wide px-2 py-0.5 rounded bg-cyan-500/25 text-cyan-100 border border-cyan-400/60 shadow-xs"><i class="fa-solid fa-clock mr-1 text-cyan-300"></i>${item.cd}s CD</span>`;
           }
 
           if (alreadyOwned) {
             badgeTag +=
-              '<span class="ml-1.5 text-[9px] font-mono font-bold uppercase px-1.5 py-0.5 rounded bg-emerald-500/25 text-emerald-200 border border-emerald-400/50">Unique • Owned</span>';
+              '<span class="text-[10px] font-sans font-bold uppercase tracking-wide px-1.5 py-0.5 rounded bg-emerald-500/25 text-emerald-200 border border-emerald-400/50">Unique • Owned</span>';
           }
 
           if (isCons && cState) {
@@ -45132,32 +46240,32 @@ diffuseColor.rgb *= mix(0.58, 1.04, groundAO) * canopyShade;`,
                     ? "1/1 Single-Use Max"
                     : "1/1 Immortal Use"
                   : `${cState.totalCommitted}/${cState.limit} ${prof.label}`;
-            badgeTag += `<span class="ml-1.5 text-[9px] font-mono font-bold uppercase px-1.5 py-0.5 rounded border ${quotaCls}">${quotaLabel}</span>`;
+            badgeTag += `<span class="text-[10px] font-sans font-bold uppercase tracking-wide px-1.5 py-0.5 rounded border ${quotaCls}">${quotaLabel}</span>`;
           }
 
           const btnHtml = alreadyOwned
-            ? `<button disabled class="buy-action bg-emerald-950/85 text-emerald-300 border border-emerald-500/45 font-mono font-black text-[11px] px-3 py-2 rounded-lg shrink-0 flex items-center gap-1 cursor-not-allowed">
+            ? `<button disabled class="buy-action bg-emerald-950/85 text-emerald-300 border border-emerald-500/45 font-sans font-black text-xs px-3 py-2 rounded-lg shrink-0 flex items-center gap-1 cursor-not-allowed">
                         <i class="fa-solid fa-check"></i> OWNED
                        </button>`
             : isExhausted
-              ? `<button disabled class="buy-action bg-slate-800 text-slate-400 border border-slate-700 font-mono font-black text-[11px] px-3 py-2 rounded-lg shrink-0 flex items-center gap-1 cursor-not-allowed">
+              ? `<button disabled class="buy-action bg-slate-800 text-slate-400 border border-slate-700 font-sans font-black text-xs px-3 py-2 rounded-lg shrink-0 flex items-center gap-1 cursor-not-allowed">
                             <i class="fa-solid fa-ban"></i> ${aiDifficulty === "infinity" ? "DISABLED" : aiDifficulty === "immortal" ? "USED (1/1)" : `MAX (${cState.limit}/${cState.limit})`}
                            </button>`
               : secretLocked
-                ? `<button type="button" class="buy-action bg-purple-950/90 hover:bg-purple-900 text-purple-200 border border-purple-400/50 font-mono font-bold text-[11px] px-2.5 py-2 rounded-lg shrink-0 flex items-center gap-1" title="Move near the East or West Secret Shop to purchase">
+                ? `<button type="button" class="buy-action bg-purple-950/90 hover:bg-purple-900 text-purple-200 border border-purple-400/50 font-sans font-extrabold tabular-nums text-xs px-2.5 py-2 rounded-lg shrink-0 flex items-center gap-1" title="Move near the East or West Secret Shop to purchase">
                                 <i class="fa-solid fa-lock"></i> ${item.cost}
                                </button>`
-                : `<button class="buy-action bg-amber-500 hover:bg-amber-400 text-slate-950 font-mono font-black text-xs px-3 py-2 rounded-lg shrink-0 flex items-center gap-1 shadow">
+                : `<button class="buy-action bg-amber-500 hover:bg-amber-400 text-slate-950 font-sans font-black tabular-nums text-xs px-3 py-2 rounded-lg shrink-0 flex items-center gap-1 shadow">
                                 <i class="fa-solid fa-coins"></i> ${item.cost}
                                </button>`;
 
           card.innerHTML = `
-                    <div class="flex items-center gap-3">
+                    <div class="flex items-center gap-3 min-w-0">
                         <div class="w-11 h-11 rounded-lg bg-slate-950 border border-slate-700 flex items-center justify-center shrink-0">
                             <i class="fa-solid ${item.icon} ${item.color} text-xl"></i>
                         </div>
-                        <div>
-                            <div class="font-bold text-sm text-white flex items-center flex-wrap">${item.name}${badgeTag}</div>
+                        <div class="min-w-0">
+                            <div class="font-bold text-sm text-white flex items-center flex-wrap gap-1.5"><span>${item.name}</span>${badgeTag}</div>
                             <div class="text-xs text-slate-300 mt-0.5">${item.desc}</div>
                         </div>
                     </div>
@@ -45563,7 +46671,7 @@ diffuseColor.rgb *= mix(0.58, 1.04, groundAO) * canopyShade;`,
         updatePrimedState();
       };
 
-      function issueCanvasOrder(cx, cy, isRight) {
+      function issueCanvasOrder(cx, cy, isRight, isTouchTap = false) {
         if (!playerHero || gameOver || inHeroSelect) return;
         raycastGround(cx, cy);
 
@@ -45582,10 +46690,12 @@ diffuseColor.rgb *= mix(0.58, 1.04, groundAO) * canopyShade;`,
           return null;
         };
 
-        const clickedShop = detectClickedShop();
-        if (clickedShop) {
-          window.openShopForEntity(clickedShop);
-          return;
+        if (isRight || isTouchTap) {
+          const clickedShop = detectClickedShop();
+          if (clickedShop) {
+            window.openShopForEntity(clickedShop);
+            return;
+          }
         }
 
         // Allow inspecting units (and clearing inspection) even while player hero is dead or reincarnating
@@ -46058,9 +47168,10 @@ diffuseColor.rgb *= mix(0.58, 1.04, groundAO) * canopyShade;`,
         } else {
           // Ignore synthetic mouse events fired right after touch double-taps on mobile browsers
           if (performance.now() - _lastAnyTouchTs < 650) return;
-          if (e.button === 2) issueCanvasOrder(e.clientX, e.clientY, true);
+          if (e.button === 2)
+            issueCanvasOrder(e.clientX, e.clientY, true, false);
           else if (e.button === 0)
-            issueCanvasOrder(e.clientX, e.clientY, false);
+            issueCanvasOrder(e.clientX, e.clientY, false, false);
           return;
         }
         if (inHeroSelect) return;
@@ -46171,7 +47282,7 @@ diffuseColor.rgb *= mix(0.58, 1.04, groundAO) * canopyShade;`,
             canvasTouchGesture.lastTapTime = now;
             canvasTouchGesture.lastTapX = e.clientX;
             canvasTouchGesture.lastTapY = e.clientY;
-            issueCanvasOrder(e.clientX, e.clientY, false);
+            issueCanvasOrder(e.clientX, e.clientY, false, true);
           }
           canvasTouchGesture.mode = "none";
           canvasTouchGesture.isDoubleTap = false;
@@ -46450,7 +47561,7 @@ diffuseColor.rgb *= mix(0.58, 1.04, groundAO) * canopyShade;`,
         const clickedMiniShop = shopEntities.find(
           (s) => Math.hypot(wx - s.x, wz - s.z) <= 18.0,
         );
-        if (clickedMiniShop) {
+        if (clickedMiniShop && e.button === 2) {
           window._minimapTapPulse = {
             wx: clickedMiniShop.x,
             wz: clickedMiniShop.z,
@@ -46458,11 +47569,6 @@ diffuseColor.rgb *= mix(0.58, 1.04, groundAO) * canopyShade;`,
             color: clickedMiniShop.type === "secret" ? "#c084fc" : "#facc15",
           };
           window.openShopForEntity(clickedMiniShop, true);
-          if (e.button === 0) {
-            cameraLocked = false;
-            syncCamLockLabel();
-            cameraFocus.set(clickedMiniShop.x, 0, clickedMiniShop.z);
-          }
           return;
         }
         if (e.button === 2 && playerHero && !playerHero.dead) {
@@ -47528,10 +48634,19 @@ diffuseColor.rgb *= mix(0.58, 1.04, groundAO) * canopyShade;`,
       document.getElementById("btn-switch-hero").onclick = () =>
         window.openHeroSelect();
 
-      document.getElementById("btn-open-shop").onclick = () => {
+      const openHudShopModal = () => {
+        window._shopOpenedAtTs = performance.now();
         const near = getNearbyShop();
         renderShopTab(near && near.type === "secret" ? "secret" : "all");
         document.getElementById("shop-modal").classList.remove("hidden");
+      };
+      const hudShopBtnEl = document.getElementById("btn-open-shop");
+      hudShopBtnEl.title =
+        "Open Armory Shop [B] • Right-Click Shopkeeper in Arena";
+      hudShopBtnEl.onclick = openHudShopModal;
+      hudShopBtnEl.oncontextmenu = (e) => {
+        e.preventDefault();
+        openHudShopModal();
       };
       document.getElementById("btn-close-shop").onclick = () =>
         document.getElementById("shop-modal").classList.add("hidden");
@@ -47679,16 +48794,14 @@ diffuseColor.rgb *= mix(0.58, 1.04, groundAO) * canopyShade;`,
         window.restartMatch();
         sfx.stopSpeech();
         const hCfg = HERO_ROSTER[selectedHeroId];
-        sfx.announceSpree("The battle begins! Defend your Ancient!", 3);
-        scheduledEvents.push({
-          delay: 3.6,
-          fn: () => {
-            if (!gameOver && !inHeroSelect) {
+        sfx.announceSpree("The battle begins! Defend your Ancient!", 3, {
+          afterAnnouncer: () => {
+            if (!gameOver && !inHeroSelect && hCfg && hCfg.voice) {
               sfx.speakHeroLine(hCfg, hCfg.voice.select, true, "triumph", {
                 category: "match_start",
                 chime: true,
-                minGapMs: 1000,
-                catGapMs: 1000,
+                minGapMs: 500,
+                catGapMs: 500,
               });
             }
           },
