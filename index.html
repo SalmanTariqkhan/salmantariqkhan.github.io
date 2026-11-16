@@ -9,7 +9,7 @@
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="mobile-web-app-capable" content="yes" />
     <title>
-      Infinite War • Grandmaster Sovereign Multiplayer Edition (v175)
+      Infinite War • Grandmaster Sovereign Multiplayer Edition (v185)
     </title>
     <link rel="preconnect" href="https://unpkg.com" crossorigin />
     <link rel="preconnect" href="https://cdn.tailwindcss.com" crossorigin />
@@ -1819,7 +1819,7 @@
             class="dota-stone-panel px-2.5 py-1.5 rounded-xl text-[11px] sm:text-xs font-mono font-black text-amber-300 border border-amber-400/65 shadow-lg tracking-wider"
             title="Game Version"
           >
-            v175
+            v185
           </span>
         </div>
       </div>
@@ -10770,7 +10770,9 @@
           (u.hasAegis ? 32 : 0) |
           (u.celebrateTimer > 0 ? 64 : 0) |
           (u.reincarnating ? 128 : 0) |
-          (u.blinkBuffTimer > 0 ? 256 : 0);
+          (u.blinkBuffTimer > 0 ? 256 : 0) |
+          (u.hasVampLeaderBuff ? 512 : 0) |
+          (u.hasWolfLeaderBuff ? 1024 : 0);
         const isHero = u.type === "hero";
         return [
           u.netId, // 0
@@ -10871,7 +10873,9 @@
             (u.hasAegis ? 32 : 0) |
             (u.celebrateTimer > 0 ? 64 : 0) |
             (u.reincarnating ? 128 : 0) |
-            (u.blinkBuffTimer > 0 ? 256 : 0);
+            (u.blinkBuffTimer > 0 ? 256 : 0) |
+            (u.hasVampLeaderBuff ? 512 : 0) |
+            (u.hasWolfLeaderBuff ? 1024 : 0);
           const rx = Math.round(u.mesh.position.x * 100) / 100;
           const rz = Math.round(u.mesh.position.z * 100) / 100;
           const ry = Math.round(u.mesh.rotation.y * 100) / 100;
@@ -11067,6 +11071,8 @@
           u.reincarnating = !!(flags & 128);
           u.blinkBuffTimer =
             flags & 256 ? Math.max(u.blinkBuffTimer || 0, 0.2) : 0;
+          u.hasVampLeaderBuff = !!(flags & 512);
+          u.hasWolfLeaderBuff = !!(flags & 1024);
           if (flags & 64 && !(prevFlags & 64)) {
             u.celebrateTimer = 1.45;
           } else if (flags & 64) {
@@ -11971,9 +11977,8 @@
           const onScreen =
             Math.abs(u.mesh.position.x - cameraFocus.x) <= 72 &&
             Math.abs(u.mesh.position.z - cameraFocus.z) <= 62;
-          const doSkeletalStep =
-            onScreen || ((_shadowFrameCounter + u.id) & 3) === 0;
-          const animDt = onScreen ? dt : dt * 4;
+          const doSkeletalStep = onScreen;
+          const animDt = dt;
           if (!doSkeletalStep) continue;
 
           if (u.type === "hero" && u.parts) {
@@ -12210,19 +12215,36 @@
             const step = p.speed * dt;
             const dist = _vScratch2.length();
             if (dist <= step + 0.5) {
-              if (p.owner && p.owner.type === "tower") {
-                const distToCam = Math.hypot(
-                  p.target.mesh.position.x - cameraFocus.x,
-                  p.target.mesh.position.z - cameraFocus.z,
+              if (
+                (p.owner && p.owner.type === "tower") ||
+                (p.target && p.target.type === "tower")
+              ) {
+                const refPos =
+                  p.owner && p.owner.type === "tower"
+                    ? p.owner.mesh.position
+                    : p.target.mesh.position;
+                const camDist = Math.hypot(
+                  refPos.x - cameraFocus.x,
+                  refPos.z - cameraFocus.z,
                 );
-                if (distToCam < 85) sfx.play("tower_hit", distToCam);
-                spawnShockwaveRing(
-                  p.target.mesh.position.x,
-                  p.target.mesh.position.z,
-                  2.1,
-                  p.owner.team === "radiant" ? 0x34d399 : 0xf43f5e,
-                  0.26,
-                );
+                const heroDist =
+                  playerHero && !playerHero.dead
+                    ? Math.hypot(
+                        refPos.x - playerHero.mesh.position.x,
+                        refPos.z - playerHero.mesh.position.z,
+                      )
+                    : Infinity;
+                const nearDist = Math.min(camDist, heroDist);
+                if (nearDist <= 42.0) sfx.play("tower_hit", nearDist);
+                if (p.owner && p.owner.type === "tower") {
+                  spawnShockwaveRing(
+                    p.target.mesh.position.x,
+                    p.target.mesh.position.z,
+                    2.1,
+                    p.owner.team === "radiant" ? 0x34d399 : 0xf43f5e,
+                    0.26,
+                  );
+                }
               }
               if (p.isUmaxHeroProj && p.owner && p.owner.heroCfg) {
                 spawnHeroAttackSparkles(
@@ -12270,17 +12292,14 @@
             const step = p.speed * dt;
             if (p.boomerang && p.boomerangPhase === "return") {
               if (p.owner && !p.owner.dead) {
-                const toOwner = new THREE.Vector3().subVectors(
-                  p.owner.mesh.position,
-                  p.mesh.position,
-                );
-                toOwner.y = 0;
-                const distBack = toOwner.length();
+                _vScratch1.subVectors(p.owner.mesh.position, p.mesh.position);
+                _vScratch1.y = 0;
+                const distBack = _vScratch1.length();
                 if (distBack <= 2.2) {
                   p.distLeft = 0;
                 } else {
-                  toOwner.normalize();
-                  p.dir.lerp(toOwner, Math.min(1, dt * 10)).normalize();
+                  _vScratch1.normalize();
+                  p.dir.lerp(_vScratch1, Math.min(1, dt * 10)).normalize();
                   p.mesh.position.addScaledVector(p.dir, step * 1.12);
                   p.distLeft -= step;
                 }
@@ -12289,10 +12308,13 @@
               }
             } else {
               if (p.boomerang && p.curveSign) {
-                p.dir.applyAxisAngle(
-                  new THREE.Vector3(0, 1, 0),
-                  p.curveSign * 0.95 * dt,
-                );
+                const ang = p.curveSign * 0.95 * dt;
+                const ca = Math.cos(ang),
+                  sa = Math.sin(ang);
+                const nx = p.dir.x * ca + p.dir.z * sa;
+                const nz = -p.dir.x * sa + p.dir.z * ca;
+                p.dir.x = nx;
+                p.dir.z = nz;
               }
               p.mesh.position.addScaledVector(p.dir, step);
               p.distLeft -= step;
@@ -12317,8 +12339,14 @@
             }
             const px = p.mesh.position.x;
             const pz = p.mesh.position.z;
-            for (let ui = 0; ui < units.length; ui++) {
-              const u = units[ui];
+            const waveCandidates = querySpatialUnits(
+              px,
+              pz,
+              p.hitRadius + 5.5,
+              _spatialQueryBufA,
+            );
+            for (let ui = 0; ui < waveCandidates.length; ui++) {
+              const u = waveCandidates[ui];
               if (
                 !u.dead &&
                 u.team !== p.team &&
@@ -12531,8 +12559,10 @@
           fx.update(prog);
           if (prog >= 1) {
             scene.remove(fx.mesh);
-            if (fx.pooledMat) releaseFxMat(fx.pooledMat);
-            else disposeObject3D(fx.mesh);
+            if (!fx.pooledMesh) {
+              if (fx.pooledMat) releaseFxMat(fx.pooledMat);
+              else disposeObject3D(fx.mesh);
+            }
             fxList.splice(i, 1);
           }
         }
@@ -14978,7 +15008,13 @@
               osc.start(t);
               osc.stop(t + 0.11);
             } else if (kind === "tower_hit") {
-              const att = Math.max(0.32, Math.min(1.0, 1.0 - distToCam / 135));
+              const maxTowerAudioRange = 42.0;
+              if (distToCam > maxTowerAudioRange) return;
+              const att = Math.pow(
+                Math.max(0, 1.0 - distToCam / maxTowerAudioRange),
+                1.35,
+              );
+              if (att <= 0.02) return;
               this.playNoiseBurst(
                 0.16,
                 "bandpass",
@@ -15164,6 +15200,7 @@
               sub.start(t);
               sub.stop(t + 0.76);
             } else if (kind === "wolf_howl") {
+              if (typeof isNightTime !== "undefined" && !isNightTime) return;
               const att = Math.max(0.28, Math.min(1.0, 1.0 - distToCam / 95));
               // Lead Alpha Wolf Howl (gliding chest-to-head formant sweep + organic vibrato)
               const voices = [
@@ -15269,6 +15306,114 @@
                 420,
                 0.032 * att,
                 0.72,
+              );
+            } else if (kind === "vampire_coven") {
+              if (typeof isNightTime !== "undefined" && !isNightTime) return;
+              const att = Math.max(0.35, Math.min(1.0, 1.0 - distToCam / 95));
+              // Grand Gothic Cathedral Pipe Organ (Multi-Rank Stops: 16' Subbass + 8' Principal + 4' Octave + 2' Superoctave + Mixture)
+              const playPipeOrganVoice = (
+                freq,
+                startOff,
+                dur,
+                gainScale,
+                isPedal = false,
+              ) => {
+                const st = t + startOff;
+                const voiceGain = this.ctx.createGain();
+                const lowpass = this.ctx.createBiquadFilter();
+                lowpass.type = "lowpass";
+                lowpass.frequency.setValueAtTime(isPedal ? 420 : 1850, st);
+                lowpass.frequency.exponentialRampToValueAtTime(
+                  isPedal ? 240 : 1180,
+                  st + dur,
+                );
+
+                // Slow cathedral pipe speech attack & release
+                const peak = gainScale * att;
+                voiceGain.gain.setValueAtTime(0.0008, st);
+                voiceGain.gain.linearRampToValueAtTime(
+                  peak,
+                  st + (isPedal ? 0.14 : 0.08),
+                );
+                voiceGain.gain.setValueAtTime(
+                  peak * 0.9,
+                  st + Math.max(0.16, dur - 0.24),
+                );
+                voiceGain.gain.exponentialRampToValueAtTime(0.0008, st + dur);
+
+                // Tremulant wind-chest vibrato
+                const tremLfo = this.ctx.createOscillator();
+                const tremDepth = this.ctx.createGain();
+                tremLfo.type = "sine";
+                tremLfo.frequency.setValueAtTime(4.9, st);
+                tremDepth.gain.setValueAtTime(freq * 0.0045, st);
+                tremLfo.connect(tremDepth);
+
+                const ranks = isPedal
+                  ? [
+                      { mult: 0.5, type: "sine", wt: 0.65 }, // 16' Subbass
+                      { mult: 1.0, type: "triangle", wt: 0.45 }, // 8' Bourdon
+                      { mult: 2.0, type: "sawtooth", wt: 0.16 }, // 4' Choralbass
+                    ]
+                  : [
+                      { mult: 1.0, type: "sawtooth", wt: 0.46 }, // 8' Principal
+                      { mult: 1.003, type: "triangle", wt: 0.34 }, // 8' Vox Humana detuned rank
+                      { mult: 2.0, type: "sawtooth", wt: 0.24 }, // 4' Octave
+                      { mult: 2.997, type: "sine", wt: 0.11 }, // 2-2/3' Nazard Quint
+                      { mult: 4.0, type: "triangle", wt: 0.12 }, // 2' Superoctave
+                    ];
+
+                ranks.forEach((rk) => {
+                  const osc = this.ctx.createOscillator();
+                  const rGain = this.ctx.createGain();
+                  osc.type = rk.type;
+                  osc.frequency.setValueAtTime(freq * rk.mult, st);
+                  tremDepth.connect(osc.frequency);
+                  rGain.gain.setValueAtTime(rk.wt, st);
+                  osc.connect(rGain);
+                  rGain.connect(lowpass);
+                  osc.start(st);
+                  osc.stop(st + dur + 0.06);
+                });
+
+                lowpass.connect(voiceGain);
+                this.connectWithReverb(voiceGain, 0.92);
+                tremLfo.start(st);
+                tremLfo.stop(st + dur + 0.06);
+              };
+
+              // Bach-inspired Gothic D-Minor Cathedral Organ Phrase + Final Minor Triad Chord
+              const organScore = [
+                // Opening dramatic mordent flourish (A3 - G3 - A3)
+                { f: 220.0, d: 0.0, dur: 0.22, vol: 0.11, pedal: false },
+                { f: 196.0, d: 0.18, dur: 0.22, vol: 0.11, pedal: false },
+                { f: 220.0, d: 0.36, dur: 1.15, vol: 0.13, pedal: false },
+                // Deep 16' Pedal D2 + A2 foundation
+                { f: 73.42, d: 0.36, dur: 3.15, vol: 0.18, pedal: true },
+                { f: 110.0, d: 0.36, dur: 3.15, vol: 0.11, pedal: true },
+                // Descending gothic lament (G3 -> F3 -> E3 -> D3 -> C#3)
+                { f: 196.0, d: 1.38, dur: 0.34, vol: 0.11, pedal: false },
+                { f: 174.61, d: 1.66, dur: 0.34, vol: 0.11, pedal: false },
+                { f: 164.81, d: 1.94, dur: 0.34, vol: 0.11, pedal: false },
+                { f: 146.83, d: 2.22, dur: 0.42, vol: 0.12, pedal: false },
+                { f: 138.59, d: 2.58, dur: 0.48, vol: 0.12, pedal: false },
+                // Resolving D-Minor Cathedral Chord (D3 + F3 + A3 + D4)
+                { f: 146.83, d: 3.02, dur: 1.65, vol: 0.11, pedal: false },
+                { f: 174.61, d: 3.02, dur: 1.65, vol: 0.1, pedal: false },
+                { f: 220.0, d: 3.02, dur: 1.65, vol: 0.11, pedal: false },
+                { f: 293.66, d: 3.02, dur: 1.65, vol: 0.09, pedal: false },
+              ];
+              organScore.forEach((n) =>
+                playPipeOrganVoice(n.f, n.d, n.dur, n.vol, n.pedal),
+              );
+              // Subtle pipe-chest air chiff at onset
+              this.playNoiseBurst(
+                0.28,
+                "bandpass",
+                1450,
+                950,
+                0.022 * att,
+                0.75,
               );
             }
           } catch (e) {}
@@ -15610,11 +15755,7 @@
 
       const ULTRA_MAX_UNLOCK_KEY = "dota3d_ultramax_unlocked_v1";
       function isUltraMaxUnlocked() {
-        try {
-          return localStorage.getItem(ULTRA_MAX_UNLOCK_KEY) === "1";
-        } catch (e) {
-          return Boolean(window._ultraMaxUnlockedMem);
-        }
+        return true;
       }
       function setUltraMaxUnlocked(val) {
         window._ultraMaxUnlockedMem = Boolean(val);
@@ -15817,19 +15958,12 @@
         if (composer) return true;
         if (_composerDisabled) return false;
         try {
-          const initW = Math.max(
-            1,
-            Math.floor(window.innerWidth * renderer.getPixelRatio()),
-          );
-          const initH = Math.max(
-            1,
-            Math.floor(window.innerHeight * renderer.getPixelRatio()),
-          );
+          const initDpr = renderer.getPixelRatio();
+          const initW = Math.max(1, Math.floor(window.innerWidth * initDpr));
+          const initH = Math.max(1, Math.floor(window.innerHeight * initDpr));
           const msaaSamples =
-            renderer.capabilities.isWebGL2 && !_isTouchBoot
-              ? (window.devicePixelRatio || 1) >= 1.5
-                ? 2
-                : 4
+            renderer.capabilities.isWebGL2 && !_isTouchBoot && initDpr < 1.5
+              ? 4
               : 0;
           _hdrRT = new THREE.WebGLRenderTarget(initW, initH, {
             type: THREE.HalfFloatType,
@@ -15894,18 +16028,15 @@
                                 vec3 eComp = safeReinhard(texture2D(tDiffuse, vUv + vec2(px.x, 0.0)).rgb);
                                 vec3 wComp = safeReinhard(texture2D(tDiffuse, vUv - vec2(px.x, 0.0)).rgb);
                                 vec3 avgComp = (nComp + sComp + eComp + wComp) * 0.25;
-                                float sharpAmt = mix(0.24, 0.58, uUltraMax) * uStrength;
+                                float sharpAmt = mix(0.08, 0.16, uUltraMax) * uStrength;
                                 vec3 sharpComp = clamp(cComp + (cComp - avgComp) * sharpAmt, 0.0, 0.992);
                                 col = sharpComp / max(vec3(0.008), 1.0 - sharpComp);
 
                                 if (uUltraMax > 0.85) {
-                                    vec2 disp = centered * (0.0022 * r2);
-                                    col.r = mix(col.r, max(texture2D(tDiffuse, vUv + disp).r, 0.0), 0.35);
-                                    col.b = mix(col.b, max(texture2D(tDiffuse, vUv - disp).b, 0.0), 0.35);
-                                    vec3 streakL = max(texture2D(tDiffuse, vUv - vec2(px.x * 7.0, 0.0)).rgb, vec3(0.0));
-                                    vec3 streakR = max(texture2D(tDiffuse, vUv + vec2(px.x * 7.0, 0.0)).rgb, vec3(0.0));
-                                    vec3 anamorphic = max(max(streakL, streakR) - vec3(1.15), vec3(0.0));
-                                    col += anamorphic * vec3(0.24, 0.20, 0.14) * uStrength;
+                                    vec3 streakL = max(texture2D(tDiffuse, vUv - vec2(px.x * 5.0, 0.0)).rgb, vec3(0.0));
+                                    vec3 streakR = max(texture2D(tDiffuse, vUv + vec2(px.x * 5.0, 0.0)).rgb, vec3(0.0));
+                                    vec3 anamorphic = max(max(streakL, streakR) - vec3(1.22), vec3(0.0));
+                                    col += anamorphic * vec3(0.18, 0.15, 0.10) * uStrength;
                                 }
 
                                 gl_FragColor = vec4(col, 1.0);
@@ -16389,8 +16520,8 @@
                             float ang = (cell.x + cell.y * 4.0) * 0.3927 + 0.2;
                             float occ = 0.0;
                             float bias = 0.05 + 0.0018 * -p.z;
-                            for (int i = 0; i < 8; i++) {
-                                float fi = (float(i) + 0.5) / 8.0;
+                            for (int i = 0; i < 6; i++) {
+                                float fi = (float(i) + 0.5) / 6.0;
                                 float a = ang + float(i) * 2.39996323;
                                 vec2 off = vec2(cos(a) * aspect, sin(a)) * (sqrt(fi) * rUv);
                                 vec3 v = vpos(vUv + off) - p;
@@ -16398,7 +16529,7 @@
                                 float w = max(0.0, 1.0 - vv / (uRadius * uRadius));
                                 occ += max(0.0, dot(v, n) - bias) * inversesqrt(vv + 0.0001) * w;
                             }
-                            gl_FragColor = vec4(vec3(1.0 - clamp(occ * 0.125 * uIntensity, 0.0, 1.0)), 1.0);
+                            gl_FragColor = vec4(vec3(1.0 - clamp(occ * 0.1667 * uIntensity, 0.0, 1.0)), 1.0);
                         }`,
           });
           const compMat = new THREE.ShaderMaterial({
@@ -16469,8 +16600,8 @@
             haze: 0,
             hazeCol: new THREE.Color(0x6a93c4),
             setSize(w, h) {
-              const hw = Math.max(2, Math.floor(w * 0.5)),
-                hh = Math.max(2, Math.floor(h * 0.5));
+              const hw = Math.max(2, Math.floor(w * 0.35)),
+                hh = Math.max(2, Math.floor(h * 0.35));
               aoRT.setSize(hw, hh);
               aoMat.uniforms.uTexel.value.set(1 / hw, 1 / hh);
               compMat.uniforms.uAOTexel.value.set(1 / hw, 1 / hh);
@@ -16793,9 +16924,7 @@
           m.visible = dens > 0 && userSettings.clutterEnabled;
         }
         const aoEl = document.getElementById("set-ao");
-        if (aoEl)
-          aoEl.checked =
-            preset === "ultramax" || preset === "ultra" || preset === "high";
+        if (aoEl) aoEl.checked = preset === "ultramax" || preset === "ultra";
         document.body.classList.toggle(
           "nxg-lite",
           preset === "ultralight" ||
@@ -18100,18 +18229,18 @@
       const sunLight = new THREE.DirectionalLight(0xfffbeb, 1.55);
       sunLight.position.set(60, 110, 62);
       sunLight.castShadow = true;
-      sunLight.shadow.mapSize.width = 4096;
-      sunLight.shadow.mapSize.height = 4096;
-      sunLight.shadow.camera.near = 10;
-      sunLight.shadow.camera.far = 260;
-      const shExt = 76;
+      sunLight.shadow.mapSize.width = 2048;
+      sunLight.shadow.mapSize.height = 2048;
+      sunLight.shadow.camera.near = 55;
+      sunLight.shadow.camera.far = 195;
+      const shExt = 66;
       sunLight.shadow.camera.left = -shExt;
       sunLight.shadow.camera.right = shExt;
       sunLight.shadow.camera.top = shExt;
       sunLight.shadow.camera.bottom = -shExt;
-      sunLight.shadow.bias = -0.00035;
-      sunLight.shadow.normalBias = 0.025;
-      sunLight.shadow.radius = 2.4;
+      sunLight.shadow.bias = -0.00018;
+      sunLight.shadow.normalBias = 0.028;
+      sunLight.shadow.radius = 2.0;
       scene.add(sunLight);
       scene.add(sunLight.target);
 
@@ -18283,20 +18412,25 @@
           )
           .normalize();
         window._activeSunDir = sc.sunDir;
-        const shSpan =
-          sunLight.shadow.camera.right - sunLight.shadow.camera.left || 152;
-        const shMapW = sunLight.shadow.mapSize.width || 2048;
-        const texelWorld = shSpan / shMapW;
-        const fBaseX = inHeroSelect ? 0 : cameraFocus.x;
-        const fBaseZ = inHeroSelect ? 0 : cameraFocus.z;
-        const snapX = Math.round(fBaseX / texelWorld) * texelWorld;
-        const snapZ = Math.round(fBaseZ / texelWorld) * texelWorld;
-        sunLight.target.position.set(snapX, 0, snapZ);
+        // Keep sunLight anchored to the last baked shadow texel center so shadows never slide between shadowMap updates
+        const bakedX =
+          window._bakedShadowX !== undefined
+            ? window._bakedShadowX
+            : inHeroSelect
+              ? 0
+              : cameraFocus.x;
+        const bakedZ =
+          window._bakedShadowZ !== undefined
+            ? window._bakedShadowZ
+            : inHeroSelect
+              ? 0
+              : cameraFocus.z;
+        sunLight.target.position.set(bakedX, 0, bakedZ);
         sunLight.target.updateMatrixWorld();
         sunLight.position.set(
-          snapX + sc.sunDir.x * 135,
+          bakedX + sc.sunDir.x * 135,
           sc.sunDir.y * 135,
-          snapZ + sc.sunDir.z * 135,
+          bakedZ + sc.sunDir.z * 135,
         );
         sunLight.color.copy(sc.moonLightCol).lerp(sc.dayLightCol, sunFactor);
 
@@ -19427,7 +19561,7 @@ varying vec3 vTerrainNormal;
 
                             // Animated pulsing molten magma cracks in Dire territory
                             magmaPulse = 0.78 + 0.28 * sin(uTime * 2.1 + wpXZ.x * 0.14 + wpXZ.y * 0.14);
-                            if (side > 0.02) {
+                            if (side > 0.06) {
                                 float seam = direSeam(wpXZ * 0.21 + vec2(nMicro * 0.4));
                                 float molten = smoothstep(0.38, 0.64, nMacro);
                                 // Keep the paved lane and the Dire plaza intact
@@ -19495,8 +19629,8 @@ varying vec3 vTerrainNormal;
               "#include <normal_fragment_maps>",
               `#include <normal_fragment_maps>
                         // World-space grass-blade & stone relief micro-bump normal perturbation (with distance LOD fade)
-                        float maxBumpDist = mix(68.0, 95.0, uUltraMax);
-                        float detailFade = uUltraLight > 0.5 ? 0.0 : smoothstep(maxBumpDist, 32.0, length(cameraPosition - vTerrainWorldPos));
+                        float maxBumpDist = mix(54.0, 78.0, uUltraMax);
+                        float detailFade = uUltraLight > 0.5 ? 0.0 : smoothstep(maxBumpDist, 24.0, length(cameraPosition - vTerrainWorldPos));
                         if (detailFade > 0.01) {
                             float baseMM = nMacro * 0.45 + nMicro * 0.30;
                             float hC = terrainMicroHeight(vTerrainWorldPos.xz, baseMM);
@@ -23518,6 +23652,7 @@ diffuseColor.rgb *= mix(0.58, 1.04, groundAO) * canopyShade;`,
         return mat;
       }
 
+      const _shockwaveMeshPool = [];
       function spawnShockwaveRing(x, z, maxRadius, colorHex, duration = 0.48) {
         if (!nxg.ready) nxgInit();
         const gy = getTerrainHeightAt(x, z);
@@ -23525,7 +23660,10 @@ diffuseColor.rgb *= mix(0.58, 1.04, groundAO) * canopyShade;`,
         mat.polygonOffset = true;
         mat.polygonOffsetFactor = -2;
         mat.polygonOffsetUnits = -2;
-        const mesh = new THREE.Mesh(SHARED_GEO.decal, mat);
+        const mesh =
+          _shockwaveMeshPool.pop() || new THREE.Mesh(SHARED_GEO.decal, mat);
+        mesh.material = mat;
+        mesh.visible = true;
         mesh.position.set(x, gy + 0.16, z);
         const rMax = maxRadius / 0.88;
         mesh.scale.set(rMax * 0.12, 1, rMax * 0.12);
@@ -23534,12 +23672,17 @@ diffuseColor.rgb *= mix(0.58, 1.04, groundAO) * canopyShade;`,
           mesh,
           t: 0,
           dur: duration,
+          pooledMesh: true,
           update: (p) => {
             const e = 1 - (1 - p) * (1 - p) * (1 - p);
             const s = rMax * (0.12 + 0.88 * e);
             mesh.scale.set(s, 1, s);
             mat.opacity = Math.pow(1 - p, 1.4);
-            if (p >= 1) nxgReleaseMat(mat);
+            if (p >= 1) {
+              nxgReleaseMat(mat);
+              mesh.visible = false;
+              if (_shockwaveMeshPool.length < 64) _shockwaveMeshPool.push(mesh);
+            }
           },
         });
         if (maxRadius >= 3.5) {
@@ -32291,8 +32434,8 @@ diffuseColor.rgb *= mix(0.58, 1.04, groundAO) * canopyShade;`,
       function getNeutralMaterialSet(subType, isAncient) {
         if (_neutralMatCache.has(subType)) return _neutralMatCache.get(subType);
         const colorMap = {
-          wolf: 0x475569,
-          werewolf: 0x27272a,
+          wolf: 0x7c8696,
+          werewolf: 0x8c96a6,
           satyr: 0x7e22ce,
           centaur: 0xb45309,
           hellbear: 0xdc2626,
@@ -33089,12 +33232,15 @@ diffuseColor.rgb *= mix(0.58, 1.04, groundAO) * canopyShade;`,
 
       function buildVampireMesh(unitName = "") {
         const group = new THREE.Group();
-        const isElder = unitName.includes("Elder");
+        const isLeader =
+          unitName.includes("Lord") || unitName.includes("Leader");
+        const isElder = isLeader || unitName.includes("Elder");
         const isFem =
           unitName.includes("Bloodfiend") || unitName.includes("Courtesan");
-        const sc = isElder ? 1.16 : isFem ? 1.04 : 1.08;
+        const sc = isLeader ? 1.44 : isElder ? 1.15 : isFem ? 1.03 : 1.07;
         group.scale.setScalar(sc);
-        attachContactShadow(group, 1.48 * sc);
+        group.userData.baseScale = sc;
+        attachContactShadow(group, 1.52 * sc);
 
         // Human-Proportioned Articulated Rig
         const hips = new THREE.Group();
@@ -33146,9 +33292,9 @@ diffuseColor.rgb *= mix(0.58, 1.04, groundAO) * canopyShade;`,
         rightAnkle.position.set(0, -0.66, 0.04);
         rightKnee.add(rightAnkle);
 
-        // Aristocratic Velvet, Silk & Gold Materials
+        // Aristocratic Velvet, Silk & Gold Materials (Vampire Lord wears Scarlet-Crimson & Gold Regalia)
         const coatTex = createHeroMaterialSet(
-          isElder ? 0x4c0519 : 0x2e1042,
+          isLeader ? 0x881337 : isElder ? 0x3b0764 : 0x1e1b4b,
           0xfacc15,
           "cloth",
         );
@@ -33156,15 +33302,19 @@ diffuseColor.rgb *= mix(0.58, 1.04, groundAO) * canopyShade;`,
           bumpScale: 0.07,
           side: THREE.DoubleSide,
         });
-        coatMat.emissive = new THREE.Color(0x2a0818);
-        coatMat.emissiveIntensity = 0.42;
-        const velvetTex = createHeroMaterialSet(0x9f1239, 0xfef08a, "cloth");
+        coatMat.emissive = new THREE.Color(isLeader ? 0x500724 : 0x1e0826);
+        coatMat.emissiveIntensity = isLeader ? 0.62 : 0.38;
+        const velvetTex = createHeroMaterialSet(
+          isLeader ? 0xe11d48 : 0x881337,
+          0xfef08a,
+          "cloth",
+        );
         const velvetMat = makeHeroPBRMaterial(velvetTex, {
           bumpScale: 0.06,
           side: THREE.DoubleSide,
         });
-        velvetMat.emissive = new THREE.Color(0x4c0519);
-        velvetMat.emissiveIntensity = 0.45;
+        velvetMat.emissive = new THREE.Color(isLeader ? 0x881337 : 0x3b0712);
+        velvetMat.emissiveIntensity = isLeader ? 0.68 : 0.42;
         const limbTex = createHeroMaterialSet(0x312e59, 0xf43f5e, "cloth");
         const limbMat = makeHeroPBRMaterial(limbTex, { bumpScale: 0.07 });
         const bootTex = createHeroMaterialSet(0x27272a, 0x94a3b8, "scale");
@@ -33349,13 +33499,97 @@ diffuseColor.rgb *= mix(0.58, 1.04, groundAO) * canopyShade;`,
 
         [-0.036, 0.036].forEach((fx) => {
           const fang = new THREE.Mesh(
-            new THREE.ConeGeometry(0.012, 0.044, 5),
+            new THREE.ConeGeometry(0.013, 0.048, 5),
             fangMat,
           );
           fang.rotation.x = Math.PI;
           fang.position.set(fx, 0.125, 0.305);
           face.add(fang);
         });
+
+        // Pointed Vampiric Bat Ears & Gothic Shoulders
+        const earSkinMat = registerSharedAsset(
+          new THREE.MeshStandardMaterial({ color: 0xf5e2da, roughness: 0.52 }),
+        );
+        [-1, 1].forEach((side) => {
+          const batEar = new THREE.Mesh(
+            new THREE.ConeGeometry(0.036, 0.15, 5),
+            earSkinMat,
+          );
+          batEar.position.set(side * 0.21, 0.3, -0.02);
+          batEar.rotation.z = -side * 0.86;
+          batEar.rotation.x = -0.18;
+          face.add(batEar);
+
+          const lapel = new THREE.Mesh(
+            new THREE.ConeGeometry(0.16, 0.42, 4),
+            velvetMat,
+          );
+          lapel.scale.set(1.25, 1.0, 0.24);
+          lapel.position.set(side * 0.42, 1.46, 0.12);
+          lapel.rotation.z = side * 0.48;
+          lapel.rotation.x = 0.28;
+          torso.add(lapel);
+        });
+
+        let leaderBloodOrb = null;
+        let leaderHaloRing = null;
+        if (isLeader) {
+          // Tall Gilded Ruby-Spiked Vampire Lord Crown
+          const crownRing = new THREE.Mesh(
+            new THREE.TorusGeometry(0.19, 0.028, 8, 18),
+            goldTrimMat,
+          );
+          crownRing.rotation.x = Math.PI / 2;
+          crownRing.position.set(0, 0.49, 0.01);
+          face.add(crownRing);
+          for (let ci = 0; ci < 7; ci++) {
+            const ca = (ci / 7) * Math.PI * 2;
+            const spire = new THREE.Mesh(
+              new THREE.ConeGeometry(0.028, ci === 0 ? 0.17 : 0.13, 5),
+              ci % 2 === 0 ? rubyMat : goldTrimMat,
+            );
+            spire.position.set(
+              Math.cos(ca) * 0.18,
+              0.56,
+              0.01 + Math.sin(ca) * 0.18,
+            );
+            face.add(spire);
+          }
+          // Royal Sanguine Back-Halo behind Vampire Lord's Head
+          leaderHaloRing = new THREE.Mesh(
+            new THREE.TorusGeometry(0.46, 0.022, 8, 28),
+            new THREE.MeshBasicMaterial({ color: 0xfacc15 }),
+          );
+          leaderHaloRing.position.set(0, 1.78, -0.22);
+          torso.add(leaderHaloRing);
+
+          // Dramatic Crimson-Gold Bat-Wing Shoulder Mantle
+          [-1, 1].forEach((side) => {
+            const wingFin = new THREE.Mesh(
+              new THREE.BoxGeometry(0.62, 0.3, 0.05),
+              velvetMat,
+            );
+            wingFin.position.set(side * 0.72, 1.56, -0.1);
+            wingFin.rotation.z = side * 0.46;
+            wingFin.rotation.y = -side * 0.24;
+            const wingTrim = new THREE.Mesh(
+              new THREE.BoxGeometry(0.64, 0.045, 0.06),
+              goldTrimMat,
+            );
+            wingTrim.position.set(side * 0.72, 1.7, -0.1);
+            wingTrim.rotation.z = side * 0.46;
+            wingTrim.rotation.y = -side * 0.24;
+            torso.add(wingFin, wingTrim);
+          });
+          // Orbiting Sanguine Soul Crystal
+          leaderBloodOrb = new THREE.Mesh(
+            new THREE.OctahedronGeometry(0.2, 1),
+            rubyMat,
+          );
+          leaderBloodOrb.position.set(0.76, 1.82, 0.24);
+          torso.add(leaderBloodOrb);
+        }
 
         // 3. Articulated Human Arms & Sharp Vampiric Claws on BOTH Hands (No Swords!)
         const aScale = isFem ? 0.84 : 0.98;
@@ -33480,13 +33714,17 @@ diffuseColor.rgb *= mix(0.58, 1.04, groundAO) * canopyShade;`,
           anklePivot.add(sole, toeCap);
         });
 
-        // Subtle Crimson Ground Aura Ring
+        // Crimson Ground Aura Ring (Enhanced dual-sigil for Vampire Leader)
         const auraRing = new THREE.Mesh(
-          new THREE.RingGeometry(0.85, 1.05, 28),
+          new THREE.RingGeometry(
+            isLeader ? 0.92 : 0.85,
+            isLeader ? 1.22 : 1.05,
+            28,
+          ),
           new THREE.MeshBasicMaterial({
-            color: 0xf43f5e,
+            color: isLeader ? 0xff1e42 : 0xf43f5e,
             transparent: true,
-            opacity: 0.45,
+            opacity: isLeader ? 0.68 : 0.45,
             side: THREE.DoubleSide,
           }),
         );
@@ -33510,6 +33748,8 @@ diffuseColor.rgb *= mix(0.58, 1.04, groundAO) * canopyShade;`,
           rightAnkle,
           capePivot,
           auraRing,
+          leaderBloodOrb,
+          leaderHaloRing,
         };
         return { group, parts };
       }
@@ -33568,6 +33808,14 @@ diffuseColor.rgb *= mix(0.58, 1.04, groundAO) * canopyShade;`,
             p.rightElbow.rotation.x = isMoving ? -0.38 : -0.28;
           }
         }
+        if (p.leaderBloodOrb) {
+          p.leaderBloodOrb.position.y =
+            1.82 + Math.sin(time * 3.6 + mob.animPhase) * 0.14;
+          p.leaderBloodOrb.rotation.y += dt * 2.6;
+        }
+        if (p.leaderHaloRing) {
+          p.leaderHaloRing.rotation.z -= dt * 1.4;
+        }
         if (p.auraRing) {
           p.auraRing.rotation.z += dt * 1.1;
         }
@@ -33575,11 +33823,14 @@ diffuseColor.rgb *= mix(0.58, 1.04, groundAO) * canopyShade;`,
 
       function buildWerewolfMesh(unitName = "") {
         const group = new THREE.Group();
-        const isAlpha = unitName.includes("Alpha");
+        const isLeader =
+          unitName.includes("Moonfang") || unitName.includes("Leader");
+        const isAlpha = isLeader || unitName.includes("Alpha");
         const isRavager = unitName.includes("Ravager");
-        const sc = isAlpha ? 1.28 : 1.15;
+        const sc = isLeader ? 1.48 : isAlpha ? 1.24 : 1.12;
         group.scale.setScalar(sc);
-        attachContactShadow(group, 1.62 * sc);
+        group.userData.baseScale = sc;
+        attachContactShadow(group, 1.66 * sc);
 
         // Muscular Apex Werewolf Articulated Rig (Hunched Lupine-Humanoid Silhouette)
         const hips = new THREE.Group();
@@ -33629,22 +33880,34 @@ diffuseColor.rgb *= mix(0.58, 1.04, groundAO) * canopyShade;`,
         rightAnkle.position.set(0, -0.7, -0.04);
         rightKnee.add(rightAnkle);
 
-        // Rich Textured Wolf Pelt, Silver-Ash Undercoat, Dark Mane & Iron Trim
+        // High-Visibility Grey Wolf Pelt (Silver-Grey for Pack, Arctic Frost-Grey for Moonfang Leader)
         const furTex = getCreatureTextureSet("kong_fur");
-        const peltHex = isAlpha ? 0x262936 : isRavager ? 0x3b3540 : 0x333a48;
-        const muscleHex = isAlpha ? 0x4b5166 : isRavager ? 0x625866 : 0x576175;
-        const snoutHex = isAlpha ? 0x393e4f : 0x4d5466;
+        const peltHex = isLeader
+          ? 0xdbeafe
+          : isAlpha
+            ? 0x7c8594
+            : isRavager
+              ? 0x94a3b8
+              : 0x8892a4;
+        const muscleHex = isLeader
+          ? 0xf8fafc
+          : isAlpha
+            ? 0xa8b3c4
+            : isRavager
+              ? 0xbdc6d4
+              : 0xb0bac9;
+        const snoutHex = isLeader ? 0xe2e8f0 : isAlpha ? 0x94a3b8 : 0xa3adbd;
 
         const furMat = registerSharedAsset(
           new THREE.MeshStandardMaterial({
             color: peltHex,
             map: furTex.map,
             bumpMap: furTex.bumpMap,
-            bumpScale: 0.26,
-            roughness: 0.66,
-            metalness: 0.06,
-            emissive: new THREE.Color(isAlpha ? 0x240914 : 0x121520),
-            emissiveIntensity: 0.36,
+            bumpScale: 0.24,
+            roughness: 0.56,
+            metalness: 0.08,
+            emissive: new THREE.Color(isLeader ? 0x1e3a5f : 0x2c3545),
+            emissiveIntensity: isLeader ? 0.52 : 0.44,
           }),
         );
         const muscleMat = registerSharedAsset(
@@ -33652,11 +33915,11 @@ diffuseColor.rgb *= mix(0.58, 1.04, groundAO) * canopyShade;`,
             color: muscleHex,
             map: furTex.map,
             bumpMap: furTex.bumpMap,
-            bumpScale: 0.22,
-            roughness: 0.56,
-            metalness: 0.05,
-            emissive: new THREE.Color(0x161822),
-            emissiveIntensity: 0.28,
+            bumpScale: 0.2,
+            roughness: 0.48,
+            metalness: 0.06,
+            emissive: new THREE.Color(isLeader ? 0x26466d : 0x364154),
+            emissiveIntensity: isLeader ? 0.46 : 0.38,
           }),
         );
         const snoutMat = registerSharedAsset(
@@ -33665,16 +33928,20 @@ diffuseColor.rgb *= mix(0.58, 1.04, groundAO) * canopyShade;`,
             map: furTex.map,
             bumpMap: furTex.bumpMap,
             bumpScale: 0.14,
-            roughness: 0.62,
+            roughness: 0.54,
+            emissive: new THREE.Color(0x283040),
+            emissiveIntensity: 0.32,
           }),
         );
         const maneMat = registerSharedAsset(
           new THREE.MeshStandardMaterial({
-            color: 0x14161f,
+            color: isLeader ? 0x3b4d6b : 0x475569,
             map: furTex.map,
             bumpMap: furTex.bumpMap,
-            bumpScale: 0.28,
-            roughness: 0.84,
+            bumpScale: 0.26,
+            roughness: 0.72,
+            emissive: new THREE.Color(isLeader ? 0x0c4a6e : 0x1e293b),
+            emissiveIntensity: isLeader ? 0.42 : 0.25,
           }),
         );
         const innerEarMat = registerSharedAsset(
@@ -33700,13 +33967,15 @@ diffuseColor.rgb *= mix(0.58, 1.04, groundAO) * canopyShade;`,
           }),
         );
         const eyeMat = registerSharedAsset(
-          new THREE.MeshBasicMaterial({ color: isAlpha ? 0xff2244 : 0xfbbf24 }),
+          new THREE.MeshBasicMaterial({
+            color: isLeader ? 0x38bdf8 : isAlpha ? 0xff2244 : 0xfbbf24,
+          }),
         );
         const eyeHaloMat = registerSharedAsset(
           new THREE.MeshBasicMaterial({
-            color: isAlpha ? 0xf43f5e : 0xf59e0b,
+            color: isLeader ? 0x0ea5e9 : isAlpha ? 0xf43f5e : 0xf59e0b,
             transparent: true,
-            opacity: 0.38,
+            opacity: isLeader ? 0.52 : 0.38,
             depthWrite: false,
           }),
         );
@@ -33975,11 +34244,11 @@ diffuseColor.rgb *= mix(0.58, 1.04, groundAO) * canopyShade;`,
           delt.position.set(-side * 0.03, 0, 0);
           shPivot.add(delt);
 
-          // Alpha Werewolf wears a spiked iron shoulder guard on left shoulder
-          if (isAlpha && idx === 0) {
+          // Alpha & Moonfang Leader Werewolves wear spiked iron shoulder guards
+          if (isLeader || (isAlpha && idx === 0)) {
             const pauldron = new THREE.Mesh(
               new THREE.SphereGeometry(
-                0.3,
+                0.31,
                 14,
                 10,
                 0,
@@ -33989,14 +34258,14 @@ diffuseColor.rgb *= mix(0.58, 1.04, groundAO) * canopyShade;`,
               ),
               ironMat,
             );
-            pauldron.rotation.z = 0.45;
-            pauldron.position.set(-0.05, 0.04, 0);
+            pauldron.rotation.z = -side * 0.45;
+            pauldron.position.set(side * 0.05, 0.04, 0);
             const pSpike = new THREE.Mesh(
-              new THREE.ConeGeometry(0.048, 0.24, 5),
+              new THREE.ConeGeometry(0.052, 0.26, 5),
               clawMat,
             );
-            pSpike.position.set(-0.18, 0.22, 0);
-            pSpike.rotation.z = 0.65;
+            pSpike.position.set(side * 0.18, 0.23, 0);
+            pSpike.rotation.z = -side * 0.65;
             shPivot.add(pauldron, pSpike);
           }
 
@@ -34141,12 +34410,39 @@ diffuseColor.rgb *= mix(0.58, 1.04, groundAO) * canopyShade;`,
         tailPivot.add(buildLoftedMesh(tailStations, 14, maneMat));
         hips.add(tailPivot);
 
+        let alphaLunarCrest = null;
+        if (isLeader) {
+          // Glowing Lunar-Cyan Alpha Halo & Dorsal Spine Crystals on Werewolf Leader
+          alphaLunarCrest = new THREE.Mesh(
+            new THREE.TorusGeometry(0.34, 0.042, 8, 24, Math.PI * 1.45),
+            eyeMat,
+          );
+          alphaLunarCrest.position.set(0, 1.94, -0.04);
+          alphaLunarCrest.rotation.z = -Math.PI * 0.22;
+          torso.add(alphaLunarCrest);
+
+          for (let sp = 0; sp < 4; sp++) {
+            const lunarCrystal = new THREE.Mesh(
+              new THREE.OctahedronGeometry(0.11, 0),
+              eyeMat,
+            );
+            lunarCrystal.scale.set(0.8, 1.8, 0.8);
+            lunarCrystal.position.set(0, 1.32 - sp * 0.25, -0.44 + sp * 0.02);
+            lunarCrystal.rotation.x = -0.85;
+            torso.add(lunarCrystal);
+          }
+        }
+
         const auraRing = new THREE.Mesh(
-          new THREE.RingGeometry(0.96, 1.18, 28),
+          new THREE.RingGeometry(
+            isLeader ? 1.02 : 0.96,
+            isLeader ? 1.34 : 1.18,
+            28,
+          ),
           new THREE.MeshBasicMaterial({
-            color: isAlpha ? 0xf43f5e : 0xf59e0b,
+            color: isLeader ? 0x38bdf8 : isAlpha ? 0xf43f5e : 0xf59e0b,
             transparent: true,
-            opacity: 0.42,
+            opacity: isLeader ? 0.68 : 0.42,
             side: THREE.DoubleSide,
           }),
         );
@@ -34171,6 +34467,7 @@ diffuseColor.rgb *= mix(0.58, 1.04, groundAO) * canopyShade;`,
           rightAnkle,
           tailPivot,
           auraRing,
+          alphaLunarCrest,
         };
         return { group, parts };
       }
@@ -34249,6 +34546,9 @@ diffuseColor.rgb *= mix(0.58, 1.04, groundAO) * canopyShade;`,
             p.leftElbow.rotation.x = isMoving ? -0.44 : -0.34;
             p.rightElbow.rotation.x = isMoving ? -0.44 : -0.34;
           }
+        }
+        if (p.alphaLunarCrest) {
+          p.alphaLunarCrest.rotation.y += dt * 1.9;
         }
         if (p.auraRing) {
           p.auraRing.rotation.z -= dt * 1.1;
@@ -34400,6 +34700,13 @@ diffuseColor.rgb *= mix(0.58, 1.04, groundAO) * canopyShade;`,
           this.subType = cfg.subType || "melee";
           this.isMega = !!cfg.isMega;
           this.isAncientNeutral = !!cfg.isAncientNeutral;
+          this.isMiniBoss = !!cfg.isMiniBoss;
+          this.leaderBonusType = cfg.leaderBonusType || null;
+          this.vampLeaderBuffTimer = 0;
+          this.wolfLeaderBuffTimer = 0;
+          this.hasVampLeaderBuff = false;
+          this.hasWolfLeaderBuff = false;
+          this.baseScale = 1.0;
           this.heroCfg = cfg.heroCfg || null;
           this.isPlayer = !!cfg.isPlayer;
 
@@ -34586,6 +34893,7 @@ diffuseColor.rgb *= mix(0.58, 1.04, groundAO) * canopyShade;`,
           if (this.type === "vampire" || this.subType === "vampire") {
             const built = buildVampireMesh(this.name);
             this.parts = built.parts;
+            this.baseScale = built.group.userData.baseScale || 1.0;
             built.group.traverse((o) => {
               o.userData.unit = this;
             });
@@ -34595,6 +34903,7 @@ diffuseColor.rgb *= mix(0.58, 1.04, groundAO) * canopyShade;`,
           if (this.type === "werewolf" || this.subType === "werewolf") {
             const built = buildWerewolfMesh(this.name);
             this.parts = built.parts;
+            this.baseScale = built.group.userData.baseScale || 1.0;
             built.group.traverse((o) => {
               o.userData.unit = this;
             });
@@ -34637,47 +34946,59 @@ diffuseColor.rgb *= mix(0.58, 1.04, groundAO) * canopyShade;`,
 
         createWorldBar() {
           const el = document.createElement("div");
-          el.className = "unit-bar flex flex-col items-center";
+          el.className = "unit-bar flex flex-col items-center opacity-90";
           const isRad = this.team === "radiant";
           const isNeut = this.team === "neutral";
           const fill =
             this.type === "sneakygolem"
               ? "bg-pink-500"
-              : this.type === "boss" ||
-                  this.type === "dragon" ||
-                  this.type === "kong" ||
-                  this.type === "redman"
-                ? "bg-orange-500"
-                : this.isMega || this.isAncientNeutral
-                  ? "bg-amber-400"
-                  : isRad
-                    ? "bg-emerald-500"
-                    : isNeut
-                      ? "bg-amber-500"
-                      : "bg-rose-500";
+              : this.isMiniBoss
+                ? this.type === "vampire"
+                  ? "bg-rose-500"
+                  : "bg-sky-400"
+                : this.type === "boss" ||
+                    this.type === "dragon" ||
+                    this.type === "kong" ||
+                    this.type === "redman"
+                  ? "bg-orange-500"
+                  : this.isMega || this.isAncientNeutral
+                    ? "bg-amber-400"
+                    : isRad
+                      ? "bg-emerald-500"
+                      : isNeut
+                        ? "bg-amber-500"
+                        : "bg-rose-500";
           const wCls =
             this.type === "sneakygolem"
-              ? "w-44 h-4"
+              ? "w-32 h-2.5"
               : this.type === "ancient" ||
                   this.type === "boss" ||
                   this.type === "dragon" ||
                   this.type === "kong" ||
                   this.type === "redman"
-                ? "w-36 h-3.5"
-                : this.type === "hero"
-                  ? "w-24 h-2.5"
-                  : this.type === "tower"
-                    ? "w-24 h-2.5"
-                    : this.isMega || this.isAncientNeutral
+                ? "w-28 h-2.5"
+                : this.isMiniBoss
+                  ? "w-[84px] h-2"
+                  : this.type === "hero"
+                    ? "w-[72px] h-1.5"
+                    : this.type === "tower"
                       ? "w-20 h-2"
-                      : "w-14 h-1.5";
+                      : this.isMega || this.isAncientNeutral
+                        ? "w-16 h-1.5"
+                        : "w-11 h-1";
 
           let label = "";
           if (this.type === "hero") {
-            label = `<div class="flex items-center gap-1 mb-0.5 px-1.5 rounded bg-slate-950/90 border border-amber-500/35 text-[10px] font-bold">
+            label = `<div class="flex items-center gap-1 mb-0.5 px-1 rounded bg-slate-950/80 border border-amber-500/30 text-[8.5px] leading-tight font-bold">
                         <span class="b-lvl text-amber-400 font-mono">Lv1</span>
                         <span class="${isRad ? "text-emerald-300" : "text-rose-300"}">${this.name}</span>
                     </div>`;
+          } else if (this.isMiniBoss) {
+            const bCol =
+              this.type === "vampire"
+                ? "text-rose-300 border-rose-400/60"
+                : "text-sky-300 border-sky-400/60";
+            label = `<div class="px-1 rounded bg-slate-950/85 border ${bCol} text-[8px] leading-tight font-cinzel font-black tracking-wide drop-shadow mb-0.5">★ ${this.name} ★</div>`;
           } else if (
             this.type === "vampire" ||
             this.type === "werewolf" ||
@@ -34708,18 +35029,24 @@ diffuseColor.rgb *= mix(0.58, 1.04, groundAO) * canopyShade;`,
                       : isNeut
                         ? "text-amber-300"
                         : "text-rose-300";
-            label = `<div class="text-[9px] font-cinzel font-black ${tCol} drop-shadow mb-0.5">${this.name}</div>`;
+            label = `<div class="text-[8px] leading-none font-cinzel font-bold ${tCol} drop-shadow mb-0.5">${this.name}</div>`;
           }
 
+          const borderCls = this.isMiniBoss
+            ? this.type === "vampire"
+              ? "border-rose-400/80"
+              : "border-sky-400/80"
+            : "border-slate-800/90";
+
           el.innerHTML = `
-                    <div class="b-status hidden flex items-center justify-center gap-1 mb-0.5 whitespace-nowrap"></div>
+                    <div class="b-status hidden flex items-center justify-center gap-0.5 mb-0.5 whitespace-nowrap"></div>
                     ${label}
-                    <div class="${wCls} bg-slate-950/95 border border-slate-800 rounded-xs overflow-hidden relative shadow">
+                    <div class="${wCls} bg-slate-950/90 border ${borderCls} rounded-xs overflow-hidden relative shadow">
                         <div class="b-hp ${fill} h-full w-full"></div>
                         <div class="b-sh absolute top-0 left-0 bg-cyan-300/80 h-full w-0"></div>
                     </div>
-                    ${this.type === "neutral" ? `<div class="b-zzz hidden text-[10px] font-black text-sky-300 tracking-wider animate-pulse drop-shadow mt-0.5">Zzz</div>` : ""}
-                    ${this.type === "hero" ? `<div class="w-24 h-1 bg-slate-950 border-x border-b border-slate-800"><div class="b-mp bg-sky-400 h-full w-full"></div></div>` : ""}
+                    ${this.type === "neutral" ? `<div class="b-zzz hidden text-[9px] font-black text-sky-300 tracking-wider animate-pulse drop-shadow mt-0.5">Zzz</div>` : ""}
+                    ${this.type === "hero" ? `<div class="w-[72px] h-[3px] bg-slate-950/90 border-x border-b border-slate-800/90"><div class="b-mp bg-sky-400 h-full w-full"></div></div>` : ""}
                 `;
           return {
             el,
@@ -34779,11 +35106,13 @@ diffuseColor.rgb *= mix(0.58, 1.04, groundAO) * canopyShade;`,
             this.fierySoulTimer > 0 && this.fierySoulStacks
               ? this.fierySoulStacks * 0.18
               : 0;
+          const wolfAtkBonus = this.hasWolfLeaderBuff ? 0.06 : 0;
           const mult =
             this.atkSpeedMult +
             (this.blinkBuffTimer > 0 ? 0.55 : 0) +
             furyAtkBonus +
-            fieryBonus;
+            fieryBonus +
+            wolfAtkBonus;
           return Math.max(0.22, this.atkCooldownBase / mult);
         }
 
@@ -34791,6 +35120,7 @@ diffuseColor.rgb *= mix(0.58, 1.04, groundAO) * canopyShade;`,
           if (this.stunTimer > 0 || this.reincarnating || this.dead) return 0;
           const slow = this.slowTimer > 0 ? this.slowFactor : 1.0;
           const buff = this.blinkBuffTimer > 0 ? 1.25 : 1.0;
+          const wolfBuff = this.hasWolfLeaderBuff ? 1.08 : 1.0;
           const furySpd =
             this.ancientFuryTimer > 0 &&
             (this.type === "kong" ||
@@ -34798,7 +35128,7 @@ diffuseColor.rgb *= mix(0.58, 1.04, groundAO) * canopyShade;`,
               this.type === "sneakygolem")
               ? 1.42
               : 1.0;
-          return this.moveSpeed * slow * buff * furySpd;
+          return this.moveSpeed * slow * buff * wolfBuff * furySpd;
         }
 
         recordHeroInvolvement(sourceHero) {
@@ -35537,6 +35867,71 @@ diffuseColor.rgb *= mix(0.58, 1.04, groundAO) * canopyShade;`,
                   },
                 );
               spawnFloatText(this.mesh.position, `+${bounty}g`, "#facc15", 17);
+            }
+          }
+
+          if (this.leaderBonusType) {
+            if (this.camp) {
+              this.camp.leaderSlain = true;
+              this.camp.respawnTimer = Math.max(
+                this.camp.respawnTimer || 0,
+                45.0 * 1.5,
+              );
+            }
+            if (
+              effectiveKiller &&
+              effectiveKiller.type === "hero" &&
+              !effectiveKiller.dead
+            ) {
+              if (this.leaderBonusType === "vampire_lifesteal") {
+                effectiveKiller.hasVampLeaderBuff = true;
+                effectiveKiller.hp = Math.min(
+                  effectiveKiller.maxHp,
+                  effectiveKiller.hp + effectiveKiller.maxHp * 0.08,
+                );
+                spawnOrbitalSkyBeam(
+                  effectiveKiller.mesh.position.x,
+                  effectiveKiller.mesh.position.z,
+                  4.5,
+                  0xf43f5e,
+                  1.1,
+                );
+                spawnFloatText(
+                  effectiveKiller.mesh.position,
+                  "VAMPIRE LORD SLAIN! PERMANENT +6% LIFESTEAL",
+                  "#fb7185",
+                  15,
+                );
+                if (effectiveKiller.isPlayer) {
+                  showBanner(
+                    "CRIMSON VAMPIRE LORD SLAIN!",
+                    `${effectiveKiller.name} absorbs Permanent Sanguine Bloodlust (+6% Lifesteal)!`,
+                    "text-rose-400",
+                  );
+                }
+              } else if (this.leaderBonusType === "wolf_movespeed") {
+                effectiveKiller.hasWolfLeaderBuff = true;
+                spawnOrbitalSkyBeam(
+                  effectiveKiller.mesh.position.x,
+                  effectiveKiller.mesh.position.z,
+                  4.5,
+                  0x38bdf8,
+                  1.1,
+                );
+                spawnFloatText(
+                  effectiveKiller.mesh.position,
+                  "ALPHA WEREWOLF SLAIN! PERMANENT +8% SPD & +6% ATK SPD",
+                  "#38bdf8",
+                  15,
+                );
+                if (effectiveKiller.isPlayer) {
+                  showBanner(
+                    "ALPHA MOONFANG SLAIN!",
+                    `${effectiveKiller.name} gains Permanent Lunar Swiftness (+8% Move Speed & +6% Attack Speed)!`,
+                    "text-sky-300",
+                  );
+                }
+              }
             }
           }
 
@@ -39825,7 +40220,20 @@ diffuseColor.rgb *= mix(0.58, 1.04, groundAO) * canopyShade;`,
             camp.alive = false;
             return;
           }
+          camp.leaderSlain = false;
           const wolfPack = [
+            {
+              ox: 0.0,
+              oz: 0.0,
+              name: "Alpha Moonfang Werewolf",
+              isMiniBoss: true,
+              leaderBonusType: "wolf_movespeed",
+              maxHp: 2550,
+              dmg: 148,
+              rad: 1.65,
+              gold: [265, 320],
+              xp: 380,
+            },
             {
               ox: -3.2,
               oz: -2.4,
@@ -39865,15 +40273,17 @@ diffuseColor.rgb *= mix(0.58, 1.04, groundAO) * canopyShade;`,
               name: wp.name,
               type: "werewolf",
               subType: "werewolf",
+              isMiniBoss: !!wp.isMiniBoss,
+              leaderBonusType: wp.leaderBonusType || null,
               x: sx,
               z: sz,
               maxHp: wp.maxHp,
-              hpRegen: 8.5,
+              hpRegen: wp.isMiniBoss ? 12.0 : 8.5,
               atkDamage: wp.dmg,
-              atkRange: 3.6,
-              atkCooldown: 0.92,
-              moveSpeed: 12.2,
-              armor: 8,
+              atkRange: wp.isMiniBoss ? 4.0 : 3.6,
+              atkCooldown: wp.isMiniBoss ? 0.86 : 0.92,
+              moveSpeed: wp.isMiniBoss ? 12.8 : 12.2,
+              armor: wp.isMiniBoss ? 11 : 8,
               radius: wp.rad,
               goldBounty: wp.gold,
               xpBounty: wp.xp,
@@ -40196,7 +40606,20 @@ diffuseColor.rgb *= mix(0.58, 1.04, groundAO) * canopyShade;`,
             camp.alive = false;
             return;
           }
+          camp.leaderSlain = false;
           const vampPack = [
+            {
+              ox: 0.0,
+              oz: 0.0,
+              name: "Crimson Vampire Lord",
+              isMiniBoss: true,
+              leaderBonusType: "vampire_lifesteal",
+              maxHp: 2450,
+              dmg: 142,
+              rad: 1.6,
+              gold: [265, 320],
+              xp: 380,
+            },
             {
               ox: -3.2,
               oz: -2.4,
@@ -40236,15 +40659,17 @@ diffuseColor.rgb *= mix(0.58, 1.04, groundAO) * canopyShade;`,
               name: vp.name,
               type: "vampire",
               subType: "vampire",
+              isMiniBoss: !!vp.isMiniBoss,
+              leaderBonusType: vp.leaderBonusType || null,
               x: sx,
               z: sz,
               maxHp: vp.maxHp,
-              hpRegen: 8.5,
+              hpRegen: vp.isMiniBoss ? 12.0 : 8.5,
               atkDamage: vp.dmg,
-              atkRange: 3.6,
-              atkCooldown: 0.92,
-              moveSpeed: 12.2,
-              armor: 8,
+              atkRange: vp.isMiniBoss ? 4.0 : 3.6,
+              atkCooldown: vp.isMiniBoss ? 0.86 : 0.92,
+              moveSpeed: vp.isMiniBoss ? 12.8 : 12.2,
+              armor: vp.isMiniBoss ? 11 : 8,
               radius: vp.rad,
               goldBounty: vp.gold,
               xpBounty: vp.xp,
@@ -40773,13 +41198,15 @@ diffuseColor.rgb *= mix(0.58, 1.04, groundAO) * canopyShade;`,
             type: "hero",
             isPlayer: true,
             heroCfg: myCfg,
-            x: mpState.myTeam === "radiant" ? -74 : 74,
-            z: mpState.myTeam === "radiant" ? 74 : -74,
+            x: mpState.myTeam === "radiant" ? -133 : 133,
+            z: mpState.myTeam === "radiant" ? 133 : -133,
             ...myCfg.stats,
             radius: 1.4,
             gold: 650,
             tpCharges: 1,
           });
+          playerHero.mesh.rotation.y =
+            mpState.myTeam === "radiant" ? Math.PI * 0.75 : -Math.PI * 0.25;
           playerHero.ownerPeerId = mpState.myId;
           units.push(playerHero);
           spawnRiverRunes();
@@ -41018,19 +41445,28 @@ diffuseColor.rgb *= mix(0.58, 1.04, groundAO) * canopyShade;`,
           (s) => s.type === "tower" || s.type === "ancient",
         );
 
+        // Spawn all heroes cleanly on their Base Fountain Sanctuary dais (-133, 133 Radiant | 133, -133 Dire), well clear of the lane creep gate (-104, 104)
+        const FOUNTAIN_SLOTS_5V5 = [
+          [0.0, 0.0],
+          [-3.6, -2.2],
+          [2.2, 3.6],
+          [-5.2, 1.4],
+          [-1.4, 5.2],
+        ];
+        const getFountainSpawn = (team, slotIdx = 0) => {
+          const [ox, oz] =
+            FOUNTAIN_SLOTS_5V5[Math.min(4, Math.max(0, slotIdx))];
+          return team === "radiant"
+            ? { x: -133 + ox, z: 133 + oz, yaw: Math.PI * 0.75 }
+            : { x: 133 - ox, z: -133 - oz, yaw: -Math.PI * 0.25 };
+        };
+
         if (mpState.active && mpState.role === "host") {
           if (statusPill) statusPill.classList.remove("hidden");
           if (statusText)
             statusText.textContent = `MP HOST • ${mpState.roomCode} (${mpState.players.size}P)${mpState.iceModeLabel ? " • " + mpState.iceModeLabel : ""}`;
           if (p2Pill) p2Pill.classList.add("hidden");
 
-          const SPAWN_OFFSETS_5V5 = [
-            [0, 0],
-            [5.5, -3.5],
-            [-3.5, 5.5],
-            [9.5, 2.0],
-            [2.0, 9.5],
-          ];
           const usedHeroIds = new Set();
           let radCount = 0;
           let direCount = 0;
@@ -41045,17 +41481,15 @@ diffuseColor.rgb *= mix(0.58, 1.04, groundAO) * canopyShade;`,
               4,
               team === "radiant" ? radCount++ : direCount++,
             );
-            const [ox, oz] = SPAWN_OFFSETS_5V5[idx];
-            const sx = team === "radiant" ? -112 + ox : 112 - ox;
-            const sz = team === "radiant" ? 112 - oz : -112 + oz;
+            const sp = getFountainSpawn(team, idx);
             const heroEnt = new MobaEntity({
               name: `${hCfg.name} (${p.name})`,
               team,
               type: "hero",
               isPlayer: isMe,
               heroCfg: hCfg,
-              x: sx,
-              z: sz,
+              x: sp.x,
+              z: sp.z,
               ...hCfg.stats,
               radius: 1.4,
               gold: 650,
@@ -41063,6 +41497,7 @@ diffuseColor.rgb *= mix(0.58, 1.04, groundAO) * canopyShade;`,
               goldBounty: [260, 320],
               xpBounty: 260,
             });
+            heroEnt.mesh.rotation.y = sp.yaw;
             heroEnt.ownerPeerId = p.id;
             if (!isMe) {
               heroEnt.isRemoteHuman = true;
@@ -41083,23 +41518,22 @@ diffuseColor.rgb *= mix(0.58, 1.04, groundAO) * canopyShade;`,
             let poolIdx = 0;
             const spawnTeamBot = (team, slotIdx) => {
               const bCfg = botPool[poolIdx++ % botPool.length] || direCfg1;
-              const [ox, oz] = SPAWN_OFFSETS_5V5[Math.min(4, slotIdx)];
-              const sx = team === "radiant" ? -112 + ox : 112 - ox;
-              const sz = team === "radiant" ? 112 - oz : -112 + oz;
+              const sp = getFountainSpawn(team, slotIdx);
               const bot = new MobaEntity({
                 name: `${bCfg.name} [${prof.label}]`,
                 team,
                 type: "hero",
                 isPlayer: false,
                 heroCfg: bCfg,
-                x: sx,
-                z: sz,
+                x: sp.x,
+                z: sp.z,
                 ...scaleBotStatsByDifficulty(bCfg.stats),
                 radius: 1.4,
                 gold: 650,
                 goldBounty: [280, 340],
                 xpBounty: 280,
               });
+              bot.mesh.rotation.y = sp.yaw;
               bot.atkSpeedMult += prof.atkSpdBonus;
               bot.abilityLevels.Q = 1;
               bot.skillPoints = 0;
@@ -41129,14 +41563,15 @@ diffuseColor.rgb *= mix(0.58, 1.04, groundAO) * canopyShade;`,
               p2NameEl.textContent = `${p2Cfg.name} (${mpState.p2Team.toUpperCase()})`;
           }
 
+          const p1Sp = getFountainSpawn("radiant", 0);
           playerHero = new MobaEntity({
             name: `${radHeroCfg.name} (P1)`,
             team: "radiant",
             type: "hero",
             isPlayer: true,
             heroCfg: radHeroCfg,
-            x: -108,
-            z: 108,
+            x: p1Sp.x,
+            z: p1Sp.z,
             ...radHeroCfg.stats,
             radius: 1.4,
             gold: 650,
@@ -41144,16 +41579,18 @@ diffuseColor.rgb *= mix(0.58, 1.04, groundAO) * canopyShade;`,
             goldBounty: [260, 310],
             xpBounty: 260,
           });
+          playerHero.mesh.rotation.y = p1Sp.yaw;
           units.push(playerHero);
 
+          const p2Sp = getFountainSpawn(mpState.p2Team, p2IsRad ? 1 : 0);
           localP2Hero = new MobaEntity({
             name: `${p2Cfg.name} (P2)`,
             team: mpState.p2Team,
             type: "hero",
             isPlayer: false,
             heroCfg: p2Cfg,
-            x: p2IsRad ? -103 : 108,
-            z: p2IsRad ? 112 : -108,
+            x: p2Sp.x,
+            z: p2Sp.z,
             ...p2Cfg.stats,
             radius: 1.4,
             gold: 650,
@@ -41161,6 +41598,7 @@ diffuseColor.rgb *= mix(0.58, 1.04, groundAO) * canopyShade;`,
             goldBounty: [260, 310],
             xpBounty: 260,
           });
+          localP2Hero.mesh.rotation.y = p2Sp.yaw;
           localP2Hero.isLocalP2 = true;
           localP2Hero.abilityLevels.Q = 1;
           localP2Hero.skillPoints = 0;
@@ -41168,20 +41606,22 @@ diffuseColor.rgb *= mix(0.58, 1.04, groundAO) * canopyShade;`,
 
           if (p2IsRad) {
             [direCfg1, direCfg2].forEach((dc, idx) => {
+              const dSp = getFountainSpawn("dire", idx);
               const dBot = new MobaEntity({
                 name: `${dc.name} [${prof.label}]`,
                 team: "dire",
                 type: "hero",
                 isPlayer: false,
                 heroCfg: dc,
-                x: 108 + idx * 4,
-                z: -108 + idx * 5,
+                x: dSp.x,
+                z: dSp.z,
                 ...scaleBotStatsByDifficulty(dc.stats),
                 radius: 1.4,
                 gold: 650,
                 goldBounty: [280, 340],
                 xpBounty: 280,
               });
+              dBot.mesh.rotation.y = dSp.yaw;
               dBot.atkSpeedMult += prof.atkSpdBonus;
               dBot.abilityLevels.Q = 1;
               dBot.skillPoints = 0;
@@ -41198,14 +41638,15 @@ diffuseColor.rgb *= mix(0.58, 1.04, groundAO) * canopyShade;`,
               : `${direCfg1.name} (${prof.label})`;
           applyHeroToHUD(radHeroCfg, direTitle);
 
+          const radSp = getFountainSpawn("radiant", 0);
           playerHero = new MobaEntity({
             name: radHeroCfg.name,
             team: "radiant",
             type: "hero",
             isPlayer: true,
             heroCfg: radHeroCfg,
-            x: -108,
-            z: 108,
+            x: radSp.x,
+            z: radSp.z,
             ...radHeroCfg.stats,
             radius: 1.4,
             gold: 650,
@@ -41213,23 +41654,26 @@ diffuseColor.rgb *= mix(0.58, 1.04, groundAO) * canopyShade;`,
             goldBounty: [250, 290],
             xpBounty: 250,
           });
+          playerHero.mesh.rotation.y = radSp.yaw;
           units.push(playerHero);
 
           if (matchMode === "2v1") {
+            const allySp = getFountainSpawn("radiant", 1);
             const allyHero = new MobaEntity({
               name: `${allyCfg.name} (Ally)`,
               team: "radiant",
               type: "hero",
               isPlayer: false,
               heroCfg: allyCfg,
-              x: -103,
-              z: 112,
+              x: allySp.x,
+              z: allySp.z,
               ...scaleBotStatsByDifficulty(allyCfg.stats),
               radius: 1.4,
               gold: 650,
               goldBounty: [250, 290],
               xpBounty: 250,
             });
+            allyHero.mesh.rotation.y = allySp.yaw;
             allyHero.atkSpeedMult += prof.atkSpdBonus;
             allyHero.abilityLevels.Q = 1;
             allyHero.skillPoints = 0;
@@ -41237,20 +41681,22 @@ diffuseColor.rgb *= mix(0.58, 1.04, groundAO) * canopyShade;`,
             aiHeroes.push(allyHero);
           }
 
+          const dSp1 = getFountainSpawn("dire", 0);
           const dHero1 = new MobaEntity({
             name: `${direCfg1.name} [${prof.label}]`,
             team: "dire",
             type: "hero",
             isPlayer: false,
             heroCfg: direCfg1,
-            x: 108,
-            z: -108,
+            x: dSp1.x,
+            z: dSp1.z,
             ...scaleBotStatsByDifficulty(direCfg1.stats),
             radius: 1.4,
             gold: 650,
             goldBounty: [280, 340],
             xpBounty: 280,
           });
+          dHero1.mesh.rotation.y = dSp1.yaw;
           dHero1.atkSpeedMult += prof.atkSpdBonus;
           dHero1.abilityLevels.Q = 1;
           dHero1.skillPoints = 0;
@@ -41258,20 +41704,22 @@ diffuseColor.rgb *= mix(0.58, 1.04, groundAO) * canopyShade;`,
           aiHeroes.push(dHero1);
 
           if (matchMode === "1v2") {
+            const dSp2 = getFountainSpawn("dire", 1);
             const dHero2 = new MobaEntity({
               name: `${direCfg2.name} [${prof.label}]`,
               team: "dire",
               type: "hero",
               isPlayer: false,
               heroCfg: direCfg2,
-              x: 112,
-              z: -103,
+              x: dSp2.x,
+              z: dSp2.z,
               ...scaleBotStatsByDifficulty(direCfg2.stats),
               radius: 1.4,
               gold: 650,
               goldBounty: [280, 340],
               xpBounty: 280,
             });
+            dHero2.mesh.rotation.y = dSp2.yaw;
             dHero2.atkSpeedMult += prof.atkSpdBonus;
             dHero2.abilityLevels.Q = 1;
             dHero2.skillPoints = 0;
@@ -41338,8 +41786,8 @@ diffuseColor.rgb *= mix(0.58, 1.04, groundAO) * canopyShade;`,
             type: "creep",
             subType: f.sub,
             isMega: radiantMegaCreeps,
-            x: -108 + f.dx,
-            z: 108 + f.dz,
+            x: -104 + f.dx,
+            z: 104 + f.dz,
             maxHp: Math.round((isR ? 350 : 490) * m.hp * radMegaMult),
             atkDamage: Math.round((isR ? 38 : 30) * m.dmg * radMegaMult),
             atkRange: isR ? 9.5 : 2.8,
@@ -41376,8 +41824,8 @@ diffuseColor.rgb *= mix(0.58, 1.04, groundAO) * canopyShade;`,
             type: "creep",
             subType: f.sub,
             isMega: direMegaCreeps,
-            x: 108 - f.dx,
-            z: -108 - f.dz,
+            x: 104 - f.dx,
+            z: -104 - f.dz,
             maxHp: Math.round((isR ? 350 : 490) * m.hp * direMegaMult),
             atkDamage: Math.round((isR ? 38 : 30) * m.dmg * direMegaMult),
             atkRange: isR ? 9.5 : 2.8,
@@ -44511,6 +44959,21 @@ diffuseColor.rgb *= mix(0.58, 1.04, groundAO) * canopyShade;`,
         if (attacker.atkRange <= 4.6) {
           if (!isVisualReplay) {
             target.takeDamage(dmg, attacker, isCrit);
+            if (target.type === "tower") {
+              const camDist = Math.hypot(
+                target.mesh.position.x - cameraFocus.x,
+                target.mesh.position.z - cameraFocus.z,
+              );
+              const heroDist =
+                playerHero && !playerHero.dead
+                  ? Math.hypot(
+                      target.mesh.position.x - playerHero.mesh.position.x,
+                      target.mesh.position.z - playerHero.mesh.position.z,
+                    )
+                  : Infinity;
+              const nearDist = Math.min(camDist, heroDist);
+              if (nearDist <= 42.0) sfx.play("tower_hit", nearDist);
+            }
             if (
               attacker.hasSkadi &&
               target.type !== "tower" &&
@@ -44590,14 +45053,17 @@ diffuseColor.rgb *= mix(0.58, 1.04, groundAO) * canopyShade;`,
                 }
               });
             }
+            const totalLifesteal =
+              (attacker.lifesteal || 0) +
+              (attacker.hasVampLeaderBuff ? 0.06 : 0);
             if (
-              attacker.lifesteal > 0 &&
+              totalLifesteal > 0 &&
               target.type !== "tower" &&
               target.type !== "ancient"
             )
               attacker.hp = Math.min(
                 attacker.maxHp,
-                attacker.hp + dmg * attacker.lifesteal,
+                attacker.hp + dmg * totalLifesteal,
               );
             if (
               (attacker.type === "vampire" || attacker.type === "werewolf") &&
@@ -44953,6 +45419,57 @@ diffuseColor.rgb *= mix(0.58, 1.04, groundAO) * canopyShade;`,
           _spatialBuckets[cz * _SPATIAL_DIM + cx].push(u);
         }
         _spatialGridValid = true;
+      }
+
+      const _spatialQueryBufA = [];
+      const _spatialQueryBufB = [];
+      function querySpatialUnits(
+        cxWorld,
+        czWorld,
+        radius,
+        outBuf = _spatialQueryBufA,
+      ) {
+        outBuf.length = 0;
+        if (!_spatialGridValid || radius > 40) {
+          for (let i = 0; i < units.length; i++) outBuf.push(units[i]);
+          return outBuf;
+        }
+        const minCx = Math.max(
+          0,
+          Math.min(
+            _SPATIAL_DIM - 1,
+            ((cxWorld - radius + MAP_HALF) / _SPATIAL_CELL) | 0,
+          ),
+        );
+        const maxCx = Math.max(
+          0,
+          Math.min(
+            _SPATIAL_DIM - 1,
+            ((cxWorld + radius + MAP_HALF) / _SPATIAL_CELL) | 0,
+          ),
+        );
+        const minCz = Math.max(
+          0,
+          Math.min(
+            _SPATIAL_DIM - 1,
+            ((czWorld - radius + MAP_HALF) / _SPATIAL_CELL) | 0,
+          ),
+        );
+        const maxCz = Math.max(
+          0,
+          Math.min(
+            _SPATIAL_DIM - 1,
+            ((czWorld + radius + MAP_HALF) / _SPATIAL_CELL) | 0,
+          ),
+        );
+        for (let cz = minCz; cz <= maxCz; cz++) {
+          const rowOff = cz * _SPATIAL_DIM;
+          for (let cx = minCx; cx <= maxCx; cx++) {
+            const bucket = _spatialBuckets[rowOff + cx];
+            for (let i = 0; i < bucket.length; i++) outBuf.push(bucket[i]);
+          }
+        }
+        return outBuf;
       }
 
       function findNearestTarget(
@@ -45804,7 +46321,9 @@ diffuseColor.rgb *= mix(0.58, 1.04, groundAO) * canopyShade;`,
         neutralCamps.forEach((c) => {
           if (c.kind === "vampire" || c.kind === "werewolf") {
             c.alive = false;
-            c.respawnTimer = 0;
+            if (!c.leaderSlain) c.respawnTimer = 0;
+            c._playerNearHowl = false;
+            c._playerNearVampSound = false;
           }
         });
         if (removedAny && announceDawn && !inHeroSelect && !inTitleScreen) {
@@ -45840,8 +46359,10 @@ diffuseColor.rgb *= mix(0.58, 1.04, groundAO) * canopyShade;`,
           let spawnedCount = 0;
           neutralCamps.forEach((camp) => {
             if (camp.kind === "vampire" || camp.kind === "werewolf") {
-              spawnCampCreeps(camp);
-              if (camp.alive) spawnedCount++;
+              if ((camp.respawnTimer || 0) <= 0) {
+                spawnCampCreeps(camp);
+                if (camp.alive) spawnedCount++;
+              }
             }
           });
           if (spawnedCount > 0 && !inHeroSelect && !inTitleScreen) {
@@ -46090,7 +46611,7 @@ diffuseColor.rgb *= mix(0.58, 1.04, groundAO) * canopyShade;`,
               playerHero.mesh.position.z - camp.z,
             );
             camp.howlCooldown = Math.max(0, (camp.howlCooldown || 0) - dt);
-            if (distToWolfCamp > 50.0) {
+            if (!isNightTime || !anyAlive || distToWolfCamp > 50.0) {
               camp._playerNearHowl = false;
             } else if (
               distToWolfCamp <= 36.0 &&
@@ -46113,16 +46634,53 @@ diffuseColor.rgb *= mix(0.58, 1.04, groundAO) * canopyShade;`,
               }
             }
           }
+          if (
+            camp.kind === "vampire" &&
+            playerHero &&
+            !playerHero.dead &&
+            !inHeroSelect &&
+            !inTitleScreen
+          ) {
+            const distToVampCamp = Math.hypot(
+              playerHero.mesh.position.x - camp.x,
+              playerHero.mesh.position.z - camp.z,
+            );
+            camp.vampSoundCooldown = Math.max(
+              0,
+              (camp.vampSoundCooldown || 0) - dt,
+            );
+            if (!isNightTime || !anyAlive || distToVampCamp > 50.0) {
+              camp._playerNearVampSound = false;
+            } else if (
+              distToVampCamp <= 36.0 &&
+              !camp._playerNearVampSound &&
+              camp.vampSoundCooldown <= 0
+            ) {
+              camp._playerNearVampSound = true;
+              camp.vampSoundCooldown = 20.0;
+              sfx.play("vampire_coven", distToVampCamp);
+            }
+          }
           if (!anyAlive) {
-            if (camp.isNightOnly && !isNightTime) {
+            const NORMAL_NEUTRAL_RESPAWN = 45.0;
+            const isNocturnalBossCamp =
+              camp.kind === "vampire" || camp.kind === "werewolf";
+            const targetRespawn =
+              isNocturnalBossCamp && camp.leaderSlain
+                ? NORMAL_NEUTRAL_RESPAWN * 1.5
+                : NORMAL_NEUTRAL_RESPAWN;
+            if (camp.alive) {
               camp.alive = false;
-              camp.respawnTimer = 0;
-            } else if (camp.alive) {
-              camp.alive = false;
-              camp.respawnTimer = 45.0;
-            } else if (!camp.isNightOnly || isNightTime) {
-              camp.respawnTimer -= dt;
-              if (camp.respawnTimer <= 0) {
+              camp.respawnTimer = Math.max(
+                camp.respawnTimer || 0,
+                targetRespawn,
+              );
+            } else if (camp.respawnTimer > 0) {
+              camp.respawnTimer = Math.max(0, camp.respawnTimer - dt);
+              if (
+                camp.respawnTimer <= 0 &&
+                (!camp.isNightOnly || isNightTime)
+              ) {
                 spawnCampCreeps(camp);
                 if (camp.alive)
                   spawnShockwaveRing(
@@ -46137,6 +46695,20 @@ diffuseColor.rgb *= mix(0.58, 1.04, groundAO) * canopyShade;`,
                     0.6,
                   );
               }
+            } else if (!camp.isNightOnly || isNightTime) {
+              spawnCampCreeps(camp);
+              if (camp.alive)
+                spawnShockwaveRing(
+                  camp.x,
+                  camp.z,
+                  4.5,
+                  camp.kind === "vampire"
+                    ? 0xf43f5e
+                    : camp.kind === "werewolf"
+                      ? 0xf59e0b
+                      : 0x34d399,
+                  0.6,
+                );
             }
           }
         }
@@ -46239,17 +46811,22 @@ diffuseColor.rgb *= mix(0.58, 1.04, groundAO) * canopyShade;`,
               0,
               u.ancientUnderAttackTimer - dt,
             );
+          if (u.vampLeaderBuffTimer > 0)
+            u.vampLeaderBuffTimer = Math.max(0, u.vampLeaderBuffTimer - dt);
+          if (u.wolfLeaderBuffTimer > 0)
+            u.wolfLeaderBuffTimer = Math.max(0, u.wolfLeaderBuffTimer - dt);
           if (u.swingAnim > 0) u.swingAnim = Math.max(0, u.swingAnim - dt);
           if (u.castAnim > 0) u.castAnim = Math.max(0, u.castAnim - dt);
           if (u.celebrateTimer > 0)
             u.celebrateTimer = Math.max(0, u.celebrateTimer - dt);
+          const entityBaseScale = u.baseScale || 1.0;
           const baseGuardianScale =
             (u.type === "kong" ||
               u.type === "redman" ||
               u.type === "sneakygolem") &&
             u.ancientFuryTimer > 0
               ? 1.12 + Math.sin(matchTime * 12.0) * 0.03
-              : 1.0;
+              : entityBaseScale;
           if (
             Math.abs(u.hitFlinchX || 0) > 0.005 ||
             Math.abs(u.hitFlinchZ || 0) > 0.005
@@ -46272,8 +46849,8 @@ diffuseColor.rgb *= mix(0.58, 1.04, groundAO) * canopyShade;`,
             u.hitFlashTimer = Math.max(0, u.hitFlashTimer - dt);
             if (u.type !== "tower" && u.type !== "ancient") {
               const pulse =
-                baseGuardianScale +
-                Math.sin((u.hitFlashTimer / 0.13) * Math.PI) * 0.085;
+                baseGuardianScale *
+                (1.0 + Math.sin((u.hitFlashTimer / 0.13) * Math.PI) * 0.085);
               u.mesh.scale.setScalar(pulse);
             }
           } else if (
@@ -46570,8 +47147,8 @@ diffuseColor.rgb *= mix(0.58, 1.04, groundAO) * canopyShade;`,
 
           if (u.type === "vampire" || u.type === "werewolf") {
             const NORMAL_NEUTRAL_AGGRO = 9.2;
-            const doubleNeutralAggroR = NORMAL_NEUTRAL_AGGRO * 2.0; // 18.4m (2x normal neutral aggro radius)
-            const campLeash = 26.0;
+            const tripleNeutralAggroR = NORMAL_NEUTRAL_AGGRO * 3.0; // 27.6m (3x normal neutral aggro radius)
+            const campLeash = 34.0;
             const distCampSq = u.mesh.position.distanceToSquared(u.homePos);
             if (
               distCampSq > campLeash * campLeash ||
@@ -46606,7 +47183,7 @@ diffuseColor.rgb *= mix(0.58, 1.04, groundAO) * canopyShade;`,
               if (!u.targetUnit) {
                 const prey = findNearestTarget(
                   u,
-                  doubleNeutralAggroR,
+                  tripleNeutralAggroR,
                   true,
                   false,
                 );
@@ -46622,6 +47199,19 @@ diffuseColor.rgb *= mix(0.58, 1.04, groundAO) * canopyShade;`,
                 ) {
                   u.targetUnit = prey;
                   u.targetPos = null;
+                  // Alert all pack/coven allies when any member spots prey within 3x aggro range
+                  for (let vi = 0; vi < units.length; vi++) {
+                    const allyV = units[vi];
+                    if (
+                      !allyV.dead &&
+                      allyV.type === u.type &&
+                      allyV.camp === u.camp &&
+                      !allyV.targetUnit
+                    ) {
+                      allyV.targetUnit = prey;
+                      allyV.targetPos = null;
+                    }
+                  }
                 }
               }
               if (u.targetUnit && !u.targetUnit.dead) {
@@ -47014,9 +47604,8 @@ diffuseColor.rgb *= mix(0.58, 1.04, groundAO) * canopyShade;`,
               );
             }
           }
-          const doSkeletalStep =
-            onScreen || ((_shadowFrameCounter + u.id) & 3) === 0;
-          const animDt = onScreen ? dt : dt * 4;
+          const doSkeletalStep = onScreen;
+          const animDt = dt;
 
           if (u.type === "hero") {
             if (u.activeDash) {
@@ -47193,11 +47782,25 @@ diffuseColor.rgb *= mix(0.58, 1.04, groundAO) * canopyShade;`,
             const d = Math.sqrt(dSq);
             const rawPush = Math.min(0.18, (minD - d) * 0.22);
             const push = rawPush / d;
-            a.mesh.position.x += dx * push;
-            a.mesh.position.z += dz * push;
-            if (b.type !== "tower" && b.type !== "ancient") {
-              b.mesh.position.x -= dx * push;
-              b.mesh.position.z -= dz * push;
+            const aImmovable = a.type === "tower" || a.type === "ancient";
+            const bImmovable = b.type === "tower" || b.type === "ancient";
+            // Creeps yield around Heroes so creeps never shove a standing or moving Hero
+            let aWeight = aImmovable ? 0.0 : 1.0;
+            let bWeight = bImmovable ? 0.0 : 1.0;
+            if (a.type === "hero" && b.type === "creep") {
+              aWeight = 0.0;
+              bWeight = 1.65;
+            } else if (b.type === "hero" && a.type === "creep") {
+              aWeight = 1.65;
+              bWeight = 0.0;
+            }
+            if (aWeight > 0) {
+              a.mesh.position.x += dx * push * aWeight;
+              a.mesh.position.z += dz * push * aWeight;
+            }
+            if (bWeight > 0) {
+              b.mesh.position.x -= dx * push * bWeight;
+              b.mesh.position.z -= dz * push * bWeight;
             }
           }
         };
@@ -47453,19 +48056,36 @@ diffuseColor.rgb *= mix(0.58, 1.04, groundAO) * canopyShade;`,
             const step = p.speed * dt;
             const dist = _vScratch2.length();
             if (dist <= step + 0.5) {
-              if (p.owner && p.owner.type === "tower") {
-                const distToCam = Math.hypot(
-                  p.target.mesh.position.x - cameraFocus.x,
-                  p.target.mesh.position.z - cameraFocus.z,
+              if (
+                (p.owner && p.owner.type === "tower") ||
+                (p.target && p.target.type === "tower")
+              ) {
+                const refPos =
+                  p.owner && p.owner.type === "tower"
+                    ? p.owner.mesh.position
+                    : p.target.mesh.position;
+                const camDist = Math.hypot(
+                  refPos.x - cameraFocus.x,
+                  refPos.z - cameraFocus.z,
                 );
-                sfx.play("tower_hit", distToCam);
-                spawnShockwaveRing(
-                  p.target.mesh.position.x,
-                  p.target.mesh.position.z,
-                  2.1,
-                  p.owner.team === "radiant" ? 0x34d399 : 0xf43f5e,
-                  0.26,
-                );
+                const heroDist =
+                  playerHero && !playerHero.dead
+                    ? Math.hypot(
+                        refPos.x - playerHero.mesh.position.x,
+                        refPos.z - playerHero.mesh.position.z,
+                      )
+                    : Infinity;
+                const nearDist = Math.min(camDist, heroDist);
+                if (nearDist <= 42.0) sfx.play("tower_hit", nearDist);
+                if (p.owner && p.owner.type === "tower") {
+                  spawnShockwaveRing(
+                    p.target.mesh.position.x,
+                    p.target.mesh.position.z,
+                    2.1,
+                    p.owner.team === "radiant" ? 0x34d399 : 0xf43f5e,
+                    0.26,
+                  );
+                }
               }
               if (p.isUmaxHeroProj && p.owner && p.owner.heroCfg) {
                 spawnHeroAttackSparkles(
@@ -47610,17 +48230,14 @@ diffuseColor.rgb *= mix(0.58, 1.04, groundAO) * canopyShade;`,
             const step = p.speed * dt;
             if (p.boomerang && p.boomerangPhase === "return") {
               if (p.owner && !p.owner.dead) {
-                const toOwner = new THREE.Vector3().subVectors(
-                  p.owner.mesh.position,
-                  p.mesh.position,
-                );
-                toOwner.y = 0;
-                const distBack = toOwner.length();
+                _vScratch1.subVectors(p.owner.mesh.position, p.mesh.position);
+                _vScratch1.y = 0;
+                const distBack = _vScratch1.length();
                 if (distBack <= 2.2) {
                   p.distLeft = 0;
                 } else {
-                  toOwner.normalize();
-                  p.dir.lerp(toOwner, Math.min(1, dt * 10)).normalize();
+                  _vScratch1.normalize();
+                  p.dir.lerp(_vScratch1, Math.min(1, dt * 10)).normalize();
                   p.mesh.position.addScaledVector(p.dir, step * 1.12);
                   p.distLeft -= step;
                 }
@@ -47629,10 +48246,13 @@ diffuseColor.rgb *= mix(0.58, 1.04, groundAO) * canopyShade;`,
               }
             } else {
               if (p.boomerang && p.curveSign) {
-                p.dir.applyAxisAngle(
-                  new THREE.Vector3(0, 1, 0),
-                  p.curveSign * 0.95 * dt,
-                );
+                const ang = p.curveSign * 0.95 * dt;
+                const ca = Math.cos(ang),
+                  sa = Math.sin(ang);
+                const nx = p.dir.x * ca + p.dir.z * sa;
+                const nz = -p.dir.x * sa + p.dir.z * ca;
+                p.dir.x = nx;
+                p.dir.z = nz;
               }
               p.mesh.position.addScaledVector(p.dir, step);
               p.distLeft -= step;
@@ -47657,8 +48277,14 @@ diffuseColor.rgb *= mix(0.58, 1.04, groundAO) * canopyShade;`,
             }
             const px = p.mesh.position.x;
             const pz = p.mesh.position.z;
-            for (let ui = 0; ui < units.length; ui++) {
-              const u = units[ui];
+            const waveCandidates = querySpatialUnits(
+              px,
+              pz,
+              p.hitRadius + 5.5,
+              _spatialQueryBufA,
+            );
+            for (let ui = 0; ui < waveCandidates.length; ui++) {
+              const u = waveCandidates[ui];
               if (
                 !u.dead &&
                 u.team !== p.team &&
@@ -47874,8 +48500,14 @@ diffuseColor.rgb *= mix(0.58, 1.04, groundAO) * canopyShade;`,
           z.outerRing.rotation.z += dt * 1.4;
           if (z.tickAccum >= 0.35) {
             z.tickAccum = 0;
-            for (let ui = 0; ui < units.length; ui++) {
-              const u = units[ui];
+            const zoneCandidates = querySpatialUnits(
+              z.x,
+              z.z,
+              z.radius + 5.5,
+              _spatialQueryBufA,
+            );
+            for (let ui = 0; ui < zoneCandidates.length; ui++) {
+              const u = zoneCandidates[ui];
               if (u.dead) continue;
               const dx = u.mesh.position.x - z.x;
               const dz = u.mesh.position.z - z.z;
@@ -47952,26 +48584,37 @@ diffuseColor.rgb *= mix(0.58, 1.04, groundAO) * canopyShade;`,
             if (z.detonateDmg) {
               spawnShockwaveRing(z.x, z.z, z.radius * 1.25, z.colorHex, 0.65);
               spawnParticleBurst(
-                new THREE.Vector3(z.x, getTerrainHeightAt(z.x, z.z) + 1.2, z.z),
+                LowRamOptimizer.Vec3Pool.get(
+                  z.x,
+                  getTerrainHeightAt(z.x, z.z) + 1.2,
+                  z.z,
+                ),
                 z.colorHex,
                 32,
               );
-              units.forEach((u) => {
+              const detCandidates = querySpatialUnits(
+                z.x,
+                z.z,
+                z.radius + 5.5,
+                _spatialQueryBufB,
+              );
+              for (let ui2 = 0; ui2 < detCandidates.length; ui2++) {
+                const u = detCandidates[ui2];
                 if (
-                  !u.dead &&
-                  u.team !== z.team &&
-                  u.type !== "tower" &&
-                  u.type !== "ancient" &&
-                  Math.hypot(
-                    u.mesh.position.x - z.x,
-                    u.mesh.position.z - z.z,
-                  ) <=
-                    z.radius + u.radius
-                ) {
+                  u.dead ||
+                  u.team === z.team ||
+                  u.type === "tower" ||
+                  u.type === "ancient"
+                )
+                  continue;
+                const rLim = z.radius + u.radius;
+                const dxZ = u.mesh.position.x - z.x;
+                const dzZ = u.mesh.position.z - z.z;
+                if (dxZ * dxZ + dzZ * dzZ <= rLim * rLim) {
                   u.takeDamage(z.detonateDmg, z.owner, true);
                   u.stunTimer = Math.max(u.stunTimer, 1.35);
                 }
-              });
+              }
             }
             scene.remove(z.mesh);
             disposeObject3D(z.mesh);
@@ -48045,17 +48688,24 @@ diffuseColor.rgb *= mix(0.58, 1.04, groundAO) * canopyShade;`,
                 0xfb923c,
                 0.22,
               );
-              units.forEach((foe) => {
+              const bfCandidates = querySpatialUnits(
+                u.mesh.position.x,
+                u.mesh.position.z,
+                11.5,
+                _spatialQueryBufB,
+              );
+              for (let fi = 0; fi < bfCandidates.length; fi++) {
+                const foe = bfCandidates[fi];
+                if (foe.dead || foe.team === u.team || foe.type === "ancient")
+                  continue;
+                const bfLim = 5.8 + foe.radius;
                 if (
-                  !foe.dead &&
-                  foe.team !== u.team &&
-                  foe.type !== "ancient" &&
-                  foe.mesh.position.distanceTo(u.mesh.position) <=
-                    5.8 + foe.radius
+                  foe.mesh.position.distanceToSquared(u.mesh.position) <=
+                  bfLim * bfLim
                 ) {
                   foe.takeDamage(u.bladeFuryDmg || 50, u, false);
                 }
-              });
+              }
             }
           }
           if (u.fireTrailTimer > 0) {
@@ -48090,20 +48740,28 @@ diffuseColor.rgb *= mix(0.58, 1.04, groundAO) * canopyShade;`,
                   u.remnantColor,
                   0.35,
                 );
-                units.forEach((ally) => {
+                const wardCandidates = querySpatialUnits(
+                  u.mesh.position.x,
+                  u.mesh.position.z,
+                  8.0,
+                  _spatialQueryBufB,
+                );
+                for (let ai = 0; ai < wardCandidates.length; ai++) {
+                  const ally = wardCandidates[ai];
                   if (
                     !ally.dead &&
                     ally.team === u.team &&
                     ally.type !== "tower" &&
                     ally.type !== "ancient" &&
-                    ally.mesh.position.distanceTo(u.mesh.position) <= 7.5
+                    ally.mesh.position.distanceToSquared(u.mesh.position) <=
+                      56.25
                   ) {
                     ally.hp = Math.min(
                       ally.maxHp,
                       ally.hp + (u.wardHealPerSec || 60) * 0.5,
                     );
                   }
-                });
+                }
               }
             } else if (u.isStaticRemnant) {
               const intruder = findNearestTarget(u, 4.8, false, false);
@@ -48122,13 +48780,20 @@ diffuseColor.rgb *= mix(0.58, 1.04, groundAO) * canopyShade;`,
                   0x38bdf8,
                   0.45,
                 );
-                units.forEach((foe) => {
+                const remCandidates = querySpatialUnits(
+                  u.mesh.position.x,
+                  u.mesh.position.z,
+                  12.5,
+                  _spatialQueryBufB,
+                );
+                for (let ri = 0; ri < remCandidates.length; ri++) {
+                  const foe = remCandidates[ri];
+                  if (foe.dead || foe.team === u.team || foe.type === "ancient")
+                    continue;
+                  const remLim = 6.8 + foe.radius;
                   if (
-                    !foe.dead &&
-                    foe.team !== u.team &&
-                    foe.type !== "ancient" &&
-                    foe.mesh.position.distanceTo(u.mesh.position) <=
-                      6.8 + foe.radius
+                    foe.mesh.position.distanceToSquared(u.mesh.position) <=
+                    remLim * remLim
                   ) {
                     foe.takeDamage(
                       u.remnantBurstDmg || 195,
@@ -48137,7 +48802,7 @@ diffuseColor.rgb *= mix(0.58, 1.04, groundAO) * canopyShade;`,
                     );
                     foe.stunTimer = Math.max(foe.stunTimer, 1.1);
                   }
-                });
+                }
                 u.summonLife = 0;
               }
             }
@@ -48162,8 +48827,10 @@ diffuseColor.rgb *= mix(0.58, 1.04, groundAO) * canopyShade;`,
           fx.update(prog);
           if (prog >= 1) {
             scene.remove(fx.mesh);
-            if (fx.pooledMat) releaseFxMat(fx.pooledMat);
-            else disposeObject3D(fx.mesh);
+            if (!fx.pooledMesh) {
+              if (fx.pooledMat) releaseFxMat(fx.pooledMat);
+              else disposeObject3D(fx.mesh);
+            }
             fxList.splice(i, 1);
           }
         }
@@ -48343,9 +49010,13 @@ diffuseColor.rgb *= mix(0.58, 1.04, groundAO) * canopyShade;`,
         } else {
           tagEl.textContent =
             unit.type === "vampire"
-              ? "NIGHT VAMPIRE"
+              ? unit.isMiniBoss
+                ? "VAMPIRE LORD • MINI-BOSS"
+                : "NIGHT VAMPIRE"
               : unit.type === "werewolf"
-                ? "BLOODMOON LYCAN"
+                ? unit.isMiniBoss
+                  ? "ALPHA LYCAN • MINI-BOSS"
+                  : "BLOODMOON LYCAN"
                 : unit.type === "dragon"
                   ? "WORLD BOSS"
                   : unit.type === "boss"
@@ -48508,20 +49179,24 @@ diffuseColor.rgb *= mix(0.58, 1.04, groundAO) * canopyShade;`,
             }
             const yOff =
               u.type === "sneakygolem"
-                ? 14.6
+                ? 14.8
                 : u.type === "ancient"
-                  ? 9.2
+                  ? 9.6
                   : u.type === "kong"
-                    ? 8.6
+                    ? 9.0
                     : u.type === "dragon"
-                      ? 9.2
+                      ? 9.6
                       : u.type === "boss"
-                        ? 7.5
+                        ? 8.0
                         : u.type === "tower"
-                          ? 9.2
+                          ? 9.5
                           : u.type === "hero"
-                            ? 4.95
-                            : 3.0;
+                            ? 5.35
+                            : u.isMiniBoss
+                              ? 5.55
+                              : u.type === "vampire" || u.type === "werewolf"
+                                ? 4.35
+                                : 3.35;
             const sc = projectToScreen(u.mesh.position, yOff);
             const isVis =
               sc.visible &&
@@ -48577,23 +49252,23 @@ diffuseColor.rgb *= mix(0.58, 1.04, groundAO) * canopyShade;`,
                 if (u.stunTimer > 0) {
                   const sSec = u.stunTimer.toFixed(1);
                   stSig += `STN:${sSec}|`;
-                  stHtml += `<span class="px-1.5 py-0.2 rounded bg-amber-500/95 text-slate-950 font-black text-[9px] tracking-wider shadow border border-yellow-200 animate-pulse"><i class="fa-solid fa-star mr-0.5"></i>STUNNED ${sSec}s</span>`;
+                  stHtml += `<span title="Stunned (${sSec}s)" class="inline-flex items-center gap-0.5 px-1 py-0.5 rounded-full bg-amber-500/95 text-slate-950 font-mono font-black text-[8px] leading-none shadow border border-yellow-200 animate-pulse"><i class="fa-solid fa-star text-[8px]"></i>${sSec}</span>`;
                 }
                 if (u.slowTimer > 0) {
                   stSig += "SLW|";
-                  stHtml += `<span class="px-1 py-0.2 rounded bg-sky-900/90 text-sky-200 font-bold text-[8px] border border-sky-400/60">SLOWED</span>`;
+                  stHtml += `<span title="Slowed" class="inline-flex items-center justify-center w-4 h-4 rounded-full bg-sky-900/95 text-sky-200 border border-sky-400/75 shadow"><i class="fa-solid fa-icicles text-[8px]"></i></span>`;
                 }
                 if (u.bkbTimer > 0) {
                   stSig += "BKB|";
-                  stHtml += `<span class="px-1 py-0.2 rounded bg-amber-900/90 text-amber-200 font-bold text-[8px] border border-amber-400/70">IMMUNE</span>`;
+                  stHtml += `<span title="Spell Immune" class="inline-flex items-center justify-center w-4 h-4 rounded-full bg-amber-900/95 text-amber-200 border border-amber-400/80 shadow"><i class="fa-solid fa-crown text-[8px]"></i></span>`;
                 }
                 if (u.bladeMailTimer > 0) {
                   stSig += "THN|";
-                  stHtml += `<span class="px-1 py-0.2 rounded bg-orange-900/90 text-orange-200 font-bold text-[8px] border border-orange-400/70">THORNS</span>`;
+                  stHtml += `<span title="Thorns Reflect" class="inline-flex items-center justify-center w-4 h-4 rounded-full bg-orange-900/95 text-orange-200 border border-orange-400/80 shadow"><i class="fa-solid fa-burst text-[8px]"></i></span>`;
                 }
                 if (u.ancientFuryTimer > 0) {
                   stSig += "FRY|";
-                  stHtml += `<span class="px-1 py-0.2 rounded bg-rose-900/95 text-rose-200 font-black text-[8px] border border-rose-400/70">ENRAGED</span>`;
+                  stHtml += `<span title="Enraged" class="inline-flex items-center justify-center w-4 h-4 rounded-full bg-rose-900/95 text-rose-200 border border-rose-400/80 shadow"><i class="fa-solid fa-fire text-[8px]"></i></span>`;
                 }
                 if (bar._stSig !== stSig) {
                   bar._stSig = stSig;
@@ -48801,47 +49476,47 @@ diffuseColor.rgb *= mix(0.58, 1.04, groundAO) * canopyShade;`,
               const badges = [];
               if (inspectedUnit.stunTimer > 0)
                 badges.push(
-                  `<span class="px-1.5 py-0.5 rounded bg-rose-950/90 border border-amber-400 text-amber-300 font-bold text-[9px]"><i class="fa-solid fa-star mr-0.5"></i>STUNNED ${inspectedUnit.stunTimer.toFixed(1)}s</span>`,
+                  `<span title="Stunned (${inspectedUnit.stunTimer.toFixed(1)}s)" class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-rose-950/90 border border-amber-400 text-amber-300 font-mono font-bold text-[9px]"><i class="fa-solid fa-star"></i>${inspectedUnit.stunTimer.toFixed(1)}s</span>`,
                 );
               if (inspectedUnit.slowTimer > 0)
                 badges.push(
-                  `<span class="px-1.5 py-0.5 rounded bg-sky-950/90 border border-sky-400/60 text-sky-200 font-bold text-[9px]"><i class="fa-solid fa-icicles mr-0.5"></i>SLOWED ${inspectedUnit.slowTimer.toFixed(1)}s</span>`,
+                  `<span title="Slowed (${inspectedUnit.slowTimer.toFixed(1)}s)" class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-sky-950/90 border border-sky-400/60 text-sky-200 font-mono font-bold text-[9px]"><i class="fa-solid fa-icicles"></i>${inspectedUnit.slowTimer.toFixed(1)}s</span>`,
                 );
               if ((inspectedUnit._desolatorShred || 0) > 0)
                 badges.push(
-                  `<span class="px-1.5 py-0.5 rounded bg-rose-950/90 border border-rose-500/60 text-rose-300 font-bold text-[9px]">ARMOR -${inspectedUnit._desolatorShred.toFixed(1)}</span>`,
+                  `<span title="Armor Shred -${inspectedUnit._desolatorShred.toFixed(1)}" class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-rose-950/90 border border-rose-500/60 text-rose-300 font-mono font-bold text-[9px]"><i class="fa-solid fa-shield-halved"></i>-${inspectedUnit._desolatorShred.toFixed(1)}</span>`,
                 );
               if (inspectedUnit.fatalBondTimer > 0)
                 badges.push(
-                  `<span class="px-1.5 py-0.5 rounded bg-purple-950/90 border border-fuchsia-400/60 text-fuchsia-200 font-bold text-[9px]">FATAL BONDS</span>`,
+                  `<span title="Fatal Bonds" class="inline-flex items-center justify-center w-5 h-5 rounded-full bg-purple-950/90 border border-fuchsia-400/60 text-fuchsia-200 text-[9px]"><i class="fa-solid fa-link"></i></span>`,
                 );
               if (inspectedUnit.isSleeping)
                 badges.push(
-                  `<span class="px-1.5 py-0.5 rounded bg-indigo-950/90 border border-sky-400/50 text-sky-300 font-bold text-[9px]">SLEEPING (Zzz)</span>`,
+                  `<span title="Sleeping" class="inline-flex items-center justify-center w-5 h-5 rounded-full bg-indigo-950/90 border border-sky-400/50 text-sky-300 text-[9px]"><i class="fa-solid fa-moon"></i></span>`,
                 );
               if (inspectedUnit.bkbTimer > 0)
                 badges.push(
-                  `<span class="px-1.5 py-0.5 rounded bg-amber-950/90 border border-amber-400 text-amber-200 font-bold text-[9px]">SPELL IMMUNE ${inspectedUnit.bkbTimer.toFixed(1)}s</span>`,
+                  `<span title="Spell Immune (${inspectedUnit.bkbTimer.toFixed(1)}s)" class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-amber-950/90 border border-amber-400 text-amber-200 font-mono font-bold text-[9px]"><i class="fa-solid fa-crown"></i>${inspectedUnit.bkbTimer.toFixed(1)}s</span>`,
                 );
               if (inspectedUnit.shield > 0)
                 badges.push(
-                  `<span class="px-1.5 py-0.5 rounded bg-cyan-950/90 border border-cyan-400/60 text-cyan-200 font-bold text-[9px]">SHIELD +${Math.ceil(inspectedUnit.shield)}</span>`,
+                  `<span title="Shield +${Math.ceil(inspectedUnit.shield)}" class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-cyan-950/90 border border-cyan-400/60 text-cyan-200 font-mono font-bold text-[9px]"><i class="fa-solid fa-shield"></i>+${Math.ceil(inspectedUnit.shield)}</span>`,
                 );
               if (inspectedUnit.bladeMailTimer > 0)
                 badges.push(
-                  `<span class="px-1.5 py-0.5 rounded bg-orange-950/90 border border-orange-400/60 text-orange-200 font-bold text-[9px]">THORNS ${inspectedUnit.bladeMailTimer.toFixed(1)}s</span>`,
+                  `<span title="Thorns (${inspectedUnit.bladeMailTimer.toFixed(1)}s)" class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-orange-950/90 border border-orange-400/60 text-orange-200 font-mono font-bold text-[9px]"><i class="fa-solid fa-burst"></i>${inspectedUnit.bladeMailTimer.toFixed(1)}s</span>`,
                 );
               if (inspectedUnit.blinkBuffTimer > 0)
                 badges.push(
-                  `<span class="px-1.5 py-0.5 rounded bg-emerald-950/90 border border-emerald-400/60 text-emerald-200 font-bold text-[9px]">HASTE ${inspectedUnit.blinkBuffTimer.toFixed(1)}s</span>`,
+                  `<span title="Haste (${inspectedUnit.blinkBuffTimer.toFixed(1)}s)" class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-emerald-950/90 border border-emerald-400/60 text-emerald-200 font-mono font-bold text-[9px]"><i class="fa-solid fa-wind"></i>${inspectedUnit.blinkBuffTimer.toFixed(1)}s</span>`,
                 );
               if (inspectedUnit.towerAuraActive)
                 badges.push(
-                  `<span class="px-1.5 py-0.5 rounded bg-emerald-950/90 border border-emerald-400/50 text-emerald-300 font-bold text-[9px]">TOWER AURA</span>`,
+                  `<span title="Tower Protection Aura" class="inline-flex items-center justify-center w-5 h-5 rounded-full bg-emerald-950/90 border border-emerald-400/50 text-emerald-300 text-[9px]"><i class="fa-solid fa-chess-rook"></i></span>`,
                 );
               if (inspectedUnit.ancientFuryTimer > 0)
                 badges.push(
-                  `<span class="px-1.5 py-0.5 rounded bg-rose-950/95 border border-rose-400 text-rose-200 font-black text-[9px]">ANCIENT FURY</span>`,
+                  `<span title="Ancient Fury" class="inline-flex items-center justify-center w-5 h-5 rounded-full bg-rose-950/95 border border-rose-400 text-rose-200 text-[9px]"><i class="fa-solid fa-fire"></i></span>`,
                 );
               const sig = badges.join("");
               if (inspStatusRow._sig !== sig) {
@@ -48952,14 +49627,14 @@ diffuseColor.rgb *= mix(0.58, 1.04, groundAO) * canopyShade;`,
           );
           setTxt("hud-mp-reg", `+${playerHero.manaRegen.toFixed(1)}/s`);
 
-          // Update Player Active Positive & Negative Status Bar + Screen Stun Vignette
+          // Update Player Active Positive & Negative Status Bar (Compact Icon Badges) + Screen Stun Vignette
           const statusBarEl = getHudEl("hud-status-bar");
           if (statusBarEl) {
             const pBadges = [];
             if (!playerHero.dead) {
               if (playerHero.stunTimer > 0) {
                 pBadges.push(
-                  `<span class="px-2 py-0.5 rounded-md bg-rose-950/95 border border-amber-400 text-amber-300 font-cinzel font-black text-[10px] shadow-[0_0_12px_rgba(250,204,21,0.55)] animate-pulse"><i class="fa-solid fa-star mr-1"></i>STUNNED (${playerHero.stunTimer.toFixed(1)}s)</span>`,
+                  `<span title="Stunned (${playerHero.stunTimer.toFixed(1)}s)" class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-rose-950/95 border border-amber-400 text-amber-300 font-mono font-black text-[9.5px] shadow-[0_0_10px_rgba(250,204,21,0.55)] animate-pulse"><i class="fa-solid fa-star"></i>${playerHero.stunTimer.toFixed(1)}s</span>`,
                 );
               }
               if (playerHero.slowTimer > 0) {
@@ -48967,42 +49642,42 @@ diffuseColor.rgb *= mix(0.58, 1.04, groundAO) * canopyShade;`,
                   (1 - (playerHero.slowFactor || 0.6)) * 100,
                 );
                 pBadges.push(
-                  `<span class="px-1.5 py-0.5 rounded-md bg-sky-950/95 border border-sky-400/70 text-sky-200 font-mono font-bold text-[9.5px]"><i class="fa-solid fa-icicles mr-1"></i>SLOWED -${slowPct}% (${playerHero.slowTimer.toFixed(1)}s)</span>`,
+                  `<span title="Slowed -${slowPct}% (${playerHero.slowTimer.toFixed(1)}s)" class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-sky-950/95 border border-sky-400/70 text-sky-200 font-mono font-bold text-[9.5px]"><i class="fa-solid fa-icicles"></i>${playerHero.slowTimer.toFixed(1)}s</span>`,
                 );
               }
               if ((playerHero._desolatorShred || 0) > 0) {
                 pBadges.push(
-                  `<span class="px-1.5 py-0.5 rounded-md bg-rose-950/90 border border-rose-500/70 text-rose-300 font-mono font-bold text-[9.5px]"><i class="fa-solid fa-shield-halved mr-1"></i>ARMOR -${playerHero._desolatorShred.toFixed(1)}</span>`,
+                  `<span title="Armor Shred -${playerHero._desolatorShred.toFixed(1)}" class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-rose-950/90 border border-rose-500/70 text-rose-300 font-mono font-bold text-[9.5px]"><i class="fa-solid fa-shield-halved"></i>-${playerHero._desolatorShred.toFixed(1)}</span>`,
                 );
               }
               if (playerHero.fatalBondTimer > 0) {
                 pBadges.push(
-                  `<span class="px-1.5 py-0.5 rounded-md bg-purple-950/90 border border-fuchsia-400/70 text-fuchsia-200 font-mono font-bold text-[9.5px]"><i class="fa-solid fa-link mr-1"></i>FATAL BONDS (${playerHero.fatalBondTimer.toFixed(1)}s)</span>`,
+                  `<span title="Fatal Bonds (${playerHero.fatalBondTimer.toFixed(1)}s)" class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-purple-950/90 border border-fuchsia-400/70 text-fuchsia-200 font-mono font-bold text-[9.5px]"><i class="fa-solid fa-link"></i>${playerHero.fatalBondTimer.toFixed(1)}s</span>`,
                 );
               }
               if (playerHero.bkbTimer > 0) {
                 pBadges.push(
-                  `<span class="px-1.5 py-0.5 rounded-md bg-amber-950/95 border border-amber-400 text-amber-200 font-mono font-bold text-[9.5px]"><i class="fa-solid fa-crown mr-1"></i>SPELL IMMUNE (${playerHero.bkbTimer.toFixed(1)}s)</span>`,
+                  `<span title="Spell Immune (${playerHero.bkbTimer.toFixed(1)}s)" class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-amber-950/95 border border-amber-400 text-amber-200 font-mono font-bold text-[9.5px]"><i class="fa-solid fa-crown"></i>${playerHero.bkbTimer.toFixed(1)}s</span>`,
                 );
               }
               if (playerHero.shield > 0) {
                 pBadges.push(
-                  `<span class="px-1.5 py-0.5 rounded-md bg-cyan-950/90 border border-cyan-400/70 text-cyan-200 font-mono font-bold text-[9.5px]"><i class="fa-solid fa-shield mr-1"></i>SHIELD +${Math.ceil(playerHero.shield)}</span>`,
+                  `<span title="Shield +${Math.ceil(playerHero.shield)}" class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-cyan-950/90 border border-cyan-400/70 text-cyan-200 font-mono font-bold text-[9.5px]"><i class="fa-solid fa-shield"></i>+${Math.ceil(playerHero.shield)}</span>`,
                 );
               }
               if (playerHero.bladeMailTimer > 0) {
                 pBadges.push(
-                  `<span class="px-1.5 py-0.5 rounded-md bg-orange-950/90 border border-orange-400/70 text-orange-200 font-mono font-bold text-[9.5px]"><i class="fa-solid fa-burst mr-1"></i>THORNS (${playerHero.bladeMailTimer.toFixed(1)}s)</span>`,
+                  `<span title="Thorns Reflect (${playerHero.bladeMailTimer.toFixed(1)}s)" class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-orange-950/90 border border-orange-400/70 text-orange-200 font-mono font-bold text-[9.5px]"><i class="fa-solid fa-burst"></i>${playerHero.bladeMailTimer.toFixed(1)}s</span>`,
                 );
               }
               if (playerHero.blinkBuffTimer > 0) {
                 pBadges.push(
-                  `<span class="px-1.5 py-0.5 rounded-md bg-emerald-950/90 border border-emerald-400/70 text-emerald-200 font-mono font-bold text-[9.5px]"><i class="fa-solid fa-wind mr-1"></i>HASTE (${playerHero.blinkBuffTimer.toFixed(1)}s)</span>`,
+                  `<span title="Haste (${playerHero.blinkBuffTimer.toFixed(1)}s)" class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-emerald-950/90 border border-emerald-400/70 text-emerald-200 font-mono font-bold text-[9.5px]"><i class="fa-solid fa-wind"></i>${playerHero.blinkBuffTimer.toFixed(1)}s</span>`,
                 );
               }
               if (playerHero.towerAuraActive) {
                 pBadges.push(
-                  `<span class="px-1.5 py-0.5 rounded-md bg-emerald-950/90 border border-emerald-400/55 text-emerald-300 font-mono font-bold text-[9.5px]"><i class="fa-solid fa-chess-rook mr-1"></i>TOWER +${playerHero.towerBonusArmor} ARM</span>`,
+                  `<span title="Tower Protection (+${playerHero.towerBonusArmor} Armor)" class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-emerald-950/90 border border-emerald-400/55 text-emerald-300 font-mono font-bold text-[9.5px]"><i class="fa-solid fa-chess-rook"></i>+${playerHero.towerBonusArmor}</span>`,
                 );
               }
               if (
@@ -49010,17 +49685,27 @@ diffuseColor.rgb *= mix(0.58, 1.04, groundAO) * canopyShade;`,
                 playerHero.fierySoulStacks > 0
               ) {
                 pBadges.push(
-                  `<span class="px-1.5 py-0.5 rounded-md bg-orange-950/90 border border-orange-400/70 text-orange-200 font-mono font-bold text-[9.5px]"><i class="fa-solid fa-fire mr-1"></i>FIERY SOUL x${playerHero.fierySoulStacks}</span>`,
+                  `<span title="Fiery Soul x${playerHero.fierySoulStacks}" class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-orange-950/90 border border-orange-400/70 text-orange-200 font-mono font-bold text-[9.5px]"><i class="fa-solid fa-fire"></i>x${playerHero.fierySoulStacks}</span>`,
                 );
               }
               if (playerHero.hasRadiance) {
                 pBadges.push(
-                  `<span class="px-1.5 py-0.5 rounded-md bg-amber-950/85 border border-yellow-400/55 text-yellow-200 font-mono font-bold text-[9.5px]"><i class="fa-solid fa-sun mr-1"></i>RADIANCE</span>`,
+                  `<span title="Radiance Burn Aura" class="inline-flex items-center justify-center w-5 h-5 rounded-full bg-amber-950/85 border border-yellow-400/55 text-yellow-200 text-[9.5px]"><i class="fa-solid fa-sun"></i></span>`,
                 );
               }
               if (playerHero.hasAegis) {
                 pBadges.push(
-                  `<span class="px-1.5 py-0.5 rounded-md bg-amber-950/95 border border-amber-300 text-amber-200 font-mono font-bold text-[9.5px]"><i class="fa-solid fa-shield-heart mr-1"></i>AEGIS</span>`,
+                  `<span title="Aegis of the Immortal" class="inline-flex items-center justify-center w-5 h-5 rounded-full bg-amber-950/95 border border-amber-300 text-amber-200 text-[9.5px]"><i class="fa-solid fa-shield-heart"></i></span>`,
+                );
+              }
+              if (playerHero.hasVampLeaderBuff) {
+                pBadges.push(
+                  `<span title="Vampire Lord Blessing (Permanent): +6% Lifesteal" class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-rose-950/95 border border-rose-400 text-rose-200 font-mono font-bold text-[9.5px]"><i class="fa-solid fa-droplet"></i>+6% LS</span>`,
+                );
+              }
+              if (playerHero.hasWolfLeaderBuff) {
+                pBadges.push(
+                  `<span title="Alpha Moonfang Blessing (Permanent): +8% Move Speed & +6% Attack Speed" class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-sky-950/95 border border-sky-400 text-sky-200 font-mono font-bold text-[9.5px]"><i class="fa-solid fa-paw"></i>+8% SPD</span>`,
                 );
               }
             }
@@ -52842,14 +53527,15 @@ diffuseColor.rgb *= mix(0.58, 1.04, groundAO) * canopyShade;`,
         const isUltraMax = preset === "ultramax";
         const isUltraLight = preset === "ultralight";
         const detailLvl = getGraphicsShaderDetailLevel(preset);
+        const nativeDpr = Math.max(1, window.devicePixelRatio || 1);
         const dprCap = isUltraMax
-          ? 1.85
+          ? Math.min(2.0, nativeDpr)
           : preset === "ultra"
-            ? 1.3
+            ? Math.min(1.65, nativeDpr)
             : preset === "high"
-              ? 1.15
+              ? 1.3
               : preset === "balanced"
-                ? 1.0
+                ? 1.05
                 : preset === "performance"
                   ? 0.85
                   : preset === "potato"
@@ -52864,30 +53550,26 @@ diffuseColor.rgb *= mix(0.58, 1.04, groundAO) * canopyShade;`,
               : preset === "balanced"
                 ? 85
                 : preset === "high"
-                  ? 100
-                  : preset === "ultra"
-                    ? 112
-                    : 135;
+                  ? 95
+                  : 100;
         const scaleMult = isUltraLight
           ? 1.0
           : (userSettings.renderScale || defaultScale) / 100;
         const minDprFloor = isUltraLight ? 0.42 : 0.45;
         let effectiveDpr = Math.max(
           minDprFloor,
-          Math.min(window.devicePixelRatio || 1, dprCap) *
-            scaleMult *
-            nxg.dynResScale,
+          Math.min(nativeDpr, dprCap) * scaleMult * nxg.dynResScale,
         );
         if (userSettings.dynResEnabled !== false) {
-          // Pixel budget per preset: keeps high-DPI phone screens from rendering excessive pixels
+          // Native 1:1 Retina pixel budget (~8.8M px = full 2x Retina laptop/desktop without wasteful sub-pixel oversampling)
           const pxBudget = isUltraMax
-            ? 8.4e6
+            ? 8.8e6
             : preset === "ultra"
-              ? 5.6e6
+              ? 6.4e6
               : preset === "high"
-                ? 4.2e6
+                ? 4.4e6
                 : preset === "balanced"
-                  ? 3.0e6
+                  ? 3.2e6
                   : preset === "performance"
                     ? 2.0e6
                     : preset === "potato"
@@ -52898,18 +53580,34 @@ diffuseColor.rgb *= mix(0.58, 1.04, groundAO) * canopyShade;`,
             effectiveDpr = Math.max(minDprFloor, Math.sqrt(pxBudget / cssPx));
         }
         const bloomScale = isUltraMax
-          ? 0.45
+          ? 0.32
           : preset === "ultra"
-            ? 0.35
+            ? 0.28
             : preset === "high"
-              ? 0.28
+              ? 0.24
               : preset === "balanced"
-                ? 0.22
-                : 0.18;
+                ? 0.2
+                : 0.16;
 
         renderer.setPixelRatio(effectiveDpr);
         renderer.setSize(window.innerWidth, window.innerHeight);
-        if (composer) composer.setSize(window.innerWidth, window.innerHeight);
+        if (_hdrRT) {
+          const wantSamples =
+            renderer.capabilities.isWebGL2 &&
+            !_isTouchBoot &&
+            effectiveDpr < 1.5
+              ? 4
+              : 0;
+          if (_hdrRT.samples !== wantSamples) {
+            _hdrRT.samples = wantSamples;
+            _hdrRT.dispose();
+          }
+        }
+        if (composer) {
+          if (typeof composer.setPixelRatio === "function")
+            composer.setPixelRatio(effectiveDpr);
+          composer.setSize(window.innerWidth, window.innerHeight);
+        }
         if (bloomPass) {
           bloomPass.setSize(
             Math.floor(window.innerWidth * bloomScale),
@@ -52992,10 +53690,8 @@ diffuseColor.rgb *= mix(0.58, 1.04, groundAO) * canopyShade;`,
               : isBalanced
                 ? 85
                 : isHigh
-                  ? 100
-                  : isUltra
-                    ? 112
-                    : 135;
+                  ? 95
+                  : 100;
         const resEl = document.getElementById("set-res-scale");
         if (resEl) resEl.value = String(resScale);
 
@@ -53009,7 +53705,7 @@ diffuseColor.rgb *= mix(0.58, 1.04, groundAO) * canopyShade;`,
 
         // 7-tier differentiation: Ultra Light -> Potato -> Low -> Medium -> High -> Ultra -> Ultra Max
         if (cinEl) cinEl.checked = isUltraMax || isUltra;
-        if (bloomEl) bloomEl.checked = isUltraMax || isUltra || isHigh;
+        if (bloomEl) bloomEl.checked = isUltraMax || isUltra;
         if (shadEl)
           shadEl.checked = isUltraMax || isUltra || isHigh || isBalanced;
         if (waterEl)
@@ -53052,15 +53748,15 @@ diffuseColor.rgb *= mix(0.58, 1.04, groundAO) * canopyShade;`,
           buildUltraMaxEnvironmentDetails();
         }
 
-        // Shadow map resolution, soft PCF filtering & frustum tightness per tier
+        // Tight-frustum 2048 shadow map preserves crisp shadow texel density at 4x lower GPU cost than 4096
         const shSize = isUltraMax
-          ? 4096
+          ? 2048
           : isUltra
-            ? 2048
+            ? 1536
             : isHigh
-              ? 1536
+              ? 1024
               : isBalanced
-                ? 1024
+                ? 768
                 : 512;
         const targetShadowType =
           isUltraMax || isUltra || isHigh
@@ -53078,7 +53774,7 @@ diffuseColor.rgb *= mix(0.58, 1.04, groundAO) * canopyShade;`,
             }
           });
         }
-        const targetExt = isUltraMax ? 44 : isUltra ? 50 : isHigh ? 56 : 64;
+        const targetExt = isUltraMax ? 64 : isUltra ? 64 : isHigh ? 66 : 68;
         if (sunLight.shadow.camera.right !== targetExt) {
           sunLight.shadow.camera.left = -targetExt;
           sunLight.shadow.camera.right = targetExt;
@@ -53087,12 +53783,12 @@ diffuseColor.rgb *= mix(0.58, 1.04, groundAO) * canopyShade;`,
           sunLight.shadow.camera.updateProjectionMatrix();
         }
         sunLight.shadow.normalBias = isUltraMax
-          ? 0.022
+          ? 0.024
           : isUltra
-            ? 0.03
+            ? 0.028
             : isHigh
-              ? 0.038
-              : 0.055;
+              ? 0.034
+              : 0.044;
         if (sunLight.shadow.mapSize.width !== shSize) {
           sunLight.shadow.mapSize.set(shSize, shSize);
           if (sunLight.shadow.map) {
@@ -53196,11 +53892,7 @@ diffuseColor.rgb *= mix(0.58, 1.04, groundAO) * canopyShade;`,
         const isUltraMax = preset === "ultramax";
         const detailLvl = getGraphicsShaderDetailLevel(preset);
         const resEl = document.getElementById("set-res-scale");
-        userSettings.renderScale = resEl
-          ? parseInt(resEl.value, 10)
-          : isUltraMax
-            ? 130
-            : 100;
+        userSettings.renderScale = resEl ? parseInt(resEl.value, 10) : 100;
         const resValEl = document.getElementById("set-res-scale-val");
         if (resValEl) resValEl.textContent = `${userSettings.renderScale}%`;
 
@@ -53227,16 +53919,19 @@ diffuseColor.rgb *= mix(0.58, 1.04, groundAO) * canopyShade;`,
 
         if (wantPost) {
           ensureComposerReady();
-        } else if (
-          preset === "ultralight" ||
-          preset === "potato" ||
-          preset === "performance"
-        ) {
-          LowRamOptimizer.disposeHeavyGpuResources({
-            renderer,
-            disposeComposerFn: disposeComposerResources,
-            dirLight: !userSettings.shadowsEnabled ? sunLight : null,
-          });
+        } else {
+          disposeComposerResources();
+          if (
+            preset === "ultralight" ||
+            preset === "potato" ||
+            preset === "performance"
+          ) {
+            LowRamOptimizer.disposeHeavyGpuResources({
+              renderer,
+              disposeComposerFn: disposeComposerResources,
+              dirLight: !userSettings.shadowsEnabled ? sunLight : null,
+            });
+          }
         }
 
         applyRendererResolution();
@@ -53370,6 +54065,8 @@ diffuseColor.rgb *= mix(0.58, 1.04, groundAO) * canopyShade;`,
           }
         }
         updateDayNightAndWeather(0);
+        if (!wantNight && typeof updateNightVampires === "function")
+          updateNightVampires(0);
         if (!inHeroSelect && !inTitleScreen) {
           if (wantNight)
             showBanner(
@@ -53754,7 +54451,7 @@ diffuseColor.rgb *= mix(0.58, 1.04, groundAO) * canopyShade;`,
         projectiles = [];
         fxList.forEach((f) => {
           scene.remove(f.mesh);
-          disposeObject3D(f.mesh);
+          if (!f.pooledMesh) disposeObject3D(f.mesh);
         });
         fxList = [];
         floatTexts.forEach((ft) => {
@@ -53879,8 +54576,10 @@ diffuseColor.rgb *= mix(0.58, 1.04, groundAO) * canopyShade;`,
             fx.update(prog);
             if (prog >= 1) {
               scene.remove(fx.mesh);
-              if (fx.pooledMat) releaseFxMat(fx.pooledMat);
-              else disposeObject3D(fx.mesh);
+              if (!fx.pooledMesh) {
+                if (fx.pooledMat) releaseFxMat(fx.pooledMat);
+                else disposeObject3D(fx.mesh);
+              }
               fxList.splice(i, 1);
             }
           }
@@ -53990,23 +54689,35 @@ diffuseColor.rgb *= mix(0.58, 1.04, groundAO) * canopyShade;`,
           MAP_HALF - 12,
         );
 
-        // Texel-snapped camera-following shadow frustum: ~45% sharper shadows on every preset with zero shimmer
+        // Texel-locked zero-slide shadow frustum: only moves sunLight when re-baking shadowMap so shadows never slide or detach
         if (userSettings.shadowsEnabled && sunLight && sunLight.shadow) {
-          const ext = sunLight.shadow.camera.right || 56;
+          const ext = sunLight.shadow.camera.right || 66;
           const mapW = sunLight.shadow.mapSize.width || 1024;
           const texelWorld = (ext * 2) / mapW;
-          const snapX = Math.round(cameraFocus.x / texelWorld) * texelWorld;
-          const snapZ = Math.round(cameraFocus.z / texelWorld) * texelWorld;
-          sunLight.target.position.set(snapX, 0, snapZ);
+          const desiredX = Math.round(cameraFocus.x / texelWorld) * texelWorld;
+          const desiredZ = Math.round(cameraFocus.z / texelWorld) * texelWorld;
+          const needBake =
+            window._bakedShadowX === undefined ||
+            Math.abs(desiredX - window._bakedShadowX) >= texelWorld * 0.5 ||
+            Math.abs(desiredZ - window._bakedShadowZ) >= texelWorld * 0.5;
+          if (needBake) {
+            window._bakedShadowX = desiredX;
+            window._bakedShadowZ = desiredZ;
+            window._shadowFrustumMoved = true;
+          }
+          const bx = window._bakedShadowX;
+          const bz = window._bakedShadowZ;
+          sunLight.target.position.set(bx, 0, bz);
+          sunLight.target.updateMatrixWorld();
           const sDir = window._activeSunDir;
           if (sDir) {
             sunLight.position.set(
-              snapX + sDir.x * 135,
+              bx + sDir.x * 135,
               sDir.y * 135,
-              snapZ + sDir.z * 135,
+              bz + sDir.z * 135,
             );
           } else {
-            sunLight.position.set(snapX + 60, 110, snapZ + 62);
+            sunLight.position.set(bx + 60, 110, bz + 62);
           }
         }
 
@@ -54157,16 +54868,18 @@ diffuseColor.rgb *= mix(0.58, 1.04, groundAO) * canopyShade;`,
             userSettings.qualityPreset === "ultramax"
               ? 2
               : userSettings.qualityPreset === "ultra"
-                ? 2
+                ? 3
                 : userSettings.qualityPreset === "high"
                   ? 4
                   : userSettings.qualityPreset === "balanced"
-                    ? 8
-                    : 16;
+                    ? 6
+                    : 10;
           if (
             userSettings.shadowsEnabled &&
-            ++_shadowFrameCounter % shadowSkip === 0
+            (window._shadowFrustumMoved ||
+              ++_shadowFrameCounter % shadowSkip === 0)
           ) {
+            window._shadowFrustumMoved = false;
             renderer.shadowMap.needsUpdate = true;
           }
         }
