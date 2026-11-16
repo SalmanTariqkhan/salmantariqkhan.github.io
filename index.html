@@ -321,9 +321,11 @@
             inset 0 1px 0 var(--panel-inset);
         }
       }
+      /* Animating box-shadow repaints the whole (blurred) panel every frame; stepping the glow keeps the
+         slow "breathing" look while repainting ~3x per second instead of 60-120x. */
       .dota-gold-trim {
         border-color: var(--trim-border);
-        animation: goldBorderGlow 4s ease-in-out infinite;
+        animation: goldBorderGlow 4s steps(6, end) infinite;
       }
       .setting-pill,
       .sptab-btn,
@@ -11612,13 +11614,7 @@
           !isNightTime &&
           (Math.cos((cycleClock / DAY_CYCLE_DURATION) * Math.PI) + 1) * 0.5 >
             0.78;
-        const torchCap =
-          userSettings.qualityPreset === "potato" ||
-          userSettings.qualityPreset === "performance"
-            ? 0
-            : userSettings.qualityPreset === "balanced"
-              ? 2
-              : torchLights.length;
+        const torchCap = getTorchLightCap();
         for (let ti = 0; ti < torchLights.length; ti++) {
           const tl = torchLights[ti];
           tl.phase += dt * 11;
@@ -16004,26 +16000,29 @@
 
                         vec3 applyFXAA(sampler2D tex, vec2 uv, vec2 res) {
                             vec2 inverseVP = 1.0 / max(res, vec2(1.0));
-                            vec3 rgbNW = texture2D(tex, uv + vec2(-1.0, -1.0) * inverseVP).rgb;
-                            vec3 rgbNE = texture2D(tex, uv + vec2( 1.0, -1.0) * inverseVP).rgb;
-                            vec3 rgbSW = texture2D(tex, uv + vec2(-1.0,  1.0) * inverseVP).rgb;
-                            vec3 rgbSE = texture2D(tex, uv + vec2( 1.0,  1.0) * inverseVP).rgb;
                             vec3 rgbM  = texture2D(tex, uv).rgb;
+                            vec3 rgbNW = texture2D(tex, uv - inverseVP).rgb;
+                            vec3 rgbSE = texture2D(tex, uv + inverseVP).rgb;
 
                             vec3 lumaW = vec3(0.299, 0.587, 0.114);
+                            float lumaM  = dot(rgbM,  lumaW);
                             float lumaNW = dot(rgbNW, lumaW);
+                            float lumaSE = dot(rgbSE, lumaW);
+
+                            float diagMin = min(lumaM, min(lumaNW, lumaSE));
+                            float diagMax = max(lumaM, max(lumaNW, lumaSE));
+                            float range = diagMax - diagMin;
+                            if (range < max(0.048, diagMax * 0.125)) {
+                                return rgbM; // Fast early-exit: 85% of screen fragments exit in 3 taps!
+                            }
+
+                            vec3 rgbNE = texture2D(tex, uv + vec2( 1.0, -1.0) * inverseVP).rgb;
+                            vec3 rgbSW = texture2D(tex, uv + vec2(-1.0,  1.0) * inverseVP).rgb;
                             float lumaNE = dot(rgbNE, lumaW);
                             float lumaSW = dot(rgbSW, lumaW);
-                            float lumaSE = dot(rgbSE, lumaW);
-                            float lumaM  = dot(rgbM,  lumaW);
 
-                            float lumaMin = min(lumaM, min(min(lumaNW, lumaNE), min(lumaSW, lumaSE)));
-                            float lumaMax = max(lumaM, max(max(lumaNW, lumaNE), max(lumaSW, lumaSE)));
-
-                            float range = lumaMax - lumaMin;
-                            if (range < max(0.035, lumaMax * 0.125)) {
-                                return rgbM;
-                            }
+                            float lumaMin = min(diagMin, min(lumaNE, lumaSW));
+                            float lumaMax = max(diagMax, max(lumaNE, lumaSW));
 
                             vec2 dir;
                             dir.x = -((lumaNW + lumaNE) - (lumaSW + lumaSE));
@@ -16465,6 +16464,7 @@
           scene.add(l);
           nxg.flashes.push({ light: l, t: 1, dur: 1, peak: 0 });
         }
+        _lightBudgetKey = "";
       }
       function nxgFlash(x, y, z, colorHex, peak = 30, dist = 26, dur = 0.34) {
         if (
@@ -18300,6 +18300,40 @@
       scene.add(direBaseLight);
 
       const torchLights = [];
+      const arenaAccentLights = [];
+      // Every visible point light is evaluated per pixel by every lit material, even at intensity 0.
+      // Keep only the lights the current screen + quality tier can actually show.
+      function getTorchLightCap() {
+        const q = userSettings.qualityPreset;
+        return q === "ultralight" || q === "potato" || q === "performance"
+          ? 0
+          : q === "balanced"
+            ? 2
+            : torchLights.length;
+      }
+      let _lightBudgetKey = "";
+      function syncSceneLightBudget() {
+        const q = userSettings.qualityPreset;
+        const inSelect = inHeroSelect && !inTitleScreen;
+        const key = q + (inSelect ? "|s|" : "|a|") + torchLights.length;
+        if (key === _lightBudgetKey) return;
+        _lightBudgetKey = key;
+        const lowTier = q === "ultralight" || q === "potato";
+        const arena = !inSelect;
+        stageKeyLight.visible = inSelect;
+        stageFillLight.visible = inSelect;
+        stageRimLight.visible = inSelect;
+        radBaseLight.visible = arena && !lowTier;
+        direBaseLight.visible = arena && !lowTier;
+        const torchCap = getTorchLightCap();
+        for (let i = 0; i < torchLights.length; i++)
+          torchLights[i].light.visible = arena && i < torchCap;
+        const accents = arena && !lowTier && q !== "performance";
+        for (let i = 0; i < arenaAccentLights.length; i++)
+          arenaAccentLights[i].visible = accents;
+        for (let i = 0; i < nxg.flashes.length; i++)
+          nxg.flashes[i].light.visible = arena && !lowTier;
+      }
       const raycaster = new THREE.Raycaster();
       const mouseNDC = new THREE.Vector2();
       const worldCursor = new THREE.Vector3(-52, 0, 52);
@@ -19291,6 +19325,82 @@
           }
         });
         return obj;
+      }
+
+      // Map-wide InstancedMeshes (forest, ferns, rocks...) are culled as ONE object, so every tree on the
+      // 380m map was drawn each frame (and again in the shadow pass) no matter where the camera looked.
+      // Splitting them into spatial cells lets normal frustum culling skip everything off-screen.
+      function chunkStaticInstancedMeshes(cellSize = 64, minTris = 12000) {
+        const targets = [];
+        for (let i = 0; i < scene.children.length; i++) {
+          const o = scene.children[i];
+          if (!o.isInstancedMesh || o.matrixAutoUpdate || o.userData.nxgMax)
+            continue;
+          if (o.userData._chunked || o.count < 16) continue;
+          const g = o.geometry;
+          const perTris =
+            (g.index ? g.index.count : g.attributes.position.count) / 3;
+          if (perTris * o.count < minTris) continue;
+          if (!o.boundingSphere) o.computeBoundingSphere();
+          if (o.boundingSphere.radius < cellSize * 1.25) continue;
+          targets.push(o);
+        }
+        targets.forEach((src) => chunkOneInstancedMesh(src, cellSize));
+      }
+      function chunkOneInstancedMesh(src, cellSize = 64) {
+        const m4 = new THREE.Matrix4();
+        const col = new THREE.Color();
+        const parent = src.parent || scene;
+        {
+          const cells = new Map();
+          const arr = src.instanceMatrix.array;
+          for (let i = 0; i < src.count; i++) {
+            const key =
+              Math.floor(arr[i * 16 + 12] / cellSize) * 4096 +
+              Math.floor(arr[i * 16 + 14] / cellSize);
+            let list = cells.get(key);
+            if (!list) cells.set(key, (list = []));
+            list.push(i);
+          }
+          const chunks = [];
+          cells.forEach((list) => {
+            const part = new THREE.InstancedMesh(
+              src.geometry,
+              src.material,
+              list.length,
+            );
+            for (let j = 0; j < list.length; j++) {
+              src.getMatrixAt(list[j], m4);
+              part.setMatrixAt(j, m4);
+              if (src.instanceColor) {
+                src.getColorAt(list[j], col);
+                part.setColorAt(j, col);
+              }
+            }
+            part.castShadow = src.castShadow;
+            part.receiveShadow = src.receiveShadow;
+            part.renderOrder = src.renderOrder;
+            part.visible = src.visible;
+            part.name = src.name;
+            part.layers.mask = src.layers.mask;
+            if (src.customDepthMaterial)
+              part.customDepthMaterial = src.customDepthMaterial;
+            if (Object.prototype.hasOwnProperty.call(src, "raycast"))
+              part.raycast = src.raycast;
+            part.matrix.copy(src.matrix);
+            part.userData._chunked = true;
+            freezeStaticObject(part);
+            part.matrix.copy(src.matrix);
+            part.matrixWorldNeedsUpdate = true;
+            part.computeBoundingSphere();
+            parent.add(part);
+            chunks.push(part);
+          });
+          parent.remove(src);
+          src.dispose();
+          const ci = groundClutterMeshes.indexOf(src);
+          if (ci >= 0) groundClutterMeshes.splice(ci, 1, ...chunks);
+        }
       }
 
       function disposeObject3D(obj) {
@@ -22754,7 +22864,7 @@ diffuseColor.rgb *= mix(0.58, 1.04, groundAO) * canopyShade;`,
           { x: -0.21, z: 0.18, rx: 0.16, ry: 0.07, rz: 0.15, rot: 2.3 },
         ];
         pebbleOffsets.forEach((po) => {
-          const subGeo = new THREE.IcosahedronGeometry(1.0, 2);
+          const subGeo = new THREE.IcosahedronGeometry(1.0, 1);
           const sp = subGeo.attributes.position;
           for (let vi = 0; vi < sp.count; vi++) {
             const vx = sp.getX(vi),
@@ -22829,6 +22939,7 @@ diffuseColor.rgb *= mix(0.58, 1.04, groundAO) * canopyShade;`,
         if (pebbleInst.instanceColor)
           pebbleInst.instanceColor.needsUpdate = true;
         ultraMaxEnvGroup.add(pebbleInst);
+        chunkOneInstancedMesh(pebbleInst, 48);
 
         // 2. 4 Towering Carved Marble & Arcane Faction Archway Gates spanning the Mid-Lane
         const archCoords = [
@@ -23271,6 +23382,7 @@ diffuseColor.rgb *= mix(0.58, 1.04, groundAO) * canopyShade;`,
           const gazeboLight = new THREE.PointLight(0xf472b6, 3.2, 24);
           gazeboLight.position.set(x, 4.2, z);
           scene.add(gazeboLight);
+          arenaAccentLights.push(gazeboLight);
         }
 
         const counter = new THREE.Mesh(
@@ -46501,13 +46613,7 @@ diffuseColor.rgb *= mix(0.58, 1.04, groundAO) * canopyShade;`,
           !isNightTime &&
           (Math.cos((cycleClock / DAY_CYCLE_DURATION) * Math.PI) + 1) * 0.5 >
             0.78;
-        const torchCap =
-          userSettings.qualityPreset === "potato" ||
-          userSettings.qualityPreset === "performance"
-            ? 0
-            : userSettings.qualityPreset === "balanced"
-              ? 2
-              : torchLights.length;
+        const torchCap = getTorchLightCap();
         for (let ti = 0; ti < torchLights.length; ti++) {
           const tl = torchLights[ti];
           tl.phase += dt * 11;
@@ -53541,19 +53647,21 @@ diffuseColor.rgb *= mix(0.58, 1.04, groundAO) * canopyShade;`,
         const isUltraLight = preset === "ultralight";
         const detailLvl = getGraphicsShaderDetailLevel(preset);
         const nativeDpr = Math.max(1, window.devicePixelRatio || 1);
+        // Part of the GPU time saved by forest/unit culling and the light budget is spent on a modestly
+        // sharper image per tier (adaptive resolution still steps it down if the frame rate drops).
         const dprCap = isUltraMax
-          ? Math.min(2.0, nativeDpr)
+          ? Math.min(1.5, nativeDpr)
           : isUltra
-            ? Math.min(1.5, nativeDpr)
+            ? Math.min(1.25, nativeDpr)
             : preset === "high"
-              ? Math.min(1.25, nativeDpr)
+              ? Math.min(1.1, nativeDpr)
               : preset === "balanced"
                 ? 1.0
                 : preset === "performance"
-                  ? 0.85
+                  ? 0.9
                   : preset === "potato"
-                    ? 0.65
-                    : 0.5;
+                    ? 0.75
+                    : 0.6;
         const defaultScale = isUltraLight
           ? 50
           : preset === "potato"
@@ -53573,29 +53681,27 @@ diffuseColor.rgb *= mix(0.58, 1.04, groundAO) * canopyShade;`,
           minDprFloor,
           Math.min(nativeDpr, dprCap) * scaleMult * nxg.dynResScale,
         );
-        // Generous DPR ceiling for Ultra Max enabling pin-sharp Retina supersampling without artificial downscaling
         const maxDprCeiling = isUltraMax
-          ? Math.min(2.0, nativeDpr * (scaleMult > 1.05 ? 1.4 : 1.05))
+          ? 1.5
           : isUltra
-            ? 1.5
-            : isHigh
-              ? 1.25
+            ? 1.25
+            : preset === "high"
+              ? 1.1
               : 1.0;
         effectiveDpr = Math.min(maxDprCeiling, effectiveDpr);
 
-        // Physical desktop pixel budget ceiling:
-        // Ultra Max supports full 4.5M pixels (1440p / Retina supersampled) for pin-sharp fidelity
+        // Per-preset pixel budget so huge / high-DPI windows cannot blow up fill-rate
         const cssPx = Math.max(1, window.innerWidth * window.innerHeight);
         const maxDesktopPixels = isUltraMax
-          ? 4.5e6
+          ? 3.0e6
           : isUltra
-            ? 3.0e6
+            ? 2.4e6
             : preset === "high"
-              ? 2.2e6
+              ? 1.8e6
               : preset === "balanced"
-                ? 1.6e6
+                ? 1.35e6
                 : preset === "performance"
-                  ? 1.2e6
+                  ? 1.1e6
                   : preset === "potato"
                     ? 0.75e6
                     : 0.5e6;
@@ -54717,52 +54823,41 @@ diffuseColor.rgb *= mix(0.58, 1.04, groundAO) * canopyShade;`,
           MAP_HALF - 12,
         );
 
-        // Texel-locked zero-slide shadow frustum: only moves sunLight when re-baking shadowMap so shadows never slide or detach
+        // Texel-locked zero-slide shadow frustum: perfectly synchronized with shadowMap bake cadence
         if (userSettings.shadowsEnabled && sunLight && sunLight.shadow) {
-          const ext = sunLight.shadow.camera.right || 66;
-          const mapW = sunLight.shadow.mapSize.width || 1024;
-          const texelWorld = (ext * 2) / mapW;
-          const desiredX = Math.round(cameraFocus.x / texelWorld) * texelWorld;
-          const desiredZ = Math.round(cameraFocus.z / texelWorld) * texelWorld;
-          const needBake =
-            window._bakedShadowX === undefined ||
-            Math.abs(desiredX - window._bakedShadowX) >= texelWorld * 0.5 ||
-            Math.abs(desiredZ - window._bakedShadowZ) >= texelWorld * 0.5;
-          if (needBake) {
-            window._bakedShadowX = desiredX;
-            window._bakedShadowZ = desiredZ;
-            window._shadowFrustumMoved = true;
-          }
           const shadowSkipVal =
             userSettings.qualityPreset === "ultramax"
               ? 2
               : userSettings.qualityPreset === "ultra"
                 ? 3
-                : 4;
-          if (
-            window._shadowFrustumMoved ||
-            (_shadowFrameCounter + 1) % shadowSkipVal === 0
-          ) {
-            const bx =
-              window._bakedShadowX !== undefined
-                ? window._bakedShadowX
-                : desiredX;
-            const bz =
-              window._bakedShadowZ !== undefined
-                ? window._bakedShadowZ
-                : desiredZ;
-            sunLight.target.position.set(bx, 0, bz);
+                : userSettings.qualityPreset === "high"
+                  ? 4
+                  : 6;
+          // Counter advances every frame (it used to advance only after a bake, so it stalled at 0
+          // and in-match shadows were never re-rendered).
+          _shadowFrameCounter++;
+          const isShadowBakeFrame = _shadowFrameCounter % shadowSkipVal === 0;
+          if (isShadowBakeFrame) {
+            const ext = sunLight.shadow.camera.right || 66;
+            const mapW = sunLight.shadow.mapSize.width || 1536;
+            const texelWorld = (ext * 2) / mapW;
+            const desiredX = Math.round(cameraFocus.x / texelWorld) * texelWorld;
+            const desiredZ = Math.round(cameraFocus.z / texelWorld) * texelWorld;
+            window._bakedShadowX = desiredX;
+            window._bakedShadowZ = desiredZ;
+            sunLight.target.position.set(desiredX, 0, desiredZ);
             sunLight.target.updateMatrixWorld();
             const sDir = window._activeSunDir;
             if (sDir) {
               sunLight.position.set(
-                bx + sDir.x * 135,
+                desiredX + sDir.x * 135,
                 sDir.y * 135,
-                bz + sDir.z * 135,
+                desiredZ + sDir.z * 135,
               );
             } else {
-              sunLight.position.set(bx + 60, 110, bz + 62);
+              sunLight.position.set(desiredX + 60, 110, desiredZ + 62);
             }
+            window._shadowNeedsUpdate = true;
           }
         }
 
@@ -54796,6 +54891,35 @@ diffuseColor.rgb *= mix(0.58, 1.04, groundAO) * canopyShade;`,
       });
       let _introShadowBaked = false;
       let _firstFrameWarmed = false;
+      // A unit is a group of ~30 part meshes that three.js would otherwise visit and frustum-test one by
+      // one. Hide whole off-screen units for the duration of the draw only (restored right after), so
+      // gameplay code that reads/writes mesh.visible is unaffected. The margin keeps their shadows in view.
+      const _unitCullBuf = [];
+      const _unitCullFrustum = new THREE.Frustum();
+      const _unitCullMat = new THREE.Matrix4();
+      const _unitCullSphere = new THREE.Sphere();
+      function cullOffscreenUnitsForRender() {
+        if (inHeroSelect || inTitleScreen) return 0;
+        camera.updateMatrixWorld();
+        _unitCullFrustum.setFromProjectionMatrix(
+          _unitCullMat.multiplyMatrices(
+            camera.projectionMatrix,
+            camera.matrixWorldInverse,
+          ),
+        );
+        let n = 0;
+        for (let i = 0; i < units.length; i++) {
+          const m = units[i].mesh;
+          if (!m || !m.visible || m.parent !== scene) continue;
+          _unitCullSphere.center.copy(m.position);
+          _unitCullSphere.radius = 30;
+          if (!_unitCullFrustum.intersectsSphere(_unitCullSphere)) {
+            m.visible = false;
+            _unitCullBuf[n++] = m;
+          }
+        }
+        return n;
+      }
       function mainLoop(now) {
         requestAnimationFrame(mainLoop);
         if (document.hidden) {
@@ -54909,26 +55033,14 @@ diffuseColor.rgb *= mix(0.58, 1.04, groundAO) * canopyShade;`,
           }
         } else {
           _introShadowBaked = false;
-          const shadowSkip =
-            userSettings.qualityPreset === "ultramax"
-              ? 2
-              : userSettings.qualityPreset === "ultra"
-                ? 3
-                : userSettings.qualityPreset === "high"
-                  ? 4
-                  : userSettings.qualityPreset === "balanced"
-                    ? 6
-                    : 10;
-          if (userSettings.shadowsEnabled) {
-            if (window._shadowFrustumMoved) {
-              window._shadowFrustumMoved = false;
-              renderer.shadowMap.needsUpdate = true;
-            } else if (++_shadowFrameCounter % shadowSkip === 0) {
-              renderer.shadowMap.needsUpdate = true;
-            }
+          if (userSettings.shadowsEnabled && window._shadowNeedsUpdate) {
+            window._shadowNeedsUpdate = false;
+            renderer.shadowMap.needsUpdate = true;
           }
         }
         nxgTick(dt);
+        syncSceneLightBudget();
+        const culledUnitCount = cullOffscreenUnitsForRender();
         if (
           composer &&
           (userSettings.bloomEnabled ||
@@ -54937,6 +55049,8 @@ diffuseColor.rgb *= mix(0.58, 1.04, groundAO) * canopyShade;`,
         )
           composer.render();
         else renderer.render(scene, camera);
+        for (let i = 0; i < culledUnitCount; i++)
+          _unitCullBuf[i].visible = true;
         if (!_firstFrameWarmed) {
           _firstFrameWarmed = true;
           prevTime = performance.now();
@@ -54964,6 +55078,7 @@ diffuseColor.rgb *= mix(0.58, 1.04, groundAO) * canopyShade;`,
         initAtmosphericSkyDome();
         const tSky = performance.now();
         buildArenaEnvironment();
+        chunkStaticInstancedMeshes();
         nxgInit();
         nxgRestorePrefs();
         const tArena = performance.now();
@@ -54974,6 +55089,7 @@ diffuseColor.rgb *= mix(0.58, 1.04, groundAO) * canopyShade;`,
         stageFillLight.intensity = 0;
         stageRimLight.intensity = 0;
 
+        syncSceneLightBudget();
         // Stage 2: Async shader pre-compilation (deferred on static low-tier intro for instant boot)
         if (
           !isStaticIntroTier() &&
