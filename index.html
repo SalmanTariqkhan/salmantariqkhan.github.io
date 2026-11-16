@@ -4397,16 +4397,16 @@
                 >
                   <span>Render Resolution Scale</span>
                   <span id="set-res-scale-val" class="font-mono text-cyan-300"
-                    >85%</span
+                    >100%</span
                   >
                 </div>
                 <input
                   id="set-res-scale"
                   type="range"
-                  min="45"
+                  min="50"
                   max="140"
                   step="5"
-                  value="85"
+                  value="100"
                   oninput="window.updateGraphicsSettings()"
                   class="w-full accent-cyan-400 cursor-pointer"
                 />
@@ -5190,7 +5190,7 @@
             pixelRatio: isLowRam
               ? 1
               : Math.min(window.devicePixelRatio || 1, 2),
-            resScale: isLowRam ? 45 : 85,
+            resScale: 100,
             targetFps: isLowRam ? 30 : 60,
             shadows: !isLowRam,
             bloom: false,
@@ -5209,8 +5209,8 @@
           if (!profile.isLowRam) return;
           const resSlider = document.getElementById("set-res-scale");
           const resVal = document.getElementById("set-res-scale-val");
-          if (resSlider) resSlider.value = "45";
-          if (resVal) resVal.textContent = "45%";
+          if (resSlider) resSlider.value = "100";
+          if (resVal) resVal.textContent = "100%";
 
           const toggles = {
             "set-cinematic": false,
@@ -15805,7 +15805,8 @@
 
       const renderer = new THREE.WebGLRenderer({
         canvas,
-        antialias: !LowRamOptimizer.profile.isLowRam && !_isLowEndMobileBoot,
+        // MSAA is cheap on tile-based mobile GPUs and is what keeps small character silhouettes clean
+        antialias: !LowRamOptimizer.profile.isLowRam,
         stencil: false,
         powerPreference: LowRamOptimizer.profile.isLowRam
           ? "low-power"
@@ -17387,7 +17388,7 @@
         if (!_nxgPrefsLive) return;
         clearTimeout(_nxgPrefsTimer);
         _nxgPrefsTimer = setTimeout(() => {
-          const data = { q: userSettings.qualityPreset, c: {}, r: {} };
+          const data = { v: 2, q: userSettings.qualityPreset, c: {}, r: {} };
           NXG_PREF_CHECKS.forEach((id) => {
             const el = document.getElementById(id);
             if (el) data.c[id] = el.checked;
@@ -17466,6 +17467,8 @@
             if (el) el.checked = !!v;
           });
           Object.entries(saved.r || {}).forEach(([id, v]) => {
+            // Render scale saved before v2 was relative to the old, much lower per-preset baseline
+            if (id === "set-res-scale" && saved.v !== 2) return;
             const el = document.getElementById(id);
             if (el) el.value = v;
           });
@@ -18311,28 +18314,116 @@
             ? 2
             : torchLights.length;
       }
+      // Point lights are shaded per pixel by every lit material, so their count is the single biggest
+      // fragment cost. The arena's light sources (bases, torches, shops, spell flashes, hero aura) are
+      // therefore never rendered directly: a small fixed pool of real lights is re-pointed every frame
+      // at the sources that matter most near the camera. Shader cost is bounded by the pool size and
+      // the light count never changes mid-match (no shader recompiles).
+      const POINT_LIGHT_POOL_MAX = 4;
+      const pointLightPool = [];
+      const _plSources = [];
+      const _plPick = [];
+      const _plTmp = new THREE.Vector3();
+      function getPointLightBudget() {
+        const q = userSettings.qualityPreset;
+        return q === "ultralight" || q === "potato"
+          ? 0
+          : q === "performance"
+            ? 1
+            : q === "balanced"
+              ? 2
+              : q === "ultramax"
+                ? 4
+                : 3;
+      }
       let _lightBudgetKey = "";
       function syncSceneLightBudget() {
         const q = userSettings.qualityPreset;
         const inSelect = inHeroSelect && !inTitleScreen;
-        const key = q + (inSelect ? "|s|" : "|a|") + torchLights.length;
+        const heroAura =
+          typeof ultraMaxHeroLight !== "undefined" ? ultraMaxHeroLight : null;
+        const key =
+          q +
+          (inSelect ? "|s|" : "|a|") +
+          torchLights.length +
+          "|" +
+          nxg.flashes.length +
+          (heroAura ? "|h" : "");
         if (key === _lightBudgetKey) return;
         _lightBudgetKey = key;
-        const lowTier = q === "ultralight" || q === "potato";
-        const arena = !inSelect;
+        if (!pointLightPool.length) {
+          for (let i = 0; i < POINT_LIGHT_POOL_MAX; i++) {
+            const l = new THREE.PointLight(0xffffff, 0, 30, 2);
+            l.position.set(0, -200, 0);
+            l.visible = false;
+            scene.add(l);
+            pointLightPool.push(l);
+          }
+        }
         stageKeyLight.visible = inSelect;
         stageFillLight.visible = inSelect;
         stageRimLight.visible = inSelect;
-        radBaseLight.visible = arena && !lowTier;
-        direBaseLight.visible = arena && !lowTier;
-        const torchCap = getTorchLightCap();
+        _plSources.length = 0;
+        _plSources.push(radBaseLight, direBaseLight);
         for (let i = 0; i < torchLights.length; i++)
-          torchLights[i].light.visible = arena && i < torchCap;
-        const accents = arena && !lowTier && q !== "performance";
+          _plSources.push(torchLights[i].light);
         for (let i = 0; i < arenaAccentLights.length; i++)
-          arenaAccentLights[i].visible = accents;
+          _plSources.push(arenaAccentLights[i]);
         for (let i = 0; i < nxg.flashes.length; i++)
-          nxg.flashes[i].light.visible = arena && !lowTier;
+          _plSources.push(nxg.flashes[i].light);
+        if (heroAura) _plSources.push(heroAura);
+        for (let i = 0; i < _plSources.length; i++)
+          _plSources[i].visible = false;
+        const budget = inSelect ? 0 : getPointLightBudget();
+        for (let i = 0; i < pointLightPool.length; i++) {
+          pointLightPool[i].visible = i < budget;
+          pointLightPool[i].intensity = 0;
+        }
+      }
+      function updatePointLightPool() {
+        const budget =
+          inHeroSelect && !inTitleScreen ? 0 : getPointLightBudget();
+        if (!budget || !pointLightPool.length) return;
+        const fx = inTitleScreen ? 0 : cameraFocus.x;
+        const fz = inTitleScreen ? 0 : cameraFocus.z;
+        const viewR = inTitleScreen ? 150 : 72;
+        _plPick.length = 0;
+        for (let i = 0; i < _plSources.length; i++) {
+          const src = _plSources[i];
+          if (!(src.intensity > 0.01)) continue;
+          if (src.parent !== scene) {
+            if (!src.parent || !src.parent.visible) continue;
+            src.getWorldPosition(_plTmp);
+          } else _plTmp.copy(src.position);
+          const reach = (src.distance || 60) + viewR;
+          const d = Math.hypot(_plTmp.x - fx, _plTmp.z - fz);
+          if (d >= reach) continue;
+          // Fade in/out over the last 18m so a source entering or leaving the pool never pops
+          const fade = Math.min(1, (reach - d) / 18);
+          const score = src.intensity * fade * (1.2 - d / reach);
+          let j = _plPick.length;
+          if (j < budget) _plPick.push(null);
+          else if (score <= _plPick[j - 1].s) continue;
+          else j--;
+          while (j > 0 && _plPick[j - 1].s < score) {
+            _plPick[j] = _plPick[j - 1];
+            j--;
+          }
+          _plPick[j] = { s: score, src, fade, x: _plTmp.x, y: _plTmp.y, z: _plTmp.z };
+        }
+        for (let i = 0; i < budget; i++) {
+          const slot = pointLightPool[i];
+          const pick = _plPick[i];
+          if (!pick) {
+            if (slot.intensity !== 0) slot.intensity = 0;
+            continue;
+          }
+          slot.color.copy(pick.src.color);
+          slot.intensity = pick.src.intensity * pick.fade;
+          slot.distance = pick.src.distance;
+          slot.decay = pick.src.decay;
+          slot.position.set(pick.x, pick.y, pick.z);
+        }
       }
       const raycaster = new THREE.Raycaster();
       const mouseNDC = new THREE.Vector2();
@@ -19570,7 +19661,26 @@
           (typeof userSettings !== "undefined" &&
             userSettings.qualityPreset === "ultralight") ||
           _is1GbMobileBoot;
+        // Tileable value-noise lattice: one bilinear fetch replaces four hashes per noise sample in the
+        // terrain shader (which covers most of the screen and samples noise 6-9 times per pixel).
+        const noiseN = 256;
+        const noiseData = new Uint16Array(noiseN * noiseN);
+        for (let ni = 0; ni < noiseData.length; ni++)
+          noiseData[ni] = THREE.DataUtils.toHalfFloat(Math.random());
+        const terrainNoiseTex = new THREE.DataTexture(
+          noiseData,
+          noiseN,
+          noiseN,
+          THREE.RedFormat,
+          THREE.HalfFloatType,
+        );
+        terrainNoiseTex.wrapS = terrainNoiseTex.wrapT = THREE.RepeatWrapping;
+        terrainNoiseTex.magFilter = terrainNoiseTex.minFilter =
+          THREE.LinearFilter;
+        terrainNoiseTex.generateMipmaps = false;
+        terrainNoiseTex.needsUpdate = true;
         terrainShaderUniforms = {
+          uNoiseTex: { value: terrainNoiseTex },
           uTime: { value: 0 },
           uUltraMax: { value: 1.0 },
           uUltraLight: { value: isUlTerrain ? 1.0 : 0.0 },
@@ -19585,6 +19695,7 @@
           metalness: 0.05,
         });
         terrainMat.onBeforeCompile = (shader) => {
+          shader.uniforms.uNoiseTex = terrainShaderUniforms.uNoiseTex;
           shader.uniforms.uTime = terrainShaderUniforms.uTime;
           shader.uniforms.uUltraMax = terrainShaderUniforms.uUltraMax;
           shader.uniforms.uUltraLight = terrainShaderUniforms.uUltraLight;
@@ -19612,22 +19723,15 @@ uniform float uUltraMax;
 uniform float uUltraLight;
 uniform float uNightAmt;
 uniform vec3 uTowers[12];
+uniform sampler2D uNoiseTex;
 varying vec3 vTerrainWorldPos;
 varying vec3 vTerrainNormal;
-                        float hash21(vec2 p) {
-                            p = fract(p * vec2(123.34, 456.21));
-                            p += dot(p, p + 45.32);
-                            return fract(p.x * p.y);
-                        }
+                        // Smoothstep-interpolated value noise read from a 256x256 lattice texture
                         float valNoise(vec2 p) {
                             vec2 i = floor(p);
                             vec2 f = fract(p);
                             f = f * f * (3.0 - 2.0 * f);
-                            float a = hash21(i);
-                            float b = hash21(i + vec2(1.0, 0.0));
-                            float c = hash21(i + vec2(0.0, 1.0));
-                            float d = hash21(i + vec2(1.0, 1.0));
-                            return mix(mix(a, b, f.x), mix(c, d, f.x), f.y);
+                            return texture2D(uNoiseTex, (i + f + 0.5) * 0.00390625).r;
                         }
                         float fbmTerrain(vec2 p) {
                             mat2 rot = mat2(0.8, -0.6, 0.6, 0.8);
@@ -53647,64 +53751,46 @@ diffuseColor.rgb *= mix(0.58, 1.04, groundAO) * canopyShade;`,
         const isUltraLight = preset === "ultralight";
         const detailLvl = getGraphicsShaderDetailLevel(preset);
         const nativeDpr = Math.max(1, window.devicePixelRatio || 1);
-        // Part of the GPU time saved by forest/unit culling and the light budget is spent on a modestly
-        // sharper image per tier (adaptive resolution still steps it down if the frame rate drops).
-        const dprCap = isUltraMax
-          ? Math.min(1.5, nativeDpr)
+        // Render density per preset, in device pixels per CSS pixel at the default 100% render scale.
+        // Small on-screen characters turn blocky quickly below ~0.8, so even the lowest tiers stay
+        // close to 1:1; the per-pixel shading savings (pooled lights, textured terrain noise) pay for it.
+        const targetDpr = isUltraMax
+          ? 1.75
           : isUltra
-            ? Math.min(1.25, nativeDpr)
+            ? 1.5
             : preset === "high"
-              ? Math.min(1.1, nativeDpr)
+              ? 1.3
               : preset === "balanced"
-                ? 1.0
+                ? 1.1
                 : preset === "performance"
-                  ? 0.9
+                  ? 1.0
                   : preset === "potato"
-                    ? 0.75
-                    : 0.6;
-        const defaultScale = isUltraLight
-          ? 50
-          : preset === "potato"
-            ? 60
-            : preset === "performance"
-              ? 75
-              : preset === "balanced"
-                ? 85
-                : preset === "high"
-                  ? 95
-                  : 100;
+                    ? 0.9
+                    : 0.8;
         const scaleMult = isUltraLight
           ? 1.0
-          : (userSettings.renderScale || defaultScale) / 100;
-        const minDprFloor = isUltraLight ? 0.42 : 0.45;
+          : (userSettings.renderScale || 100) / 100;
+        const minDprFloor = isUltraLight ? 0.6 : 0.5;
         let effectiveDpr = Math.max(
           minDprFloor,
-          Math.min(nativeDpr, dprCap) * scaleMult * nxg.dynResScale,
+          Math.min(nativeDpr, targetDpr * scaleMult) * nxg.dynResScale,
         );
-        const maxDprCeiling = isUltraMax
-          ? 1.5
-          : isUltra
-            ? 1.25
-            : preset === "high"
-              ? 1.1
-              : 1.0;
-        effectiveDpr = Math.min(maxDprCeiling, effectiveDpr);
 
         // Per-preset pixel budget so huge / high-DPI windows cannot blow up fill-rate
         const cssPx = Math.max(1, window.innerWidth * window.innerHeight);
         const maxDesktopPixels = isUltraMax
-          ? 3.0e6
+          ? 3.6e6
           : isUltra
-            ? 2.4e6
+            ? 2.8e6
             : preset === "high"
-              ? 1.8e6
+              ? 2.2e6
               : preset === "balanced"
-                ? 1.35e6
+                ? 1.6e6
                 : preset === "performance"
-                  ? 1.1e6
+                  ? 1.3e6
                   : preset === "potato"
-                    ? 0.75e6
-                    : 0.5e6;
+                    ? 1.0e6
+                    : 0.8e6;
         if (cssPx * effectiveDpr * effectiveDpr > maxDesktopPixels) {
           effectiveDpr = Math.max(minDprFloor, Math.sqrt(maxDesktopPixels / cssPx));
         }
@@ -53806,17 +53892,8 @@ diffuseColor.rgb *= mix(0.58, 1.04, groundAO) * canopyShade;`,
         const isPotato = preset === "potato";
         const isUltraLight = preset === "ultralight";
 
-        const resScale = isUltraLight
-          ? 45
-          : isPotato
-            ? 60
-            : isPerf
-              ? 75
-              : isBalanced
-                ? 85
-                : isHigh
-                  ? 95
-                  : 100;
+        // 100% = the preset's own target density (see applyRendererResolution)
+        const resScale = 100;
         const resEl = document.getElementById("set-res-scale");
         if (resEl) resEl.value = String(resScale);
 
@@ -55040,6 +55117,7 @@ diffuseColor.rgb *= mix(0.58, 1.04, groundAO) * canopyShade;`,
         }
         nxgTick(dt);
         syncSceneLightBudget();
+        updatePointLightPool();
         const culledUnitCount = cullOffscreenUnitsForRender();
         if (
           composer &&
