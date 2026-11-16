@@ -9,7 +9,7 @@
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="mobile-web-app-capable" content="yes" />
     <title>
-      Infinite War • Grandmaster Sovereign Multiplayer Edition (v147)
+      Infinite War • Grandmaster Sovereign Multiplayer Edition (v152)
     </title>
     <link rel="preconnect" href="https://unpkg.com" crossorigin />
     <link rel="preconnect" href="https://cdn.tailwindcss.com" crossorigin />
@@ -24,10 +24,14 @@
     <link
       href="https://fonts.googleapis.com/css2?family=Cinzel:wght@600;700;900&family=Inter:wght@400;500;600;700;800&display=swap"
       rel="stylesheet"
+      media="print"
+      onload="this.media = 'all'"
     />
     <link
       rel="stylesheet"
       href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css"
+      media="print"
+      onload="this.media = 'all'"
     />
     <style>
       * {
@@ -1575,6 +1579,82 @@
         pointer-events: none;
         animation: emberDriftUp linear infinite;
       }
+
+      /* === v148 INTRO SCREEN, STATIC PORTRAIT & 1GB RAM ULTRA-LIGHT OPTIMIZATIONS === */
+      #title-intro-overlay {
+        contain: layout style paint;
+      }
+      #title-intro-overlay .dota-stone-panel,
+      #title-intro-overlay .backdrop-blur-xs {
+        backdrop-filter: none !important;
+        -webkit-backdrop-filter: none !important;
+        background: linear-gradient(
+          180deg,
+          rgba(11, 18, 32, 0.94) 0%,
+          rgba(5, 9, 18, 0.97) 100%
+        ) !important;
+      }
+      .title-crest-float,
+      .title-ring-cw,
+      .title-ring-ccw,
+      .intro-ember {
+        will-change: transform, opacity;
+        transform: translateZ(0);
+        backface-visibility: hidden;
+      }
+      .play-cta-pulse {
+        animation: none !important;
+        box-shadow:
+          0 0 30px rgba(250, 204, 21, 0.58),
+          0 0 64px rgba(16, 185, 129, 0.38),
+          inset 0 1px 0 rgba(255, 255, 255, 0.65);
+        will-change: transform;
+        transition: transform 0.18s ease;
+      }
+      .play-cta-pulse::before {
+        content: "";
+        position: absolute;
+        inset: -3px;
+        border-radius: inherit;
+        pointer-events: none;
+        box-shadow:
+          0 0 44px rgba(250, 204, 21, 0.88),
+          0 0 88px rgba(16, 185, 129, 0.58);
+        opacity: 0.35;
+        will-change: opacity;
+        animation: playGlowComposite 2.6s ease-in-out infinite;
+      }
+      @keyframes playGlowComposite {
+        0%,
+        100% {
+          opacity: 0.25;
+        }
+        50% {
+          opacity: 0.95;
+        }
+      }
+      body.low-gfx-mode .dota-stone-panel,
+      body.low-gfx-mode .hud-console-shell,
+      body.low-gfx-mode #mobile-joystick-base,
+      body.low-gfx-mode #hud-tooltip,
+      body.low-gfx-mode .backdrop-blur-md,
+      body.low-gfx-mode .backdrop-blur-xs {
+        backdrop-filter: none !important;
+        -webkit-backdrop-filter: none !important;
+      }
+      body.low-gfx-mode .dota-gold-trim,
+      body.low-gfx-mode .intro-badge-float {
+        animation: none !important;
+      }
+      body.low-gfx-mode .unit-bar .b-hp,
+      body.low-gfx-mode #hud-portrait-canvas {
+        transition: none !important;
+      }
+      body.low-gfx-mode .floating-text {
+        animation: none !important;
+        text-shadow: 0 1px 2px #000 !important;
+        -webkit-text-stroke: 0 !important;
+      }
     </style>
 
     <script type="importmap">
@@ -1697,7 +1777,7 @@
             class="dota-stone-panel px-2.5 py-1.5 rounded-xl text-[11px] sm:text-xs font-mono font-black text-amber-300 border border-amber-400/65 shadow-lg tracking-wider"
             title="Game Version"
           >
-            v147
+            v152
           </span>
         </div>
       </div>
@@ -14749,9 +14829,11 @@
       const _bootMem = navigator.deviceMemory || 4;
       const _isLowEndMobileBoot =
         _isTouchBoot && (_bootCores <= 4 || _bootMem <= 3);
+      const _is1GbMobileBoot =
+        _isTouchBoot && (_bootMem <= 1.5 || _bootCores <= 2);
 
       function createPBRTextureSet(type, repeatX = 12, repeatY = 12) {
-        const size = _isLowEndMobileBoot ? 256 : 512;
+        const size = _is1GbMobileBoot ? 128 : _isLowEndMobileBoot ? 256 : 512;
         const mapC = document.createElement("canvas");
         const bumpC = document.createElement("canvas");
         const roughC = document.createElement("canvas");
@@ -15170,6 +15252,7 @@
 
       // 360-Degree Arena Sky, Solar Key, Radiant/Dire Horizon Bounce & Studio Rim IBL Probe
       (function initStudioEnvironment() {
+        if (_is1GbMobileBoot) return;
         try {
           const pmrem = new THREE.PMREMGenerator(renderer);
           pmrem.compileEquirectangularShader();
@@ -16236,6 +16319,10 @@
         if (nxg.aoPass) {
           nxg.aoPass.enabled = userSettings.aoEnabled;
         }
+        if (userSettings.qualityPreset !== "ultralight") {
+          if (!nxg.parts && nxg.ready) nxgBuildParticles();
+          if (!nxg.flashes.length && nxg.ready) nxgBuildFlashLights();
+        }
         if (nxg.parts) {
           nxg.parts.visible = userSettings.qualityPreset !== "ultralight";
           nxg.parts.material.uniforms.uPxScale.value =
@@ -16260,8 +16347,10 @@
         if (nxg.ready) return;
         nxg.ready = true;
         nxgBuildTextures();
-        nxgBuildParticles();
-        nxgBuildFlashLights();
+        if (userSettings.qualityPreset !== "ultralight") {
+          nxgBuildParticles();
+          nxgBuildFlashLights();
+        }
         nxgApplyQuality(userSettings.qualityPreset);
         window.updateGraphicsSettings();
       }
@@ -17238,8 +17327,13 @@
       // Custom GLSL Atmospheric Sky Dome with Sun/Moon Discs, Horizon Scattering, Clouds & Night Stars
       let skyDomeUniforms = null;
       function initAtmosphericSkyDome() {
+        const isUlInit =
+          (typeof userSettings !== "undefined" &&
+            userSettings.qualityPreset === "ultralight") ||
+          _is1GbMobileBoot;
         skyDomeUniforms = {
           uTime: { value: 0 },
+          uUltraLight: { value: isUlInit ? 1.0 : 0.0 },
           uSunFactor: { value: 1.0 },
           uSunDir: { value: new THREE.Vector3(0.45, 0.75, 0.45).normalize() },
           uZenithDay: { value: new THREE.Color(0x0c2d57) },
@@ -17247,7 +17341,11 @@
           uZenithNight: { value: new THREE.Color(0x050b1a) },
           uHorizonNight: { value: new THREE.Color(0x1e2952) },
         };
-        const skyGeo = new THREE.SphereGeometry(390, 40, 28);
+        const skyGeo = new THREE.SphereGeometry(
+          390,
+          isUlInit ? 24 : 40,
+          isUlInit ? 16 : 28,
+        );
         const skyMat = new THREE.ShaderMaterial({
           uniforms: skyDomeUniforms,
           side: THREE.BackSide,
@@ -17263,6 +17361,7 @@
                 `,
           fragmentShader: `
                     uniform float uTime;
+                    uniform float uUltraLight;
                     uniform float uSunFactor;
                     uniform vec3 uSunDir;
                     uniform vec3 uZenithDay;
@@ -17319,10 +17418,15 @@
                         // Multi-Layered Volumetric-Style Clouds with Silver/Golden Sun Scattering
                         if (dir.y > 0.025) {
                             vec2 uv1 = dir.xz / (dir.y + 0.17) * 1.32 + vec2(uTime * 0.012, -uTime * 0.008);
-                            vec2 uv2 = dir.xz / (dir.y + 0.24) * 2.25 + vec2(uTime * 0.019 + 3.1, -uTime * 0.011);
-                            float c1 = fbmCloud(uv1);
-                            float c2 = fbmCloud(uv2);
-                            float c = c1 * 0.68 + c2 * 0.32;
+                            float c;
+                            if (uUltraLight > 0.5) {
+                                c = noise2(uv1) * 0.68 + noise2(uv1 * 2.05 + vec2(1.7, 9.2)) * 0.32;
+                            } else {
+                                vec2 uv2 = dir.xz / (dir.y + 0.24) * 2.25 + vec2(uTime * 0.019 + 3.1, -uTime * 0.011);
+                                float c1 = fbmCloud(uv1);
+                                float c2 = fbmCloud(uv2);
+                                c = c1 * 0.68 + c2 * 0.32;
+                            }
                             float cloudMask = smoothstep(0.44, 0.78, c) * smoothstep(0.025, 0.26, dir.y);
                             float silverLining = smoothstep(0.42, 0.62, c) * (1.0 - smoothstep(0.62, 0.82, c)) * pow(sunAmt, 3.0);
                             vec3 cloudBase = mix(vec3(0.16, 0.24, 0.44), vec3(0.88, 0.93, 0.99), uSunFactor);
@@ -18625,9 +18729,14 @@
         geo.setAttribute("color", new THREE.Float32BufferAttribute(cols, 3));
         geo.computeVertexNormals();
 
+        const isUlTerrain =
+          (typeof userSettings !== "undefined" &&
+            userSettings.qualityPreset === "ultralight") ||
+          _is1GbMobileBoot;
         terrainShaderUniforms = {
           uTime: { value: 0 },
           uUltraMax: { value: 1.0 },
+          uUltraLight: { value: isUlTerrain ? 1.0 : 0.0 },
         };
         const terrainMat = new THREE.MeshStandardMaterial({
           vertexColors: true,
@@ -18637,6 +18746,7 @@
         terrainMat.onBeforeCompile = (shader) => {
           shader.uniforms.uTime = terrainShaderUniforms.uTime;
           shader.uniforms.uUltraMax = terrainShaderUniforms.uUltraMax;
+          shader.uniforms.uUltraLight = terrainShaderUniforms.uUltraLight;
           shader.vertexShader = shader.vertexShader
             .replace(
               "#include <common>",
@@ -18656,6 +18766,7 @@ vTerrainNormal = normalize(mat3(modelMatrix) * objectNormal);`,
               `#include <common>
 uniform float uTime;
 uniform float uUltraMax;
+uniform float uUltraLight;
 varying vec3 vTerrainWorldPos;
 varying vec3 vTerrainNormal;
                         float hash21(vec2 p) {
@@ -18709,40 +18820,57 @@ varying vec3 vTerrainNormal;
               "#include <color_fragment>",
               `#include <color_fragment>
                         vec2 wpXZ = vTerrainWorldPos.xz;
-                        float nMacro = fbmTerrain(wpXZ * 0.065);
-                        float nMicro = fbmTerrain(wpXZ * 0.48);
-                        float nGrass = valNoise(vec2(wpXZ.x * 3.8 + wpXZ.y * 1.4, wpXZ.y * 4.2 - wpXZ.x * 1.2));
-                        float nClover = valNoise(wpXZ * 1.65);
-                        float grain = mix(0.76, 1.28, nMacro * 0.46 + nMicro * 0.28 + nGrass * 0.16 + nClover * 0.10);
-                        diffuseColor.rgb *= grain;
-
-                        // Stratified cliff rock texture on steep slopes or high rim mountains
+                        float nMacro = 0.5;
+                        float nMicro = 0.5;
                         float slopeRock = smoothstep(0.92, 0.68, vTerrainNormal.y) + smoothstep(1.2, 3.6, vTerrainWorldPos.y) * 0.75;
-                        float strata = sin(vTerrainWorldPos.y * 1.9 + nMacro * 5.0) * 0.5 + 0.5;
-                        vec3 cliffCol = mix(vec3(0.10, 0.125, 0.17), vec3(0.21, 0.245, 0.30), strata * 0.3 + nMicro * 0.7);
-                        diffuseColor.rgb = mix(diffuseColor.rgb, cliffCol, clamp(slopeRock, 0.0, 0.92));
-
                         float side = smoothstep(-15.0, 15.0, vTerrainWorldPos.x - vTerrainWorldPos.z);
-                        // Deep rich forest-emerald grass variation & warm woodland loam on Radiant side
-                        vec3 radMeadowGold = vec3(0.032, 0.048, 0.010) * smoothstep(0.58, 0.90, nMacro) * smoothstep(0.48, 0.86, nGrass);
-                        vec3 radSoilPatch = vec3(0.035, 0.024, 0.008) * smoothstep(0.72, 0.94, 1.0 - nClover);
-                        vec3 radOrganic = radMeadowGold + radSoilPatch;
-
-                        // Animated pulsing molten magma cracks in Dire territory
-                        float magmaPulse = 0.78 + 0.28 * sin(uTime * 2.1 + wpXZ.x * 0.14 + wpXZ.y * 0.14);
                         float crack = 0.0;
                         float crackCore = 0.0;
-                        if (side > 0.02) {
-                            float seam = direSeam(wpXZ * 0.21 + vec2(nMicro * 0.4));
-                            float molten = smoothstep(0.38, 0.64, nMacro);
-                            // Keep the paved lane and the Dire plaza intact
-                            molten *= smoothstep(7.4, 9.4, abs(wpXZ.x + wpXZ.y) * 0.70710678);
-                            molten *= smoothstep(26.0, 38.0, length(wpXZ - vec2(140.0, -140.0)));
-                            crack = (1.0 - smoothstep(0.0, 0.13, seam)) * molten;
-                            crackCore = (1.0 - smoothstep(0.0, 0.04, seam)) * molten;
+                        float magmaPulse = 0.9;
+                        if (uUltraLight > 0.5) {
+                            nMacro = valNoise(wpXZ * 0.09);
+                            nMicro = valNoise(wpXZ * 0.45);
+                            diffuseColor.rgb *= mix(0.82, 1.18, nMacro * 0.65 + nMicro * 0.35);
+                            vec3 cliffCol = mix(vec3(0.10, 0.125, 0.17), vec3(0.20, 0.24, 0.29), nMicro);
+                            diffuseColor.rgb = mix(diffuseColor.rgb, cliffCol, clamp(slopeRock, 0.0, 0.92));
+                            if (side > 0.02) {
+                                float vein = abs(sin(wpXZ.x * 0.24 + nMacro * 3.2) * cos(wpXZ.y * 0.24 - nMicro * 2.6));
+                                float molten = smoothstep(0.38, 0.64, nMacro) * smoothstep(7.4, 9.4, abs(wpXZ.x + wpXZ.y) * 0.70710678);
+                                crack = (1.0 - smoothstep(0.0, 0.12, vein)) * molten;
+                                diffuseColor.rgb += vec3(0.36, 0.075, 0.018) * crack * side;
+                            }
+                        } else {
+                            nMacro = fbmTerrain(wpXZ * 0.065);
+                            nMicro = fbmTerrain(wpXZ * 0.48);
+                            float nGrass = valNoise(vec2(wpXZ.x * 3.8 + wpXZ.y * 1.4, wpXZ.y * 4.2 - wpXZ.x * 1.2));
+                            float nClover = valNoise(wpXZ * 1.65);
+                            float grain = mix(0.76, 1.28, nMacro * 0.46 + nMicro * 0.28 + nGrass * 0.16 + nClover * 0.10);
+                            diffuseColor.rgb *= grain;
+
+                            // Stratified cliff rock texture on steep slopes or high rim mountains
+                            float strata = sin(vTerrainWorldPos.y * 1.9 + nMacro * 5.0) * 0.5 + 0.5;
+                            vec3 cliffCol = mix(vec3(0.10, 0.125, 0.17), vec3(0.21, 0.245, 0.30), strata * 0.3 + nMicro * 0.7);
+                            diffuseColor.rgb = mix(diffuseColor.rgb, cliffCol, clamp(slopeRock, 0.0, 0.92));
+
+                            // Deep rich forest-emerald grass variation & warm woodland loam on Radiant side
+                            vec3 radMeadowGold = vec3(0.032, 0.048, 0.010) * smoothstep(0.58, 0.90, nMacro) * smoothstep(0.48, 0.86, nGrass);
+                            vec3 radSoilPatch = vec3(0.035, 0.024, 0.008) * smoothstep(0.72, 0.94, 1.0 - nClover);
+                            vec3 radOrganic = radMeadowGold + radSoilPatch;
+
+                            // Animated pulsing molten magma cracks in Dire territory
+                            magmaPulse = 0.78 + 0.28 * sin(uTime * 2.1 + wpXZ.x * 0.14 + wpXZ.y * 0.14);
+                            if (side > 0.02) {
+                                float seam = direSeam(wpXZ * 0.21 + vec2(nMicro * 0.4));
+                                float molten = smoothstep(0.38, 0.64, nMacro);
+                                // Keep the paved lane and the Dire plaza intact
+                                molten *= smoothstep(7.4, 9.4, abs(wpXZ.x + wpXZ.y) * 0.70710678);
+                                molten *= smoothstep(26.0, 38.0, length(wpXZ - vec2(140.0, -140.0)));
+                                crack = (1.0 - smoothstep(0.0, 0.13, seam)) * molten;
+                                crackCore = (1.0 - smoothstep(0.0, 0.04, seam)) * molten;
+                            }
+                            vec3 direEmber = vec3(0.40, 0.085, 0.02) * crack * magmaPulse + vec3(0.14, 0.022, 0.03) * smoothstep(0.68, 0.92, nMicro);
+                            diffuseColor.rgb += mix(radOrganic, direEmber, side) * (1.0 - clamp(slopeRock, 0.0, 0.8));
                         }
-                        vec3 direEmber = vec3(0.40, 0.085, 0.02) * crack * magmaPulse + vec3(0.14, 0.022, 0.03) * smoothstep(0.68, 0.92, nMicro);
-                        diffuseColor.rgb += mix(radOrganic, direEmber, side) * (1.0 - clamp(slopeRock, 0.0, 0.8));
 
                         if (uUltraMax > 0.85) {
                             // Ultra Max: Fine high-frequency grass-blade & moss micro-texture (deepens lush emerald contrast)
@@ -18786,7 +18914,7 @@ varying vec3 vTerrainNormal;
               `#include <normal_fragment_maps>
                         // World-space grass-blade & stone relief micro-bump normal perturbation (with distance LOD fade)
                         float maxBumpDist = mix(68.0, 95.0, uUltraMax);
-                        float detailFade = smoothstep(maxBumpDist, 32.0, length(cameraPosition - vTerrainWorldPos));
+                        float detailFade = uUltraLight > 0.5 ? 0.0 : smoothstep(maxBumpDist, 32.0, length(cameraPosition - vTerrainWorldPos));
                         if (detailFade > 0.01) {
                             float baseMM = nMacro * 0.45 + nMicro * 0.30;
                             float hC = terrainMicroHeight(vTerrainWorldPos.xz, baseMM);
@@ -19052,7 +19180,16 @@ roughnessFactor *= mix(1.0, 0.38, wetRough);`,
           uBoulders: { value: boulderUniformArray },
         };
 
-        const riverGeo = new THREE.PlaneGeometry(19.8, riverLen, 84, 240);
+        const isLightRiver =
+          _isLowEndMobileBoot ||
+          (typeof userSettings !== "undefined" &&
+            userSettings.qualityPreset === "ultralight");
+        const riverGeo = new THREE.PlaneGeometry(
+          19.8,
+          riverLen,
+          isLightRiver ? 28 : 84,
+          isLightRiver ? 84 : 240,
+        );
         const riverMat = new THREE.ShaderMaterial({
           uniforms: riverShaderUniforms,
           transparent: true,
@@ -21480,7 +21617,13 @@ diffuseColor.rgb *= mix(0.58, 1.04, groundAO) * canopyShade;`,
           scene.add(freezeStaticObject(baseDiscInst));
         }
 
-        // Lush Instanced Ground Foliage: Radiant Grass Tufts, Woodland Ferns, Wildflowers & Dire Magma Crystals
+        // Lush Instanced Ground Foliage: skip building 1,800 hidden clutter instances when booting on Ultra Light
+        if (
+          typeof userSettings !== "undefined" &&
+          userSettings.qualityPreset === "ultralight"
+        ) {
+          return;
+        }
         const grassTufts = [];
         const fernClusters = [];
         const wildflowers = [];
@@ -34599,7 +34742,10 @@ diffuseColor.rgb *= mix(0.58, 1.04, groundAO) * canopyShade;`,
           }
           const task = _idlePortraitQueue.shift();
           if (!task || !task.dot || !task.dot.isConnected) continue;
-          if (!_heroPortraitThumbCache.has(task.heroCfg.id)) {
+          if (
+            !_heroPortraitThumbCache.has(`${task.heroCfg.id}_radiant`) &&
+            !_heroPortraitThumbCache.has(task.heroCfg.id)
+          ) {
             paintHeroCardPortrait(task.heroCfg, task.canvasEl, task.iconEl);
             // Yield after building a new 3D rig so UI stays at 60+ FPS
             break;
@@ -34634,7 +34780,10 @@ diffuseColor.rgb *= mix(0.58, 1.04, groundAO) * canopyShade;`,
       }
       function paintHeroCardPortrait(heroCfg, canvasEl, iconEl) {
         if (!heroCfg || !canvasEl) return;
-        const cached = _heroPortraitThumbCache.get(heroCfg.id);
+        const cacheKey = `${heroCfg.id}_radiant`;
+        const cached =
+          _heroPortraitThumbCache.get(cacheKey) ||
+          _heroPortraitThumbCache.get(heroCfg.id);
         if (cached) {
           if (
             canvasEl.width !== cached.width ||
@@ -34647,35 +34796,30 @@ diffuseColor.rgb *= mix(0.58, 1.04, groundAO) * canopyShade;`,
           if (ctx) {
             ctx.putImageData(cached, 0, 0);
             canvasEl.classList.remove("hidden");
-            if (iconEl) iconEl.classList.add("hidden");
+            canvasEl._shown = true;
+            canvasEl.style.filter = "none";
+            canvasEl._deadFilter = false;
+            if (iconEl) {
+              iconEl.classList.add("hidden");
+              iconEl._hidden = true;
+            }
           }
           return;
         }
         if (
           typeof portraitStudio !== "undefined" &&
           portraitStudio &&
-          typeof portraitStudio.renderRigToCanvas === "function"
+          typeof portraitStudio.renderStatic3DPortrait === "function"
         ) {
-          const ok = portraitStudio.renderRigToCanvas(
+          const ok = portraitStudio.renderStatic3DPortrait(
             heroCfg,
             "radiant",
             canvasEl,
-            0.35,
-            0.16,
-            false,
             false,
           );
-          if (ok) {
-            const ctx = canvasEl.getContext("2d");
-            if (ctx) {
-              try {
-                _heroPortraitThumbCache.set(
-                  heroCfg.id,
-                  ctx.getImageData(0, 0, canvasEl.width, canvasEl.height),
-                );
-              } catch (e) {}
-            }
-            if (iconEl) iconEl.classList.add("hidden");
+          if (ok && iconEl) {
+            iconEl.classList.add("hidden");
+            iconEl._hidden = true;
           }
         }
       }
@@ -34934,6 +35078,125 @@ diffuseColor.rgb *= mix(0.58, 1.04, groundAO) * canopyShade;`,
           seraphina: { camY: 3.16, lookY: 3.1, dist: 3.5, pad: 1.28 },
         };
 
+        let _staticDisposeTimer = null;
+
+        function isStaticPortraitMode() {
+          const q = userSettings.qualityPreset || "balanced";
+          return (
+            q === "ultralight" ||
+            q === "potato" ||
+            q === "performance" ||
+            !userSettings.portraits3dEnabled
+          );
+        }
+
+        function scheduleStaticStudioCleanup() {
+          if (!isStaticPortraitMode()) return;
+          clearTimeout(_staticDisposeTimer);
+          _staticDisposeTimer = setTimeout(() => {
+            if (isStaticPortraitMode()) {
+              disposeResources();
+            }
+          }, 450);
+        }
+
+        function renderStatic3DPortrait(
+          heroCfg,
+          team,
+          targetCanvas,
+          isDead = false,
+        ) {
+          if (!targetCanvas || !heroCfg) return false;
+          const ctx2d = targetCanvas.getContext("2d");
+          if (!ctx2d) return false;
+          const effTeam = team || "radiant";
+          const cacheKey = `${heroCfg.id}_${effTeam}`;
+          let cached = _heroPortraitThumbCache.get(cacheKey);
+          if (!cached && effTeam === "radiant") {
+            cached = _heroPortraitThumbCache.get(heroCfg.id);
+          }
+
+          if (!cached) {
+            // Render 1 single static 3D hero portrait frame (matching Hero Selection Mode) and cache it
+            const ok = renderLiveRigFrame(
+              heroCfg,
+              effTeam,
+              targetCanvas,
+              0.35,
+              0.16,
+              false,
+              false,
+            );
+            if (!ok) return false;
+            try {
+              cached = ctx2d.getImageData(
+                0,
+                0,
+                targetCanvas.width,
+                targetCanvas.height,
+              );
+              _heroPortraitThumbCache.set(cacheKey, cached);
+              if (effTeam === "radiant")
+                _heroPortraitThumbCache.set(heroCfg.id, cached);
+            } catch (e) {}
+            // In low graphics / 1GB RAM modes, immediately free the 3D rig & schedule WebGL context release
+            if (isStaticPortraitMode()) {
+              const rig = rigCache.get(cacheKey);
+              if (rig) {
+                if (pScene && rig.group) pScene.remove(rig.group);
+                if (rig.group) disposeObject3D(rig.group);
+                rigCache.delete(cacheKey);
+                if (currentVisibleKey === cacheKey) currentVisibleKey = null;
+              }
+              scheduleStaticStudioCleanup();
+            }
+          } else {
+            if (
+              targetCanvas.width !== cached.width ||
+              targetCanvas.height !== cached.height
+            ) {
+              targetCanvas.width = cached.width;
+              targetCanvas.height = cached.height;
+            }
+            ctx2d.putImageData(cached, 0, 0);
+          }
+
+          if (targetCanvas._shown !== true) {
+            targetCanvas.classList.remove("hidden");
+            targetCanvas._shown = true;
+          }
+          if (targetCanvas._deadFilter !== isDead) {
+            targetCanvas.style.filter = isDead
+              ? "grayscale(100%) brightness(0.55)"
+              : "none";
+            targetCanvas._deadFilter = isDead;
+          }
+          return true;
+        }
+
+        function disposeResources() {
+          clearTimeout(_staticDisposeTimer);
+          clearRigCache();
+          if (pRenderTarget) {
+            try {
+              pRenderTarget.dispose();
+            } catch (e) {}
+            pRenderTarget = null;
+          }
+          pPixelBuffer = null;
+          if (pRenderer) {
+            try {
+              pRenderer.dispose();
+              if (typeof pRenderer.forceContextLoss === "function")
+                pRenderer.forceContextLoss();
+            } catch (e) {}
+            pRenderer = null;
+          }
+          useDedicatedRenderer = false;
+          pScene = null;
+          pCamera = null;
+        }
+
         function ensure() {
           if (pScene) return true;
           if (!renderer) return false;
@@ -35086,7 +35349,7 @@ diffuseColor.rgb *= mix(0.58, 1.04, groundAO) * canopyShade;`,
           return preset;
         }
 
-        function renderRigToCanvas(
+        function renderLiveRigFrame(
           heroCfg,
           team,
           targetCanvas,
@@ -35098,12 +35361,16 @@ diffuseColor.rgb *= mix(0.58, 1.04, groundAO) * canopyShade;`,
           if (!targetCanvas || !heroCfg || !ensure()) return false;
           const ctx2d = targetCanvas.getContext("2d");
           if (!ctx2d) return false;
+          const effRtSize =
+            userSettings.qualityPreset === "ultralight" || _is1GbMobileBoot
+              ? 128
+              : RT_SIZE;
           if (
-            targetCanvas.width !== RT_SIZE ||
-            targetCanvas.height !== RT_SIZE
+            targetCanvas.width !== effRtSize ||
+            targetCanvas.height !== effRtSize
           ) {
-            targetCanvas.width = RT_SIZE;
-            targetCanvas.height = RT_SIZE;
+            targetCanvas.width = effRtSize;
+            targetCanvas.height = effRtSize;
           }
 
           const rig = getOrCreateRig(heroCfg, team);
@@ -35140,11 +35407,21 @@ diffuseColor.rgb *= mix(0.58, 1.04, groundAO) * canopyShade;`,
           pKeyLight.color.setHex(isHit ? 0xfda4af : 0xfffbeb);
 
           if (useDedicatedRenderer && pRenderer) {
-            // Direct GPU-to-2D canvas surface copy: 30 FPS smooth with zero readPixels stalls
+            // Direct GPU-to-2D canvas surface copy scaled cleanly to effRtSize (prevents 128px crop offset)
             pRenderer.clear();
             pRenderer.render(pScene, pCamera);
-            ctx2d.clearRect(0, 0, RT_SIZE, RT_SIZE);
-            ctx2d.drawImage(pRenderer.domElement, 0, 0, RT_SIZE, RT_SIZE);
+            ctx2d.clearRect(0, 0, effRtSize, effRtSize);
+            ctx2d.drawImage(
+              pRenderer.domElement,
+              0,
+              0,
+              RT_SIZE,
+              RT_SIZE,
+              0,
+              0,
+              effRtSize,
+              effRtSize,
+            );
           } else {
             if (!pRenderTarget) {
               pRenderTarget = new THREE.WebGLRenderTarget(RT_SIZE, RT_SIZE, {
@@ -35187,7 +35464,29 @@ diffuseColor.rgb *= mix(0.58, 1.04, groundAO) * canopyShade;`,
               const dstOff = y * rowBytes;
               dst.set(pPixelBuffer.subarray(srcOff, srcOff + rowBytes), dstOff);
             }
-            ctx2d.putImageData(imgData, 0, 0);
+            if (effRtSize === RT_SIZE) {
+              ctx2d.putImageData(imgData, 0, 0);
+            } else {
+              const tmpC = document.createElement("canvas");
+              tmpC.width = RT_SIZE;
+              tmpC.height = RT_SIZE;
+              const tmpCtx = tmpC.getContext("2d");
+              if (tmpCtx) {
+                tmpCtx.putImageData(imgData, 0, 0);
+                ctx2d.clearRect(0, 0, effRtSize, effRtSize);
+                ctx2d.drawImage(
+                  tmpC,
+                  0,
+                  0,
+                  RT_SIZE,
+                  RT_SIZE,
+                  0,
+                  0,
+                  effRtSize,
+                  effRtSize,
+                );
+              }
+            }
           }
 
           if (targetCanvas._shown !== true) {
@@ -35203,21 +35502,82 @@ diffuseColor.rgb *= mix(0.58, 1.04, groundAO) * canopyShade;`,
           return true;
         }
 
+        function renderRigToCanvas(
+          heroCfg,
+          team,
+          targetCanvas,
+          clockTime,
+          dt,
+          isHit = false,
+          isDead = false,
+        ) {
+          if (!targetCanvas || !heroCfg) return false;
+          if (isStaticPortraitMode()) {
+            return renderStatic3DPortrait(heroCfg, team, targetCanvas, isDead);
+          }
+          return renderLiveRigFrame(
+            heroCfg,
+            team,
+            targetCanvas,
+            clockTime,
+            dt,
+            isHit,
+            isDead,
+          );
+        }
+
+        let _lastStaticHudSig = "";
         function update(dt, clockTime) {
           portraitClock += Math.min(0.1, Math.max(0, dt || 0));
-          if (!userSettings.portraits3dEnabled) {
-            const hudC = document.getElementById("hud-portrait-canvas");
-            const iconEl = document.getElementById("hud-portrait-icon");
-            if (hudC && hudC._shown) {
-              hudC.classList.add("hidden");
-              hudC._shown = false;
+          if (isStaticPortraitMode()) {
+            if (playerHero && playerHero.heroCfg) {
+              const hudSig = `${playerHero.heroCfg.id}_${playerHero.team}_${playerHero.dead ? 1 : 0}`;
+              if (_lastStaticHudSig !== hudSig) {
+                _lastStaticHudSig = hudSig;
+                const hudC = document.getElementById("hud-portrait-canvas");
+                const iconEl = document.getElementById("hud-portrait-icon");
+                const ok = renderStatic3DPortrait(
+                  playerHero.heroCfg,
+                  playerHero.team,
+                  hudC,
+                  playerHero.dead,
+                );
+                if (iconEl && iconEl._hidden !== ok) {
+                  iconEl.classList.toggle("hidden", ok);
+                  iconEl._hidden = ok;
+                }
+              }
             }
-            if (iconEl && iconEl._hidden) {
-              iconEl.classList.remove("hidden");
-              iconEl._hidden = false;
+            const inspPanel = getHudEl("unit-inspector-panel");
+            if (
+              inspPanel &&
+              !inspPanel.classList.contains("hidden") &&
+              inspectedUnit &&
+              inspectedUnit.type === "hero" &&
+              inspectedUnit.heroCfg
+            ) {
+              const inspSig = `${inspectedUnit.id}_${inspectedUnit.dead ? 1 : 0}`;
+              if (lastInspectedUnitId !== inspSig) {
+                lastInspectedUnitId = inspSig;
+                const inspC = document.getElementById("insp-portrait-canvas");
+                const okInsp = renderStatic3DPortrait(
+                  inspectedUnit.heroCfg,
+                  inspectedUnit.team,
+                  inspC,
+                  inspectedUnit.dead,
+                );
+                const inspIconEl = document.getElementById("insp-icon");
+                if (inspIconEl && inspIconEl._hidden !== okInsp) {
+                  inspIconEl.classList.toggle("hidden", okInsp);
+                  inspIconEl._hidden = okInsp;
+                }
+              }
+            } else {
+              lastInspectedUnitId = null;
             }
             return;
           }
+          _lastStaticHudSig = "";
 
           const isUltraMax = userSettings.qualityPreset === "ultramax";
           const isLowTier =
@@ -35324,6 +35684,7 @@ diffuseColor.rgb *= mix(0.58, 1.04, groundAO) * canopyShade;`,
           inspAccum = 0;
           hudRenderedDead = false;
           lastInspectedUnitId = null;
+          _lastStaticHudSig = "";
         }
 
         function clearRigCache() {
@@ -35336,7 +35697,15 @@ diffuseColor.rgb *= mix(0.58, 1.04, groundAO) * canopyShade;`,
           resetState();
         }
 
-        return { renderRigToCanvas, update, resetState, clearRigCache };
+        return {
+          renderRigToCanvas,
+          renderStatic3DPortrait,
+          update,
+          resetState,
+          clearRigCache,
+          disposeResources,
+          isStaticPortraitMode,
+        };
       })();
 
       function applyHeroToHUD(radCfg, direLabel) {
@@ -48822,9 +49191,9 @@ diffuseColor.rgb *= mix(0.58, 1.04, groundAO) * canopyShade;`,
                   ? 0.85
                   : preset === "potato"
                     ? 0.65
-                    : 0.55;
+                    : 0.5;
         const defaultScale = isUltraLight
-          ? 45
+          ? 50
           : preset === "potato"
             ? 60
             : preset === "performance"
@@ -48836,8 +49205,10 @@ diffuseColor.rgb *= mix(0.58, 1.04, groundAO) * canopyShade;`,
                   : preset === "ultra"
                     ? 112
                     : 135;
-        const scaleMult = (userSettings.renderScale || defaultScale) / 100;
-        const minDprFloor = isUltraLight ? 0.35 : 0.45;
+        const scaleMult = isUltraLight
+          ? 1.0
+          : (userSettings.renderScale || defaultScale) / 100;
+        const minDprFloor = isUltraLight ? 0.42 : 0.45;
         let effectiveDpr = Math.max(
           minDprFloor,
           Math.min(window.devicePixelRatio || 1, dprCap) *
@@ -48980,9 +49351,36 @@ diffuseColor.rgb *= mix(0.58, 1.04, groundAO) * canopyShade;`,
           shadEl.checked = isUltraMax || isUltra || isHigh || isBalanced;
         if (waterEl)
           waterEl.checked = isUltraMax || isUltra || isHigh || isBalanced;
+        const isStaticPortraitTier = isUltraLight || isPotato || isPerf;
+        document.body.classList.toggle("low-gfx-mode", isStaticPortraitTier);
+        document.body.classList.toggle("quality-ultralight", isUltraLight);
         if (clutterEl) clutterEl.checked = !isPotato && !isUltraLight;
         if (partEl) partEl.checked = isUltraMax || isUltra || isHigh;
-        if (portEl) portEl.checked = !isPotato && !isUltraLight;
+        if (portEl) portEl.checked = !isStaticPortraitTier;
+
+        if (
+          isStaticPortraitTier &&
+          typeof portraitStudio !== "undefined" &&
+          portraitStudio.disposeResources
+        ) {
+          portraitStudio.disposeResources();
+        }
+        if (isUltraLight) {
+          scene.traverse((obj) => {
+            if (obj.material) {
+              const mats = Array.isArray(obj.material)
+                ? obj.material
+                : [obj.material];
+              mats.forEach((m) => {
+                if (m && m.map && m.map.generateMipmaps) {
+                  m.map.generateMipmaps = false;
+                  m.map.minFilter = THREE.LinearFilter;
+                  m.map.needsUpdate = true;
+                }
+              });
+            }
+          });
+        }
 
         if (
           isUltraMax &&
@@ -49053,6 +49451,22 @@ diffuseColor.rgb *= mix(0.58, 1.04, groundAO) * canopyShade;`,
         if (nxg.ready) nxgApplyQuality(userSettings.qualityPreset);
         window.updateGraphicsSettings();
         renderer.shadowMap.needsUpdate = true;
+        if (typeof inHeroSelect !== "undefined" && inHeroSelect) {
+          if (typeof renderHeroSelectionCards === "function")
+            renderHeroSelectionCards();
+          if (typeof updateSelectionPreview === "function")
+            updateSelectionPreview();
+        } else if (
+          typeof playerHero !== "undefined" &&
+          playerHero &&
+          playerHero.heroCfg &&
+          typeof applyHeroToHUD === "function"
+        ) {
+          const radCfg = playerHero.heroCfg;
+          const direLabel =
+            document.getElementById("top-dire-name")?.textContent || "Dire";
+          applyHeroToHUD(radCfg, direLabel);
+        }
 
         const prevWasUltraMax = userSettings._lastWasUltraMax;
         userSettings._lastWasUltraMax = isUltraMax;
@@ -49185,8 +49599,16 @@ diffuseColor.rgb *= mix(0.58, 1.04, groundAO) * canopyShade;`,
             riverShaderUniforms.uUltraMax.value = detailLvl;
           }
         }
-        if (terrainShaderUniforms && terrainShaderUniforms.uUltraMax) {
-          terrainShaderUniforms.uUltraMax.value = detailLvl;
+        if (terrainShaderUniforms) {
+          if (terrainShaderUniforms.uUltraMax)
+            terrainShaderUniforms.uUltraMax.value = detailLvl;
+          if (terrainShaderUniforms.uUltraLight)
+            terrainShaderUniforms.uUltraLight.value =
+              preset === "ultralight" ? 1.0 : 0.0;
+        }
+        if (skyDomeUniforms && skyDomeUniforms.uUltraLight) {
+          skyDomeUniforms.uUltraLight.value =
+            preset === "ultralight" ? 1.0 : 0.0;
         }
         for (let i = 0; i < groundClutterMeshes.length; i++) {
           groundClutterMeshes[i].visible = userSettings.clutterEnabled;
@@ -49357,6 +49779,11 @@ diffuseColor.rgb *= mix(0.58, 1.04, groundAO) * canopyShade;`,
 
       function ensureArenaParticlesReady() {
         if (_arenaParticlesReady) return;
+        if (
+          userSettings.qualityPreset === "ultralight" &&
+          !userSettings.particlesEnabled
+        )
+          return;
         _arenaParticlesReady = true;
         initWeatherParticles();
         initAmbientMotes();
@@ -49617,6 +50044,13 @@ diffuseColor.rgb *= mix(0.58, 1.04, groundAO) * canopyShade;`,
         updatePrimedState();
 
         portraitStudio.resetState();
+        if (
+          portraitStudio.isStaticPortraitMode &&
+          portraitStudio.isStaticPortraitMode() &&
+          portraitStudio.disposeResources
+        ) {
+          portraitStudio.disposeResources();
+        }
         initMatchEntities();
         spawnRiverRunes();
         refreshInventoryGrid();
@@ -49662,11 +50096,15 @@ diffuseColor.rgb *= mix(0.58, 1.04, groundAO) * canopyShade;`,
         if (inTitleScreen) {
           previewIdleClock += dt;
           if (riverShaderUniforms) riverShaderUniforms.uTime.value += dt * 0.25;
-          const orbitAng = previewIdleClock * 0.14 + 0.65;
+          const sweepT =
+            userSettings.qualityPreset === "ultralight"
+              ? Math.max(0, previewIdleClock - 0.45)
+              : previewIdleClock;
+          const orbitAng = sweepT * 0.14 + 0.65;
           const orbitRad = 96;
           camera.position.set(
             Math.cos(orbitAng) * orbitRad,
-            58 + Math.sin(previewIdleClock * 0.35) * 6,
+            58 + Math.sin(sweepT * 0.35) * 6,
             Math.sin(orbitAng) * orbitRad,
           );
           camera.lookAt(0, 4, 0);
@@ -49837,15 +50275,32 @@ diffuseColor.rgb *= mix(0.58, 1.04, groundAO) * canopyShade;`,
           }
         }
       });
+      let _introShadowBaked = false;
+      let _firstFrameWarmed = false;
       function mainLoop(now) {
         requestAnimationFrame(mainLoop);
         if (document.hidden) {
           prevTime = now;
           return;
         }
-        const elapsedMs = now - prevTime;
-        if (userSettings.qualityPreset === "ultralight" && elapsedMs < 31.5)
+        const settingsModalEl = document.getElementById("settings-modal");
+        const mpModalEl = document.getElementById("multiplayer-modal");
+        if (
+          (settingsModalEl && !settingsModalEl.classList.contains("hidden")) ||
+          (mpModalEl && !mpModalEl.classList.contains("hidden"))
+        ) {
+          prevTime = now;
           return;
+        }
+        const elapsedMs = now - prevTime;
+        if (
+          inTitleScreen &&
+          userSettings.qualityPreset === "ultralight" &&
+          _firstFrameWarmed &&
+          elapsedMs < 31.0
+        ) {
+          return;
+        }
         const dt = Math.min(0.05, elapsedMs / 1000);
         prevTime = now;
 
@@ -49913,21 +50368,29 @@ diffuseColor.rgb *= mix(0.58, 1.04, groundAO) * canopyShade;`,
         updateCameraRig(dt);
         syncHUDAndMinimap(dt);
 
-        const shadowSkip =
-          userSettings.qualityPreset === "ultramax"
-            ? 1
-            : userSettings.qualityPreset === "ultra"
-              ? 2
-              : userSettings.qualityPreset === "high"
-                ? 4
-                : userSettings.qualityPreset === "balanced"
-                  ? 8
-                  : 16;
-        if (
-          userSettings.shadowsEnabled &&
-          ++_shadowFrameCounter % shadowSkip === 0
-        ) {
-          renderer.shadowMap.needsUpdate = true;
+        if (inTitleScreen) {
+          if (userSettings.shadowsEnabled && !_introShadowBaked) {
+            renderer.shadowMap.needsUpdate = true;
+            _introShadowBaked = true;
+          }
+        } else {
+          _introShadowBaked = false;
+          const shadowSkip =
+            userSettings.qualityPreset === "ultramax"
+              ? 1
+              : userSettings.qualityPreset === "ultra"
+                ? 2
+                : userSettings.qualityPreset === "high"
+                  ? 4
+                  : userSettings.qualityPreset === "balanced"
+                    ? 8
+                    : 16;
+          if (
+            userSettings.shadowsEnabled &&
+            ++_shadowFrameCounter % shadowSkip === 0
+          ) {
+            renderer.shadowMap.needsUpdate = true;
+          }
         }
         nxgTick(dt);
         if (
@@ -49938,6 +50401,10 @@ diffuseColor.rgb *= mix(0.58, 1.04, groundAO) * canopyShade;`,
         )
           composer.render();
         else renderer.render(scene, camera);
+        if (!_firstFrameWarmed) {
+          _firstFrameWarmed = true;
+          prevTime = performance.now();
+        }
       }
 
       let gameBooted = false;
@@ -49985,16 +50452,20 @@ diffuseColor.rgb *= mix(0.58, 1.04, groundAO) * canopyShade;`,
           `[DotA 3D Boot] Sky: ${(tSky - tBoot0).toFixed(1)}ms | Arena: ${(tArena - tSky).toFixed(1)}ms | Shaders: ${(tCompile - tArena).toFixed(1)}ms | Total: ${(tCompile - tBoot0).toFixed(1)}ms`,
         );
 
-        // Stage 3: Pre-warm secondary systems during browser idle time after Title Screen paints
-        const scheduleIdleWarmup = (fn, delayMs) => {
-          if (typeof window.requestIdleCallback === "function") {
-            window.requestIdleCallback(() => fn(), { timeout: delayMs });
-          } else {
-            setTimeout(fn, delayMs);
-          }
-        };
-        scheduleIdleWarmup(() => ensureArenaParticlesReady(), 650);
-        scheduleIdleWarmup(() => ensureShopUiReady(), 1100);
+        // Stage 3: Only pre-warm secondary systems on higher-tier hardware when not in Ultra Light mode
+        if (
+          userSettings.qualityPreset !== "ultralight" &&
+          !_isLowEndMobileBoot
+        ) {
+          const scheduleIdleWarmup = (fn, delayMs) => {
+            if (typeof window.requestIdleCallback === "function") {
+              window.requestIdleCallback(() => fn(), { timeout: delayMs });
+            } else {
+              setTimeout(fn, delayMs);
+            }
+          };
+          scheduleIdleWarmup(() => ensureArenaParticlesReady(), 1800);
+        }
 
         try {
           const params = new URLSearchParams(window.location.search);
