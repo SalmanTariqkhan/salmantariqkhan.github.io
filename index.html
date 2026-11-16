@@ -664,6 +664,16 @@
           z-index: 25;
           pointer-events: none;
         }
+        #unit-inspector-panel {
+          position: absolute !important;
+          bottom: calc(100% + 10px) !important;
+          left: 50% !important;
+          transform: translateX(-50%) !important;
+          width: 440px !important;
+          max-width: calc(100vw - 32px) !important;
+          pointer-events: auto !important;
+          z-index: 28 !important;
+        }
       }
       #mobile-joystick-base {
         background: radial-gradient(
@@ -2950,23 +2960,25 @@
               </div>
             </div>
             <div
-              class="flex items-center justify-between text-[10px] font-mono text-slate-300 mt-1"
+              class="flex items-center justify-between text-[10px] font-mono text-slate-300 mt-1 gap-2"
             >
-              <span
-                ><i class="fa-solid fa-khanda text-amber-400"></i> ATK:
-                <strong id="insp-atk" class="text-white">165</strong></span
-              >
-              <span
-                ><i class="fa-solid fa-shield text-sky-400"></i> ARM:
-                <strong id="insp-arm" class="text-white">14</strong></span
-              >
-              <span
-                ><i class="fa-solid fa-bolt text-emerald-400"></i> SPD:
-                <strong id="insp-spd" class="text-white">0</strong></span
-              >
+              <div class="flex items-center gap-2 sm:gap-2.5 shrink-0">
+                <span
+                  ><i class="fa-solid fa-khanda text-amber-400"></i> ATK:
+                  <strong id="insp-atk" class="text-white">165</strong></span
+                >
+                <span
+                  ><i class="fa-solid fa-shield text-sky-400"></i> ARM:
+                  <strong id="insp-arm" class="text-white">14</strong></span
+                >
+                <span
+                  ><i class="fa-solid fa-bolt text-emerald-400"></i> SPD:
+                  <strong id="insp-spd" class="text-white">0</strong></span
+                >
+              </div>
               <span
                 id="insp-extra"
-                class="text-amber-300 font-sans font-semibold truncate"
+                class="text-amber-300 font-sans font-semibold truncate max-w-[130px] min-w-0 text-right"
                 >Fortified</span
               >
             </div>
@@ -3757,9 +3769,11 @@
     <!-- DOTA 2 HERO TALENT TREE MODAL (HOTKEY: T) -->
     <div
       id="talent-modal"
+      onclick="if (event.target === this) this.classList.add('hidden')"
       class="hidden fixed inset-0 z-40 flex items-center justify-center bg-black/75 backdrop-blur-xs p-3"
     >
       <div
+        id="talent-dialog-card"
         class="interactive-ui dota-stone-panel dota-gold-trim rounded-2xl w-full max-w-xl overflow-hidden border-2"
       >
         <div
@@ -15082,11 +15096,7 @@
                 osc.start(t + i * 0.05);
                 osc.stop(t + i * 0.05 + 0.44);
               });
-            } else if (
-              kind === "roshan_roar" ||
-              kind === "aegis_reborn" ||
-              kind === "dragon_roar"
-            ) {
+            } else if (kind === "roshan_roar" || kind === "aegis_reborn") {
               this.playNoiseBurst(0.95, "lowpass", 950, 60, 0.34, 0.8);
               [82.4, 123.5, 164.8, 246.9].forEach((f, idx) => {
                 const osc = this.ctx.createOscillator();
@@ -15100,6 +15110,123 @@
                 this.connectWithReverb(g, 0.75);
                 osc.start(t + idx * 0.06);
                 osc.stop(t + 0.86);
+              });
+            } else if (kind === "dragon_roar") {
+              // 1. Massive Atmospheric Wing-Gust & Dragonfire Descent Noise Bursts
+              this.playNoiseBurst(1.85, "lowpass", 650, 75, 0.52, 0.85);
+              this.playNoiseBurst(1.4, "bandpass", 2400, 680, 0.32, 0.75);
+              setTimeout(() => {
+                if (this.ctx && this.sfxEnabled) {
+                  this.playNoiseBurst(1.1, "highpass", 3200, 1400, 0.18, 0.65);
+                }
+              }, 220);
+
+              // 2. Colossal Sub-Bass Earthquake Descent Thud
+              const subOsc = this.ctx.createOscillator();
+              const subGain = this.ctx.createGain();
+              subOsc.type = "sine";
+              subOsc.frequency.setValueAtTime(110, t);
+              subOsc.frequency.exponentialRampToValueAtTime(26, t + 1.8);
+              subGain.gain.setValueAtTime(0.44, t);
+              subGain.gain.exponentialRampToValueAtTime(0.001, t + 1.85);
+              subOsc.connect(subGain);
+              this.connectWithReverb(subGain, 0.85);
+              subOsc.start(t);
+              subOsc.stop(t + 1.88);
+
+              // 3. Deep Guttural Throat Flutter Roar (FM Modulation)
+              const throatOsc = this.ctx.createOscillator();
+              const throatFilter = this.ctx.createBiquadFilter();
+              const throatGain = this.ctx.createGain();
+              throatOsc.type = "sawtooth";
+              throatOsc.frequency.setValueAtTime(68, t);
+              throatOsc.frequency.exponentialRampToValueAtTime(145, t + 0.45);
+              throatOsc.frequency.exponentialRampToValueAtTime(48, t + 2.1);
+
+              // Throat flutter LFO
+              const lfoOsc = this.ctx.createOscillator();
+              const lfoGain = this.ctx.createGain();
+              lfoOsc.type = "sine";
+              lfoOsc.frequency.setValueAtTime(32, t);
+              lfoOsc.frequency.linearRampToValueAtTime(22, t + 2.1);
+              lfoGain.gain.setValueAtTime(55, t);
+              lfoGain.gain.exponentialRampToValueAtTime(8, t + 2.1);
+              lfoOsc.connect(lfoGain);
+              lfoGain.connect(throatOsc.frequency);
+
+              throatFilter.type = "lowpass";
+              throatFilter.Q.value = 3.5;
+              throatFilter.frequency.setValueAtTime(340, t);
+              throatFilter.frequency.exponentialRampToValueAtTime(1650, t + 0.45);
+              throatFilter.frequency.exponentialRampToValueAtTime(180, t + 2.1);
+
+              throatGain.gain.setValueAtTime(0.001, t);
+              throatGain.gain.linearRampToValueAtTime(0.38, t + 0.12);
+              throatGain.gain.exponentialRampToValueAtTime(0.001, t + 2.15);
+
+              throatOsc.connect(throatFilter);
+              throatFilter.connect(throatGain);
+              this.connectWithReverb(throatGain, 0.78);
+
+              lfoOsc.start(t);
+              lfoOsc.stop(t + 2.2);
+              throatOsc.start(t);
+              throatOsc.stop(t + 2.2);
+
+              // 4. Piercing Celestial Wyrm Horn / Screech Harmonics (Chord)
+              [146.83, 220.0, 293.66, 440.0].forEach((freq, idx) => {
+                const hornOsc = this.ctx.createOscillator();
+                const hornFilt = this.ctx.createBiquadFilter();
+                const hornGain = this.ctx.createGain();
+                hornOsc.type = idx % 2 === 0 ? "sawtooth" : "triangle";
+                hornOsc.frequency.setValueAtTime(freq, t + idx * 0.04);
+                hornOsc.frequency.exponentialRampToValueAtTime(
+                  freq * 1.55,
+                  t + 0.45 + idx * 0.04,
+                );
+                hornOsc.frequency.exponentialRampToValueAtTime(
+                  freq * 0.85,
+                  t + 1.95,
+                );
+
+                hornFilt.type = "bandpass";
+                hornFilt.Q.value = 2.0;
+                hornFilt.frequency.setValueAtTime(freq * 2.2, t + idx * 0.04);
+                hornFilt.frequency.exponentialRampToValueAtTime(
+                  freq * 4.2,
+                  t + 0.45,
+                );
+                hornFilt.frequency.exponentialRampToValueAtTime(
+                  freq * 1.2,
+                  t + 1.95,
+                );
+
+                hornGain.gain.setValueAtTime(0.001, t + idx * 0.04);
+                hornGain.gain.linearRampToValueAtTime(
+                  0.12,
+                  t + idx * 0.04 + 0.15,
+                );
+                hornGain.gain.exponentialRampToValueAtTime(0.001, t + 1.98);
+
+                hornOsc.connect(hornFilt);
+                hornFilt.connect(hornGain);
+                this.connectWithReverb(hornGain, 0.82);
+                hornOsc.start(t + idx * 0.04);
+                hornOsc.stop(t + 2.0);
+              });
+
+              // 5. Astral Shimmer / Celestial Overtone Ring
+              [880.0, 1318.5, 1760.0].forEach((chimeF, cIdx) => {
+                const chimeOsc = this.ctx.createOscillator();
+                const chimeGain = this.ctx.createGain();
+                chimeOsc.type = "sine";
+                chimeOsc.frequency.setValueAtTime(chimeF, t + 0.1 + cIdx * 0.06);
+                chimeGain.gain.setValueAtTime(0.035, t + 0.1 + cIdx * 0.06);
+                chimeGain.gain.exponentialRampToValueAtTime(0.001, t + 2.4);
+                chimeOsc.connect(chimeGain);
+                this.connectWithReverb(chimeGain, 0.9);
+                chimeOsc.start(t + 0.1 + cIdx * 0.06);
+                chimeOsc.stop(t + 2.45);
               });
             } else if (kind === "spell_fire_wave") {
               this.playNoiseBurst(0.45, "bandpass", 1400, 260, 0.22, 0.55);
@@ -17945,6 +18072,7 @@
         );
         orbitRing.position.y = 6.9;
         orbitRing.rotation.x = Math.PI / 3;
+        orbitRing.raycast = () => {};
         group.add(orbitRing);
         unit.parts.orbitRing = orbitRing;
         const orbitRing2 = new THREE.Mesh(
@@ -17953,6 +18081,7 @@
         );
         orbitRing2.position.y = 6.9;
         orbitRing2.rotation.y = Math.PI / 3;
+        orbitRing2.raycast = () => {};
         group.add(orbitRing2);
         unit.parts.orbitRing2 = orbitRing2;
 
@@ -23723,8 +23852,9 @@ diffuseColor.rgb *= mix(0.58, 1.04, groundAO) * canopyShade;`,
       let runes = [];
       let roshanBoss = null;
       let roshanRespawnTimer = 0;
+      const ELDER_DRAGON_INTERVAL = 300.0; // 5 minutes (300 seconds)
       let elderDragonBoss = null;
-      let elderDragonSpawnTimer = 50.0;
+      let elderDragonSpawnTimer = ELDER_DRAGON_INTERVAL;
       let ppLabuGuardians = { radiant: null, dire: null };
       let ppLabuSpawned = { radiant: false, dire: false };
       let redManGuardians = { radiant: null, dire: null };
@@ -34995,8 +35125,11 @@ diffuseColor.rgb *= mix(0.58, 1.04, groundAO) * canopyShade;`,
           this.dead = false;
           this.deathAnimTimer = 0;
           this.respawnTimer = 0;
-          this.stunTimer = 0;
-          this.slowTimer = 0;
+          this._stunTimer = 0;
+          this._slowTimer = 0;
+          this.ancientImmunityTimer = 0;
+          this.golemImmunityCd = 0;
+          this.labuJumpCd = 0;
           this.slowFactor = 1.0;
           this.blinkBuffTimer = 0;
           this.animPhase = Math.random() * 6.28;
@@ -35299,13 +35432,76 @@ diffuseColor.rgb *= mix(0.58, 1.04, groundAO) * canopyShade;`,
           }
         }
 
+        isRageResistingDebuff(type = "DEBUFF") {
+          const isGuardian =
+            this.type === "kong" ||
+            this.type === "redman" ||
+            this.type === "sneakygolem";
+          if (!isGuardian) return false;
+          const isRage =
+            this.ancientFuryTimer > 0 ||
+            units.some(
+              (u) =>
+                !u.dead &&
+                u.type === "ancient" &&
+                u.team === this.team &&
+                (u.ancientUnderAttackTimer > 0 || (u.ancientFuryTimer || 0) > 0),
+            );
+          if (!isRage) return false;
+          // 50% chance to resist any negative effect
+          if (Math.random() < 0.5) {
+            if (this.mesh && this.mesh.position) {
+              spawnFloatText(
+                this.mesh.position,
+                `RESISTED ${type}! (50%)`,
+                "#38bdf8",
+                15,
+              );
+              spawnShockwaveRing(
+                this.mesh.position.x,
+                this.mesh.position.z,
+                2.8,
+                0x38bdf8,
+                0.35,
+              );
+              sfx.play("spell_shield");
+            }
+            return true;
+          }
+          return false;
+        }
+
+        get stunTimer() {
+          return this._stunTimer || 0;
+        }
+
+        set stunTimer(val) {
+          const num = typeof val === "number" ? val : 0;
+          if (num > (this._stunTimer || 0)) {
+            if (this.isRageResistingDebuff("STUN")) return;
+          }
+          this._stunTimer = Math.max(0, num);
+        }
+
+        get slowTimer() {
+          return this._slowTimer || 0;
+        }
+
+        set slowTimer(val) {
+          const num = typeof val === "number" ? val : 0;
+          if (num > (this._slowTimer || 0)) {
+            if (this.isRageResistingDebuff("SLOW")) return;
+          }
+          this._slowTimer = Math.max(0, num);
+        }
+
         getEffectiveAtkCd() {
           const furyAtkBonus =
             this.ancientFuryTimer > 0 &&
             (this.type === "kong" ||
               this.type === "redman" ||
               this.type === "sneakygolem")
-              ? 0.65
+              ? (this.type === "redman" ? 1.15 : 0.65)
               : 0;
           const fieryBonus =
             this.fierySoulTimer > 0 && this.fierySoulStacks
@@ -35331,7 +35527,7 @@ diffuseColor.rgb *= mix(0.58, 1.04, groundAO) * canopyShade;`,
             (this.type === "kong" ||
               this.type === "redman" ||
               this.type === "sneakygolem")
-              ? 1.42
+              ? (this.type === "redman" ? 1.95 : 1.42)
               : 1.0;
           return this.moveSpeed * slow * buff * wolfBuff * furySpd;
         }
@@ -35478,14 +35674,20 @@ diffuseColor.rgb *= mix(0.58, 1.04, groundAO) * canopyShade;`,
 
           const lockReason = getStructureTierLockReason(this);
           if (lockReason) {
-            if (attacker && attacker.isPlayer) {
-              const nowWarn = performance.now();
-              if (
-                !this._lastInvulnWarnTs ||
-                nowWarn - this._lastInvulnWarnTs > 1350
-              ) {
-                this._lastInvulnWarnTs = nowWarn;
-                spawnFloatText(this.mesh.position, lockReason, "#facc15", 14);
+            if (attacker) {
+              if (attacker.isPlayer) {
+                const nowWarn = performance.now();
+                if (
+                  !this._lastInvulnWarnTs ||
+                  nowWarn - this._lastInvulnWarnTs > 1350
+                ) {
+                  this._lastInvulnWarnTs = nowWarn;
+                  spawnFloatText(this.mesh.position, lockReason, "#facc15", 14);
+                }
+              }
+              if (attacker.targetUnit === this) {
+                attacker.targetUnit = null;
+                attacker._inAttackRange = false;
               }
             }
             return;
@@ -35499,6 +35701,17 @@ diffuseColor.rgb *= mix(0.58, 1.04, groundAO) * canopyShade;`,
             rawDmg *= this.type === "ancient" ? 0.65 : 0.72;
           }
           if (this.type === "ancient") {
+            if (this.ancientImmunityTimer > 0) {
+              if (attacker && attacker.isPlayer) {
+                spawnFloatText(
+                  this.mesh.position,
+                  `ANCIENT IMMUNE (${this.ancientImmunityTimer.toFixed(1)}s)!`,
+                  "#f472b6",
+                  15,
+                );
+              }
+              return;
+            }
             const sneakyGolemUnit = units.find(
               (u) =>
                 !u.dead && u.team === this.team && u.type === "sneakygolem",
@@ -35512,6 +35725,50 @@ diffuseColor.rgb *= mix(0.58, 1.04, groundAO) * canopyShade;`,
                   14,
                 );
               }
+              return;
+            }
+            // Sneaky Golem Rage Mode Ancient Immunity (4s immune, 10s cooldown)
+            if (
+              sneakyGolemUnit &&
+              !sneakyGolemUnit.dead &&
+              (sneakyGolemUnit.golemImmunityCd || 0) <= 0 &&
+              this.ancientImmunityTimer <= 0
+            ) {
+              sneakyGolemUnit.golemImmunityCd = 10.0;
+              this.ancientImmunityTimer = 4.0;
+              spawnShockwaveRing(
+                this.mesh.position.x,
+                this.mesh.position.z,
+                14.0,
+                0xf472b6,
+                0.9,
+              );
+              spawnOrbitalSkyBeam(
+                this.mesh.position.x,
+                this.mesh.position.z,
+                8.0,
+                0xf472b6,
+                1.8,
+              );
+              spawnFloatText(
+                this.mesh.position,
+                "ANCIENT IMMUNE (4s)! SNEAKY GOLEM WARD!",
+                "#f472b6",
+                18,
+              );
+              spawnFloatText(
+                sneakyGolemUnit.mesh.position,
+                "ANCIENT WARD CAST!",
+                "#f472b6",
+                16,
+              );
+              sfx.play("spell_shield");
+              triggerCameraShake(1.1);
+              showBanner(
+                "ANCIENT IMMUNITY ACTIVATED!",
+                "Sneaky Golem grants Ancient total damage immunity for 4 seconds!",
+                "text-pink-400",
+              );
               return;
             }
             const kongUnit = units.find(
@@ -36161,7 +36418,7 @@ diffuseColor.rgb *= mix(0.58, 1.04, groundAO) * canopyShade;`,
             this.mesh.visible = false;
             this.bar.el.remove();
             elderDragonBoss = null;
-            elderDragonSpawnTimer = 110.0;
+            elderDragonSpawnTimer = ELDER_DRAGON_INTERVAL;
             document.getElementById("dragon-hud-badge").classList.add("hidden");
             triggerCameraShake(1.25);
             sfx.announceSpree(
@@ -38766,6 +39023,8 @@ diffuseColor.rgb *= mix(0.58, 1.04, groundAO) * canopyShade;`,
 
       window.openTalentModal = function () {
         if (!playerHero || !playerHero.heroCfg) return;
+        playerHero.chosenTalents = playerHero.chosenTalents || {};
+        window._talentOpenedAtTs = performance.now();
         document.getElementById("talent-modal-title").textContent =
           `${playerHero.name.toUpperCase()} — TALENT TREE (${playerHero.skillPoints || 0} SP)`;
         const container = document.getElementById("talent-tiers-container");
@@ -38774,7 +39033,10 @@ diffuseColor.rgb *= mix(0.58, 1.04, groundAO) * canopyShade;`,
         const nextCtrlTier = getNextAvailableTalentTier(playerHero);
 
         [25, 20, 15, 10].forEach((tierLvl) => {
-          const pair = playerHero.heroCfg.talents[tierLvl];
+          const pair = playerHero.heroCfg.talents
+            ? playerHero.heroCfg.talents[tierLvl]
+            : null;
+          if (!pair) return;
           const unlocked = playerHero.level >= tierLvl;
           const chosenId = playerHero.chosenTalents[tierLvl];
           const canSpendTier = unlocked && !chosenId && sp > 0;
@@ -38797,7 +39059,7 @@ diffuseColor.rgb *= mix(0.58, 1.04, groundAO) * canopyShade;`,
             const keyBadge = isNextTier
               ? `<span class="ml-1.5 px-1.5 py-0.5 rounded bg-amber-300 text-slate-950 font-mono font-black text-[9px] shrink-0">CTRL+${idx + 1}</span>`
               : "";
-            return `<button ${canPick ? `onclick="window.pickTalent(${tierLvl}, '${opt.id}')"` : "disabled"}
+            return `<button type="button" ${canPick ? `onclick="window.pickTalent(${tierLvl}, '${opt.id}')"` : "disabled"}
                         class="p-2.5 rounded-lg text-xs font-bold text-center border transition flex items-center justify-center gap-1 ${isPicked ? "bg-amber-500/25 border-amber-400 text-amber-200 shadow-[0_0_12px_rgba(250,204,21,0.3)]" : canPick ? "bg-slate-800 hover:bg-amber-950/60 border-amber-500/65 text-white cursor-pointer" : "bg-slate-950 border-slate-800 text-slate-500"}">
                         <span>${opt.label}</span>
                         ${isPicked ? '<i class="fa-solid fa-check text-amber-300 ml-1"></i>' : keyBadge}
@@ -38818,8 +39080,9 @@ diffuseColor.rgb *= mix(0.58, 1.04, groundAO) * canopyShade;`,
       };
 
       window.pickTalent = function (tierLvl, talentId) {
+        if (!playerHero) return false;
+        playerHero.chosenTalents = playerHero.chosenTalents || {};
         if (
-          !playerHero ||
           playerHero.level < tierLvl ||
           playerHero.chosenTalents[tierLvl]
         )
@@ -38836,11 +39099,12 @@ diffuseColor.rgb *= mix(0.58, 1.04, groundAO) * canopyShade;`,
         if (mpState.active && mpState.role === "guest") {
           sfx.play("levelup");
           mpSendToHost({ type: "CMD", cmd: "PICK_TALENT", tierLvl, talentId });
-          document.getElementById("talent-modal").classList.add("hidden");
+          const modal = document.getElementById("talent-modal");
+          if (modal) modal.classList.add("hidden");
           return true;
         }
-        const pair = playerHero.heroCfg.talents[tierLvl];
-        const opt = pair.find((o) => o.id === talentId);
+        const pair = playerHero.heroCfg?.talents?.[tierLvl];
+        const opt = pair?.find((o) => o.id === talentId);
         if (!opt) return false;
 
         playerHero.skillPoints--;
@@ -38862,8 +39126,13 @@ diffuseColor.rgb *= mix(0.58, 1.04, groundAO) * canopyShade;`,
         );
         updateAbilityUpgradeButtons();
         const modal = document.getElementById("talent-modal");
+        const nextAvailTier = getNextAvailableTalentTier(playerHero);
         if (modal && !modal.classList.contains("hidden")) {
-          window.openTalentModal();
+          if (nextAvailTier !== null && (playerHero.skillPoints || 0) > 0) {
+            window.openTalentModal();
+          } else {
+            modal.classList.add("hidden");
+          }
         }
         return true;
       };
@@ -38965,19 +39234,19 @@ diffuseColor.rgb *= mix(0.58, 1.04, groundAO) * canopyShade;`,
           }
         });
 
-        let hasAvailableTalent = false;
+        playerHero.chosenTalents = playerHero.chosenTalents || {};
         const tPips = document.getElementById("talent-pips");
-        tPips.innerHTML = "";
-        [10, 15, 20, 25].forEach((tl) => {
-          const picked = !!playerHero.chosenTalents[tl];
-          if (playerHero.level >= tl && !picked) hasAvailableTalent = true;
-          const dot = document.createElement("span");
-          dot.className = `w-2 h-1 rounded-xs ${picked ? "bg-amber-400" : playerHero.level >= tl ? "bg-emerald-400 animate-ping" : "bg-slate-700"}`;
-          tPips.appendChild(dot);
-        });
-        document
-          .getElementById("talent-notif-dot")
-          .classList.toggle("hidden", !hasAvailableTalent);
+        if (tPips) {
+          tPips.innerHTML = "";
+          [10, 15, 20, 25].forEach((tl) => {
+            const picked = Boolean(playerHero.chosenTalents[tl]);
+            const canPickThis = playerHero.level >= tl && !picked && sp > 0;
+            const dot = document.createElement("span");
+            dot.className = `w-2 h-1 rounded-xs ${picked ? "bg-amber-400" : canPickThis ? "bg-emerald-400 animate-ping" : playerHero.level >= tl ? "bg-amber-500/40" : "bg-slate-700"}`;
+            tPips.appendChild(dot);
+          });
+        }
+        if (talDot) talDot.classList.toggle("hidden", !canTalent);
       }
 
       /***********************************************************************
@@ -39066,13 +39335,15 @@ diffuseColor.rgb *= mix(0.58, 1.04, groundAO) * canopyShade;`,
         units.push(elderDragonBoss);
         document.getElementById("dragon-hud-badge").classList.remove("hidden");
         sfx.play("dragon_roar");
-        sfx.announceSpree(
-          `An Elder Sky Dragon has descended upon the ${spot.region}!`,
-          4,
-        );
+        setTimeout(() => {
+          sfx.announceSpree(
+            `An Elder Sky Dragon has descended upon the ${spot.region}!`,
+            4,
+          );
+        }, 450);
         spawnOrbitalSkyBeam(spot.x, spot.z, 8.5, 0x38bdf8, 1.5);
         spawnShockwaveRing(spot.x, spot.z, 13.0, 0xfacc15, 0.9);
-        triggerCameraShake(1.1);
+        triggerCameraShake(1.35);
         showBanner(
           "ELDER SKY-DRAGON APPEARS!",
           `Apex World Boss landed in the ${spot.region} (${spot.x}, ${spot.z}) • Slay it for Elder Dragon Soul & +${dragonBonusGold.toLocaleString()}g!`,
@@ -41006,6 +41277,39 @@ diffuseColor.rgb *= mix(0.58, 1.04, groundAO) * canopyShade;`,
               prioHero.mesh.position.z - p.z,
             );
           }
+          if (isFury && mob.targetUnit && !mob.targetUnit.dead && !mob.activeDash) {
+            const dTarget = mob.mesh.position.distanceTo(mob.targetUnit.mesh.position);
+            if (dTarget > 5.5 && dTarget <= 32.0) {
+              const start = mob.mesh.position;
+              const dir = new THREE.Vector3()
+                .subVectors(mob.targetUnit.mesh.position, start)
+                .setY(0)
+                .normalize();
+              const jumpDist = Math.min(dTarget - 1.5, 26.0);
+              const endX = THREE.MathUtils.clamp(
+                start.x + dir.x * jumpDist,
+                -MAP_HALF + 4,
+                MAP_HALF - 4,
+              );
+              const endZ = THREE.MathUtils.clamp(
+                start.z + dir.z * jumpDist,
+                -MAP_HALF + 4,
+                MAP_HALF - 4,
+              );
+              mob.activeDash = {
+                startX: start.x,
+                startZ: start.z,
+                endX: endX,
+                endZ: endZ,
+                t: 0,
+                dur: 0.45,
+                arcHeight: 5.5,
+                colHex: 0xfacc15,
+              };
+              spawnFloatText(start, "PP LABU ENRAGED LEAP!", "#facc15", 17);
+              sfx.play("spell_blink");
+            }
+          }
           mob.mobSkillCd = isFury ? 2.8 : 4.8;
           mob.castAnim = 0.65;
           sfx.play("spell_orbital_meteor");
@@ -41378,7 +41682,7 @@ diffuseColor.rgb *= mix(0.58, 1.04, groundAO) * canopyShade;`,
         roshanBoss = null;
         roshanRespawnTimer = 0;
         elderDragonBoss = null;
-        elderDragonSpawnTimer = 50.0;
+        elderDragonSpawnTimer = ELDER_DRAGON_INTERVAL;
         lastDragonSpot = null;
         ppLabuGuardians = { radiant: null, dire: null };
         ppLabuSpawned = { radiant: false, dire: false };
@@ -41957,6 +42261,7 @@ diffuseColor.rgb *= mix(0.58, 1.04, groundAO) * canopyShade;`,
                 [0, 0],
                 [36, -36],
                 [78, -78],
+                [114, -114],
                 [134, -134],
               ]
             : [
@@ -41965,6 +42270,7 @@ diffuseColor.rgb *= mix(0.58, 1.04, groundAO) * canopyShade;`,
                 [0, 0],
                 [-36, 36],
                 [-78, 78],
+                [-114, 114],
                 [-134, 134],
               ];
           cache[sideOff] = nodes.map(([px, pz], idx) =>
@@ -42319,6 +42625,107 @@ diffuseColor.rgb *= mix(0.58, 1.04, groundAO) * canopyShade;`,
         }
       }
 
+      function hasAnyAliveTower(team) {
+        const list =
+          staticStructures && staticStructures.length > 0
+            ? staticStructures
+            : units;
+        for (let i = 0; i < list.length; i++) {
+          const u = list[i];
+          if (!u.dead && u.team === team && u.type === "tower") return true;
+        }
+        return false;
+      }
+
+      function getNextVulnerableStructure(enemyTeam, fromPos = null) {
+        const list =
+          staticStructures && staticStructures.length > 0
+            ? staticStructures
+            : units;
+        // 1. Tier 1 Tower
+        for (let i = 0; i < list.length; i++) {
+          const u = list[i];
+          if (
+            !u.dead &&
+            u.team === enemyTeam &&
+            u.type === "tower" &&
+            u.name &&
+            u.name.includes("Tier 1")
+          ) {
+            return u;
+          }
+        }
+        // 2. Tier 2 Tower
+        for (let i = 0; i < list.length; i++) {
+          const u = list[i];
+          if (
+            !u.dead &&
+            u.team === enemyTeam &&
+            u.type === "tower" &&
+            u.name &&
+            u.name.includes("Tier 2")
+          ) {
+            return u;
+          }
+        }
+        // 3. Citadel Tower Front
+        for (let i = 0; i < list.length; i++) {
+          const u = list[i];
+          if (
+            !u.dead &&
+            u.team === enemyTeam &&
+            u.type === "tower" &&
+            u.name &&
+            u.name.includes("Citadel Tower Front")
+          ) {
+            return u;
+          }
+        }
+        // 4. Citadel Side Towers (North/East or South/West)
+        let bestSide = null;
+        let bestSideDSq = Infinity;
+        for (let i = 0; i < list.length; i++) {
+          const u = list[i];
+          if (
+            !u.dead &&
+            u.team === enemyTeam &&
+            u.type === "tower" &&
+            u.name &&
+            u.name.includes("Citadel")
+          ) {
+            if (fromPos) {
+              const dSq =
+                (u.mesh.position.x - fromPos.x) ** 2 +
+                (u.mesh.position.z - fromPos.z) ** 2;
+              if (dSq < bestSideDSq) {
+                bestSideDSq = dSq;
+                bestSide = u;
+              }
+            } else {
+              return u;
+            }
+          }
+        }
+        if (bestSide) return bestSide;
+
+        // 5. Any other alive tower
+        for (let i = 0; i < list.length; i++) {
+          const u = list[i];
+          if (!u.dead && u.team === enemyTeam && u.type === "tower") {
+            return u;
+          }
+        }
+
+        // 6. Ancient (only when ALL towers are dead!)
+        for (let i = 0; i < list.length; i++) {
+          const u = list[i];
+          if (!u.dead && u.team === enemyTeam && u.type === "ancient") {
+            return u;
+          }
+        }
+        return null;
+      }
+
       function getStructureTierLockReason(unit) {
         if (!unit || unit.dead) return null;
         if (unit.type === "tower") {
@@ -42348,11 +42755,20 @@ diffuseColor.rgb *= mix(0.58, 1.04, groundAO) * canopyShade;`,
                 u.name.includes("Tier 2"),
             );
             if (t2Alive) return "INVULNERABLE! Destroy Tier 2 Tower First!";
+            if (!unit.name.includes("Front")) {
+              const frontAlive = units.some(
+                (u) =>
+                  !u.dead &&
+                  u.team === unit.team &&
+                  u.type === "tower" &&
+                  u.name.includes("Citadel Tower Front"),
+              );
+              if (frontAlive)
+                return "INVULNERABLE! Destroy Citadel Front Tower First!";
+            }
           }
         } else if (unit.type === "ancient") {
-          const anyTowerAlive = units.some(
-            (u) => !u.dead && u.team === unit.team && u.type === "tower",
-          );
+          const anyTowerAlive = hasAnyAliveTower(unit.team);
           if (anyTowerAlive) return "INVULNERABLE! Destroy All Towers First!";
         }
         return null;
@@ -44942,7 +45358,14 @@ diffuseColor.rgb *= mix(0.58, 1.04, groundAO) * canopyShade;`,
         isVisualReplay = false,
         forcedCrit = false,
       ) {
-        if (!isVisualReplay) attacker.atkTimer = attacker.getEffectiveAtkCd();
+        if (!isVisualReplay) {
+          if (target.type === "ancient" && hasAnyAliveTower(target.team)) {
+            attacker.targetUnit = null;
+            attacker._inAttackRange = false;
+            return;
+          }
+          attacker.atkTimer = attacker.getEffectiveAtkCd();
+        }
         attacker.swingAnim = 0.34;
         attacker.atkComboIndex = ((attacker.atkComboIndex || 0) + 1) % 3;
 
@@ -45746,6 +46169,7 @@ diffuseColor.rgb *= mix(0.58, 1.04, groundAO) * canopyShade;`,
                 )
                   continue;
                 if (other.team === "neutral" && !includeNeutrals) continue;
+                if (other.type === "ancient" && hasAnyAliveTower(other.team)) continue;
                 if (getStructureTierLockReason(other)) continue;
                 const dx = ux - other.mesh.position.x;
                 if (dx > range || dx < -range) continue;
@@ -45753,9 +46177,12 @@ diffuseColor.rgb *= mix(0.58, 1.04, groundAO) * canopyShade;`,
                 if (dz > range || dz < -range) continue;
                 const dSq = dx * dx + dz * dz;
                 if (dSq <= rangeSq) {
-                  const score = preferLowHp
+                  let score = preferLowHp
                     ? other.hp + Math.sqrt(dSq) * 7
                     : dSq;
+                  if (unit.type === "creep" && other.type === "tower") {
+                    score *= 0.45;
+                  }
                   if (score < bestScore) {
                     bestScore = score;
                     best = other;
@@ -45771,6 +46198,7 @@ diffuseColor.rgb *= mix(0.58, 1.04, groundAO) * canopyShade;`,
           if (other.dead || other.reincarnating || other.team === unit.team)
             continue;
           if (other.team === "neutral" && !includeNeutrals) continue;
+          if (other.type === "ancient" && hasAnyAliveTower(other.team)) continue;
           if (getStructureTierLockReason(other)) continue;
           const dx = ux - other.mesh.position.x;
           if (dx > range || dx < -range) continue;
@@ -45778,7 +46206,10 @@ diffuseColor.rgb *= mix(0.58, 1.04, groundAO) * canopyShade;`,
           if (dz > range || dz < -range) continue;
           const dSq = dx * dx + dz * dz;
           if (dSq <= rangeSq) {
-            const score = preferLowHp ? other.hp + Math.sqrt(dSq) * 7 : dSq;
+            let score = preferLowHp ? other.hp + Math.sqrt(dSq) * 7 : dSq;
+            if (unit.type === "creep" && other.type === "tower") {
+              score *= 0.45;
+            }
             if (score < bestScore) {
               bestScore = score;
               best = other;
@@ -46079,7 +46510,28 @@ diffuseColor.rgb *= mix(0.58, 1.04, groundAO) * canopyShade;`,
               );
             if (!hasCreepCover && !diveKillTarget) {
               bot.targetUnit = null;
-              bot.targetPos = retreatPt;
+              const hasAlliedCreepsNearby = units.some(
+                (u) =>
+                  !u.dead &&
+                  u.team === bot.team &&
+                  u.type === "creep" &&
+                  u.mesh.position.distanceToSquared(enemyTower.mesh.position) <=
+                    (enemyTower.atkRange + 14.0) ** 2,
+              );
+              if (hasAlliedCreepsNearby) {
+                if (!bot._aiTowerSafePos)
+                  bot._aiTowerSafePos = new THREE.Vector3();
+                _vScratch1
+                  .subVectors(pos, enemyTower.mesh.position)
+                  .setY(0)
+                  .normalize();
+                bot._aiTowerSafePos
+                  .copy(enemyTower.mesh.position)
+                  .addScaledVector(_vScratch1, enemyTower.atkRange + 3.8);
+                bot.targetPos = bot._aiTowerSafePos;
+              } else {
+                bot.targetPos = retreatPt;
+              }
               return;
             }
           }
@@ -46315,37 +46767,54 @@ diffuseColor.rgb *= mix(0.58, 1.04, groundAO) * canopyShade;`,
           }
 
           // 8. Active Tower, Sneaky Golem & Ancient Siege
-          const siegeStructure = units.find((u) => {
-            if (u.dead || u.team === bot.team) return false;
-            if (
-              u.type === "sneakygolem" &&
-              u.hp > 1 &&
-              u.mesh.position.distanceTo(pos) <= 32.0
-            )
-              return true;
-            if (u.type !== "tower" && u.type !== "ancient") return false;
-            if (getStructureTierLockReason(u)) return false;
-            if (
-              u.type === "ancient" &&
-              units.some(
-                (sg) =>
-                  !sg.dead &&
-                  sg.team === u.team &&
-                  sg.type === "sneakygolem" &&
-                  sg.hp > 1,
-              )
-            )
-              return false;
-            if (u.mesh.position.distanceTo(pos) > 28.0) return false;
-            if (u.type === "ancient") return true;
-            return units.some(
-              (c) =>
-                !c.dead &&
-                c.team === bot.team &&
-                c.type === "creep" &&
-                c.mesh.position.distanceTo(u.mesh.position) < u.atkRange,
+          const botEnemyTeam = isRad ? "dire" : "radiant";
+          const enemyHasTowers = hasAnyAliveTower(botEnemyTeam);
+          let siegeStructure = null;
+
+          if (enemyHasTowers) {
+            const nextTower = getNextVulnerableStructure(botEnemyTeam, pos);
+            if (nextTower && nextTower.type === "tower") {
+              const distToTower = pos.distanceTo(nextTower.mesh.position);
+              const hasCreepSupport = units.some(
+                (c) =>
+                  !c.dead &&
+                  c.team === bot.team &&
+                  c.type === "creep" &&
+                  c.mesh.position.distanceTo(nextTower.mesh.position) <=
+                    nextTower.atkRange + 5.5,
+              );
+              if (
+                distToTower <= 32.0 &&
+                (hasCreepSupport || nextTower.hp < 1500)
+              ) {
+                siegeStructure = nextTower;
+              }
+            }
+          } else {
+            // Only when ALL towers are destroyed: target Sneaky Golem (Infinity) or Ancient!
+            const sneakyGolem = units.find(
+              (u) =>
+                !u.dead &&
+                u.team === botEnemyTeam &&
+                u.type === "sneakygolem" &&
+                u.hp > 1 &&
+                u.mesh.position.distanceTo(pos) <= 32.0,
             );
-          });
+            if (sneakyGolem) {
+              siegeStructure = sneakyGolem;
+            } else {
+              const enemyAncient = units.find(
+                (u) =>
+                  !u.dead &&
+                  u.team === botEnemyTeam &&
+                  u.type === "ancient" &&
+                  u.mesh.position.distanceTo(pos) <= 34.0,
+              );
+              if (enemyAncient && !getStructureTierLockReason(enemyAncient)) {
+                siegeStructure = enemyAncient;
+              }
+            }
+          }
           if (siegeStructure) {
             bot.targetUnit = siegeStructure;
             bot.targetPos = null;
@@ -46447,9 +46916,29 @@ diffuseColor.rgb *= mix(0.58, 1.04, groundAO) * canopyShade;`,
             bot.targetPos = null;
           } else {
             bot.targetUnit = null;
-            const enemyBasePt = isRad ? _vBaseDire : _vBaseRad;
-            if (pos.distanceToSquared(enemyBasePt) > 100)
-              bot.targetPos = enemyBasePt;
+            const botEnemyTeam = isRad ? "dire" : "radiant";
+            const nextObj = getNextVulnerableStructure(botEnemyTeam, pos);
+            if (nextObj && nextObj.type === "tower") {
+              const distToTower = pos.distanceTo(nextObj.mesh.position);
+              if (distToTower > nextObj.atkRange + 2.5) {
+                if (!bot._aiTowerPushPos)
+                  bot._aiTowerPushPos = new THREE.Vector3();
+                _vScratch1
+                  .subVectors(pos, nextObj.mesh.position)
+                  .setY(0)
+                  .normalize();
+                bot._aiTowerPushPos
+                  .copy(nextObj.mesh.position)
+                  .addScaledVector(_vScratch1, nextObj.atkRange + 1.2);
+                bot.targetPos = bot._aiTowerPushPos;
+              } else {
+                bot.targetPos = null;
+              }
+            } else {
+              const enemyBasePt = isRad ? _vBaseDire : _vBaseRad;
+              if (pos.distanceToSquared(enemyBasePt) > 100)
+                bot.targetPos = enemyBasePt;
+            }
           }
         });
       }
@@ -46688,7 +47177,16 @@ diffuseColor.rgb *= mix(0.58, 1.04, groundAO) * canopyShade;`,
         }
 
         if (!elderDragonBoss && elderDragonSpawnTimer > 0) {
+          const prevTimer = elderDragonSpawnTimer;
           elderDragonSpawnTimer -= dt;
+          if (prevTimer > 30.0 && elderDragonSpawnTimer <= 30.0) {
+            sfx.playNoiseBurst(1.4, "lowpass", 320, 50, 0.22, 0.8);
+            showBanner(
+              "ELDER SKY-DRAGON APPROACHING",
+              "A celestial beast stirs in the skies • Descends in 30 seconds!",
+              "text-amber-300",
+            );
+          }
           if (elderDragonSpawnTimer <= 0) {
             spawnElderDragonBoss();
           }
@@ -47035,6 +47533,12 @@ diffuseColor.rgb *= mix(0.58, 1.04, groundAO) * canopyShade;`,
               0,
               u.ancientUnderAttackTimer - dt,
             );
+          if (u.ancientImmunityTimer > 0)
+            u.ancientImmunityTimer = Math.max(0, u.ancientImmunityTimer - dt);
+          if (u.golemImmunityCd > 0)
+            u.golemImmunityCd = Math.max(0, u.golemImmunityCd - dt);
+          if (u.labuJumpCd > 0)
+            u.labuJumpCd = Math.max(0, u.labuJumpCd - dt);
           if (u.vampLeaderBuffTimer > 0)
             u.vampLeaderBuffTimer = Math.max(0, u.vampLeaderBuffTimer - dt);
           if (u.wolfLeaderBuffTimer > 0)
@@ -47272,21 +47776,28 @@ diffuseColor.rgb *= mix(0.58, 1.04, groundAO) * canopyShade;`,
             const golemShieldActive = Boolean(
               sgGuard && !sgGuard.dead && sgGuard.hp > 1,
             );
-            const shieldActive = anyTowers || golemShieldActive;
+            const isAncientImmune = (u.ancientImmunityTimer || 0) > 0;
+            const shieldActive = anyTowers || golemShieldActive || isAncientImmune;
             u.parts.wardDome.visible = shieldActive;
             if (shieldActive) {
               u.parts.wardDome.rotation.y +=
-                (golemShieldActive && !anyTowers ? 0.95 : 0.45) * dt;
+                (isAncientImmune ? 3.2 : golemShieldActive && !anyTowers ? 0.95 : 0.45) * dt;
               if (u.parts.wardDome.material) {
                 u.parts.wardDome.material.color.setHex(
-                  golemShieldActive && !anyTowers
-                    ? 0xff4dff
-                    : u.team === "radiant"
-                      ? 0x10b981
-                      : 0xf43f5e,
+                  isAncientImmune
+                    ? 0xf472b6
+                    : golemShieldActive && !anyTowers
+                      ? 0xff4dff
+                      : u.team === "radiant"
+                        ? 0x10b981
+                        : 0xf43f5e,
                 );
                 u.parts.wardDome.material.opacity =
-                  golemShieldActive && !anyTowers ? 0.28 : 0.15;
+                  isAncientImmune
+                    ? 0.65
+                    : golemShieldActive && !anyTowers
+                      ? 0.28
+                      : 0.15;
               }
             }
           }
@@ -47613,6 +48124,103 @@ diffuseColor.rgb *= mix(0.58, 1.04, groundAO) * canopyShade;`,
                 }
               }
               if (u.targetUnit && !u.targetUnit.dead) {
+                // PP Labu Rage Mode Leap to target
+                if (
+                  u.type === "kong" &&
+                  isFury &&
+                  !u.activeDash &&
+                  (u.labuJumpCd || 0) <= 0
+                ) {
+                  const dTarget = u.mesh.position.distanceTo(
+                    u.targetUnit.mesh.position,
+                  );
+                  if (dTarget > 6.0 && dTarget <= 32.0) {
+                    u.labuJumpCd = 4.0;
+                    const start = u.mesh.position;
+                    const dir = new THREE.Vector3()
+                      .subVectors(u.targetUnit.mesh.position, start)
+                      .setY(0)
+                      .normalize();
+                    const jumpDist = Math.min(dTarget - 1.5, 26.0);
+                    const endX = THREE.MathUtils.clamp(
+                      start.x + dir.x * jumpDist,
+                      -MAP_HALF + 4,
+                      MAP_HALF - 4,
+                    );
+                    const endZ = THREE.MathUtils.clamp(
+                      start.z + dir.z * jumpDist,
+                      -MAP_HALF + 4,
+                      MAP_HALF - 4,
+                    );
+                    u.activeDash = {
+                      startX: start.x,
+                      startZ: start.z,
+                      endX: endX,
+                      endZ: endZ,
+                      t: 0,
+                      dur: 0.52,
+                      arcHeight: 5.5,
+                      colHex: 0xfacc15,
+                    };
+                    u.castAnim = 0.55;
+                    sfx.play("spell_blink");
+                    spawnShockwaveRing(start.x, start.z, 5.0, 0xfacc15, 0.4);
+                    spawnFloatText(start, "PP LABU LEAP!", "#facc15", 16);
+                  }
+                }
+
+                // Sneaky Golem Rage Mode Ancient Immunity Cast (4s duration, 10s cooldown)
+                if (
+                  u.type === "sneakygolem" &&
+                  isFury &&
+                  (u.golemImmunityCd || 0) <= 0
+                ) {
+                  const myAncient = units.find(
+                    (a) => !a.dead && a.type === "ancient" && a.team === u.team,
+                  );
+                  if (
+                    myAncient &&
+                    (myAncient.ancientImmunityTimer || 0) <= 0 &&
+                    (myAncient.ancientUnderAttackTimer || 0) > 0
+                  ) {
+                    u.golemImmunityCd = 10.0;
+                    myAncient.ancientImmunityTimer = 4.0;
+                    spawnShockwaveRing(
+                      myAncient.mesh.position.x,
+                      myAncient.mesh.position.z,
+                      14.0,
+                      0xf472b6,
+                      0.9,
+                    );
+                    spawnOrbitalSkyBeam(
+                      myAncient.mesh.position.x,
+                      myAncient.mesh.position.z,
+                      8.0,
+                      0xf472b6,
+                      1.8,
+                    );
+                    spawnFloatText(
+                      myAncient.mesh.position,
+                      "ANCIENT IMMUNE (4s)! SNEAKY GOLEM WARD!",
+                      "#f472b6",
+                      18,
+                    );
+                    spawnFloatText(
+                      u.mesh.position,
+                      "ANCIENT WARD CAST!",
+                      "#f472b6",
+                      16,
+                    );
+                    sfx.play("spell_shield");
+                    triggerCameraShake(1.1);
+                    showBanner(
+                      "ANCIENT IMMUNITY ACTIVATED!",
+                      "Sneaky Golem grants Ancient total damage immunity for 4 seconds!",
+                      "text-pink-400",
+                    );
+                  }
+                }
+
                 u.mobSkillCd -= dt * (isFury ? 2.0 : 1.0);
                 const skillCastSq = isFury ? 169.0 : 110.25;
                 if (
@@ -47628,10 +48236,27 @@ diffuseColor.rgb *= mix(0.58, 1.04, groundAO) * canopyShade;`,
           }
 
           if (u.type === "creep") {
-            // Advance past any waypoint reached or overshot in 2D XZ so elevation never stalls creep pathing
+            const enemyTeam = u.team === "radiant" ? "dire" : "radiant";
+            const enemyTowersAlive = hasAnyAliveTower(enemyTeam);
+            const activeObj = getNextVulnerableStructure(
+              enemyTeam,
+              u.mesh.position,
+            );
+
+            // Advance past any waypoint reached or overshot in 2D XZ, but DO NOT advance past a standing active enemy tower!
             while (u.waypoints.length > 1) {
               const wp0 = u.waypoints[0];
               const wp1 = u.waypoints[1];
+              // If wp0 is near an active standing enemy tower, hold here until the tower falls!
+              if (activeObj && activeObj.type === "tower") {
+                const dObjWp0Sq =
+                  (activeObj.mesh.position.x - wp0.x) ** 2 +
+                  (activeObj.mesh.position.z - wp0.z) ** 2;
+                if (dObjWp0Sq <= 256.0) {
+                  // within 16m of active tower
+                  break;
+                }
+              }
               const dist2DSq =
                 (u.mesh.position.x - wp0.x) ** 2 +
                 (u.mesh.position.z - wp0.z) ** 2;
@@ -47651,6 +48276,8 @@ diffuseColor.rgb *= mix(0.58, 1.04, groundAO) * canopyShade;`,
             const curValid =
               u.targetUnit &&
               !u.targetUnit.dead &&
+              !u.targetUnit.reincarnating &&
+              !(u.targetUnit.type === "ancient" && enemyTowersAlive) &&
               (u.targetUnit.mesh.position.x - u.mesh.position.x) ** 2 +
                 (u.targetUnit.mesh.position.z - u.mesh.position.z) ** 2 <=
                 169.0;
@@ -47660,11 +48287,32 @@ diffuseColor.rgb *= mix(0.58, 1.04, groundAO) * canopyShade;`,
               if (u.targetSwitchTimer <= 0) {
                 u.targetSwitchTimer = 0.22;
                 const foe = findNearestTarget(u, 11.2, false, false);
-                if (foe) u.targetUnit = foe;
+                if (foe && !(foe.type === "ancient" && enemyTowersAlive)) {
+                  u.targetUnit = foe;
+                } else if (activeObj && activeObj.type === "tower") {
+                  const dObjSq =
+                    (activeObj.mesh.position.x - u.mesh.position.x) ** 2 +
+                    (activeObj.mesh.position.z - u.mesh.position.z) ** 2;
+                  if (dObjSq <= (u.atkRange + activeObj.radius + 6.5) ** 2) {
+                    u.targetUnit = activeObj;
+                  }
+                }
               }
             }
-            if (!u.targetUnit && u.waypoints.length > 0) {
-              u.targetPos = u.waypoints[0];
+            if (!u.targetUnit) {
+              if (activeObj && activeObj.type === "tower") {
+                const isSideCitadel =
+                  activeObj.name &&
+                  activeObj.name.includes("Citadel") &&
+                  !activeObj.name.includes("Front");
+                if (isSideCitadel || u.waypoints.length <= 1) {
+                  u.targetPos = activeObj.mesh.position;
+                } else if (u.waypoints.length > 0) {
+                  u.targetPos = u.waypoints[0];
+                }
+              } else if (u.waypoints.length > 0) {
+                u.targetPos = u.waypoints[0];
+              }
             }
           }
 
@@ -47734,7 +48382,11 @@ diffuseColor.rgb *= mix(0.58, 1.04, groundAO) * canopyShade;`,
           const prevZ = u.mesh.position.z;
           let moveIntent = false;
           if (u.targetUnit) {
-            if (u.targetUnit.dead) {
+            if (
+              u.targetUnit.dead ||
+              (u.targetUnit.type === "ancient" &&
+                hasAnyAliveTower(u.targetUnit.team))
+            ) {
               u.targetUnit = null;
               u._inAttackRange = false;
             } else {
@@ -47831,41 +48483,53 @@ diffuseColor.rgb *= mix(0.58, 1.04, groundAO) * canopyShade;`,
           const doSkeletalStep = onScreen;
           const animDt = dt;
 
-          if (u.type === "hero") {
-            if (u.activeDash) {
-              u.activeDash.t += dt;
-              const dp = Math.min(1, u.activeDash.t / u.activeDash.dur);
-              const ease = 1 - Math.pow(1 - dp, 2.2);
-              u.mesh.position.x = THREE.MathUtils.lerp(
-                u.activeDash.startX,
-                u.activeDash.endX,
-                ease,
-              );
-              u.mesh.position.z = THREE.MathUtils.lerp(
-                u.activeDash.startZ,
-                u.activeDash.endZ,
-                ease,
-              );
-              const gy = getTerrainHeightAt(
+          if (u.activeDash) {
+            u.activeDash.t += dt;
+            const dp = Math.min(1, u.activeDash.t / u.activeDash.dur);
+            const ease = 1 - Math.pow(1 - dp, 2.2);
+            u.mesh.position.x = THREE.MathUtils.lerp(
+              u.activeDash.startX,
+              u.activeDash.endX,
+              ease,
+            );
+            u.mesh.position.z = THREE.MathUtils.lerp(
+              u.activeDash.startZ,
+              u.activeDash.endZ,
+              ease,
+            );
+            const gy = getTerrainHeightAt(
+              u.mesh.position.x,
+              u.mesh.position.z,
+            );
+            u.mesh.position.y =
+              gy + Math.sin(dp * Math.PI) * (u.activeDash.arcHeight || 1.8);
+            if (Math.random() < 0.55) {
+              spawnShockwaveRing(
                 u.mesh.position.x,
                 u.mesh.position.z,
+                u.type === "kong" ? 3.5 : 1.8,
+                u.activeDash.colHex || 0xd946ef,
+                0.24,
               );
-              u.mesh.position.y =
-                gy + Math.sin(dp * Math.PI) * (u.activeDash.arcHeight || 1.8);
-              if (Math.random() < 0.55) {
+            }
+            if (dp >= 1) {
+              u.mesh.position.y = gy;
+              u.activeDash = null;
+              if (u.type === "kong") {
                 spawnShockwaveRing(
                   u.mesh.position.x,
                   u.mesh.position.z,
-                  1.8,
-                  u.activeDash.colHex || 0xd946ef,
-                  0.24,
+                  9.5,
+                  0xfacc15,
+                  0.65,
                 );
-              }
-              if (dp >= 1) {
-                u.mesh.position.y = gy;
-                u.activeDash = null;
+                triggerCameraShake(0.8);
+                sfx.playNoiseBurst(0.45, "lowpass", 450, 50, 0.38, 0.65);
               }
             }
+          }
+
+          if (u.type === "hero") {
             if (u.heroCfg) {
               const hid = u.heroCfg.id;
               if (hid === "ignis" && u.fierySoulTimer > 0) {
@@ -47953,12 +48617,24 @@ diffuseColor.rgb *= mix(0.58, 1.04, groundAO) * canopyShade;`,
               updateSneakyGolemAnimation(u, matchTime, animDt, isMoving);
           } else if (u.type === "dragon") {
             if (u.dragonDescentTimer > 0) {
+              const prevDescent = u.dragonDescentTimer;
               u.dragonDescentTimer = Math.max(0, u.dragonDescentTimer - dt);
               const gy = getTerrainHeightAt(
                 u.mesh.position.x,
                 u.mesh.position.z,
               );
               u.mesh.position.y = gy + (u.dragonDescentTimer / 1.25) * 24;
+              if (prevDescent > 0 && u.dragonDescentTimer === 0) {
+                spawnShockwaveRing(
+                  u.mesh.position.x,
+                  u.mesh.position.z,
+                  10.5,
+                  0x38bdf8,
+                  0.75,
+                );
+                triggerCameraShake(0.85);
+                sfx.playNoiseBurst(0.7, "lowpass", 340, 48, 0.38, 0.7);
+              }
             }
             updateElderDragonAnimation(u, matchTime, dt);
           } else if (u.type === "boss") {
@@ -49684,15 +50360,21 @@ diffuseColor.rgb *= mix(0.58, 1.04, groundAO) * canopyShade;`,
                   !k.dead && k.team === inspectedUnit.team && k.type === "kong",
               );
               extraStatus =
-                towersLeft > 0
-                  ? `Invulnerable (${towersLeft} Towers)`
-                  : sgGuard && sgGuard.hp > 1
-                    ? "Invulnerable (Subdue Sneaky Golem)"
-                    : kongGuard
-                      ? "Guarded by Guardians"
-                      : "Vulnerable";
+                inspectedUnit.ancientImmunityTimer > 0
+                  ? `Immune (${inspectedUnit.ancientImmunityTimer.toFixed(1)}s)`
+                  : towersLeft > 0
+                    ? `Invulnerable (${towersLeft} Towers)`
+                    : sgGuard && sgGuard.hp > 1
+                      ? "Invulnerable (Subdue Sneaky Golem)"
+                      : kongGuard
+                        ? "Guarded by Guardians"
+                        : "Vulnerable";
             }
             setTxt("insp-extra", extraStatus);
+            const inspExtraEl = getHudEl("insp-extra");
+            if (inspExtraEl) {
+              inspExtraEl.title = extraStatus;
+            }
             const inspStatusRow = getHudEl("insp-status-row");
             if (inspStatusRow) {
               const badges = [];
@@ -50719,8 +51401,9 @@ diffuseColor.rgb *= mix(0.58, 1.04, groundAO) * canopyShade;`,
             return true;
           }
           if (tipId === "talent") {
+            playerHero.chosenTalents = playerHero.chosenTalents || {};
             const unlocked = [10, 15, 20, 25].filter(
-              (l) => playerHero.chosenTalents[l],
+              (l) => playerHero.chosenTalents && playerHero.chosenTalents[l],
             ).length;
             const nextTier = getNextAvailableTalentTier(playerHero);
             ttTitle.textContent = "Hero Talent Tree";
@@ -50869,12 +51552,15 @@ diffuseColor.rgb *= mix(0.58, 1.04, groundAO) * canopyShade;`,
           if (tipId === "dragon") {
             ttTitle.textContent = "Elder Sky Dragon Active";
             ttBadge.textContent = "BOSS";
-            ttRank.textContent = "River Bend";
+            ttRank.textContent = lastDragonSpot
+              ? lastDragonSpot.region
+              : "River Shallows";
             ttMeta.innerHTML = `<span class="text-orange-300"><i class="fa-solid fa-fire mr-1"></i>Elder Dragon Soul</span><span class="text-amber-300"><i class="fa-solid fa-coins mr-1"></i>+1,200g</span>`;
-            ttDesc.textContent =
-              "The Apex World Boss has landed in the Northwestern River Bend (-62, -62). Slay it for Elder Dragon Soul & +1,200 gold!";
+            ttDesc.textContent = lastDragonSpot
+              ? `The Apex World Boss has landed in the ${lastDragonSpot.region} (${lastDragonSpot.x}, ${lastDragonSpot.z}). Slay it for Elder Dragon Soul & +1,200 gold!`
+              : "The Apex World Boss has landed on the map. Slay it for Elder Dragon Soul & +1,200 gold!";
             ttHint.textContent =
-              "Tap the northwest river on the minimap to engage";
+              "Spawns every 5 minutes • Click badge or tap minimap icon to locate";
             return true;
           }
           return false;
@@ -50950,6 +51636,15 @@ diffuseColor.rgb *= mix(0.58, 1.04, groundAO) * canopyShade;`,
           const dragonBtn = e.target.closest("#dragon-hud-badge");
           if (dragonBtn) {
             e.stopPropagation();
+            if (
+              elderDragonBoss &&
+              !elderDragonBoss.dead &&
+              elderDragonBoss.mesh
+            ) {
+              cameraFocus.copy(elderDragonBoss.mesh.position);
+              cameraLocked = false;
+              syncCamLockLabel();
+            }
             if (
               activeTarget === dragonBtn &&
               !tt.classList.contains("hidden")
@@ -52531,6 +53226,18 @@ diffuseColor.rgb *= mix(0.58, 1.04, groundAO) * canopyShade;`,
             }
           }
         }
+        const talentModal = document.getElementById("talent-modal");
+        if (talentModal && !talentModal.classList.contains("hidden")) {
+          if (performance.now() - (window._talentOpenedAtTs || 0) > 180) {
+            if (
+              !e.target.closest("#talent-dialog-card") &&
+              !e.target.closest("#btn-open-talents") &&
+              !e.target.closest("#lvlup-TALENT")
+            ) {
+              talentModal.classList.add("hidden");
+            }
+          }
+        }
         if (
           inspectedUnit &&
           e.target !== canvas &&
@@ -53361,25 +54068,29 @@ diffuseColor.rgb *= mix(0.58, 1.04, groundAO) * canopyShade;`,
         }
 
         // Ctrl + 1 / Ctrl + 2 -> Instant Left / Right Talent Branch unlock using 1 Skill Point
+        const isOne =
+          e.key === "1" || e.code === "Digit1" || e.code === "Numpad1";
+        const isTwo =
+          e.key === "2" || e.code === "Digit2" || e.code === "Numpad2";
         if (
-          e.ctrlKey &&
+          (e.ctrlKey || isCtrlHeld) &&
           !e.altKey &&
           !e.metaKey &&
-          (e.key === "1" || e.key === "2")
+          (isOne || isTwo)
         ) {
           e.preventDefault();
-          window.quickPickNextTalentBranch(e.key === "1" ? 0 : 1);
+          window.quickPickNextTalentBranch(isOne ? 0 : 1);
           return;
         }
 
         // When Talent Modal is open, 1 / ArrowLeft or 2 / ArrowRight picks Left / Right Talent branch
         if (isTalentModalOpen && !e.ctrlKey && !e.altKey && !e.metaKey) {
-          if (e.key === "1" || e.key === "ArrowLeft") {
+          if (isOne || e.key === "ArrowLeft") {
             e.preventDefault();
             window.quickPickNextTalentBranch(0);
             return;
           }
-          if (e.key === "2" || e.key === "ArrowRight") {
+          if (isTwo || e.key === "ArrowRight") {
             e.preventDefault();
             window.quickPickNextTalentBranch(1);
             return;
@@ -54644,6 +55355,8 @@ diffuseColor.rgb *= mix(0.58, 1.04, groundAO) * canopyShade;`,
 
       window.restartMatch = function () {
         document.getElementById("endgame-modal").classList.add("hidden");
+        document.getElementById("talent-modal")?.classList.add("hidden");
+        window.clearInspectedUnit();
         document.getElementById("respawn-box").classList.add("hidden");
         document.getElementById("aegis-hud-badge").classList.add("hidden");
         document.getElementById("dragon-hud-badge").classList.add("hidden");
