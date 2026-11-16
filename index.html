@@ -5302,7 +5302,7 @@
         })();
 
         const FloatTextPool = (() => {
-          const POOL_SIZE = 28;
+          const POOL_SIZE = 44;
           const nodes = [];
           let initialized = false;
 
@@ -12360,14 +12360,12 @@
                 if (dx * dx + dz * dz <= rSum * rSum) {
                   p.hitIds.add(u.id);
                   if (p.prismSplit) {
+                    const { geo: spGeo, mat: spMat } = getPrismShardAssets();
                     [-0.45, 0, 0.45].forEach((sAng) => {
                       const spDir = p.dir
                         .clone()
-                        .applyAxisAngle(new THREE.Vector3(0, 1, 0), sAng);
-                      const spMesh = new THREE.Mesh(
-                        new THREE.ConeGeometry(0.32, 2.6, 5),
-                        new THREE.MeshBasicMaterial({ color: 0x38bdf8 }),
-                      );
+                        .applyAxisAngle(_yUpAxis, sAng);
+                      const spMesh = new THREE.Mesh(spGeo, spMat);
                       spMesh.rotation.x = Math.PI / 2;
                       spMesh.rotation.y = Math.atan2(spDir.x, spDir.z);
                       spMesh.position.set(px, 1.5, pz);
@@ -15961,10 +15959,7 @@
           const initDpr = renderer.getPixelRatio();
           const initW = Math.max(1, Math.floor(window.innerWidth * initDpr));
           const initH = Math.max(1, Math.floor(window.innerHeight * initDpr));
-          const msaaSamples =
-            renderer.capabilities.isWebGL2 && !_isTouchBoot && initDpr < 1.5
-              ? 4
-              : 0;
+          const msaaSamples = 0; // Disable 4x MSAA on HDR half-float target to eliminate catastrophic GPU resolve stalls
           _hdrRT = new THREE.WebGLRenderTarget(initW, initH, {
             type: THREE.HalfFloatType,
             minFilter: THREE.LinearFilter,
@@ -16007,32 +16002,62 @@
                         uniform float uUltraMax;
                         varying vec2 vUv;
 
-                        vec3 safeReinhard(vec3 hdr) {
-                            vec3 h = max(hdr, vec3(0.0));
-                            return h / (1.0 + h);
+                        vec3 applyFXAA(sampler2D tex, vec2 uv, vec2 res) {
+                            vec2 inverseVP = 1.0 / max(res, vec2(1.0));
+                            vec3 rgbNW = texture2D(tex, uv + vec2(-1.0, -1.0) * inverseVP).rgb;
+                            vec3 rgbNE = texture2D(tex, uv + vec2( 1.0, -1.0) * inverseVP).rgb;
+                            vec3 rgbSW = texture2D(tex, uv + vec2(-1.0,  1.0) * inverseVP).rgb;
+                            vec3 rgbSE = texture2D(tex, uv + vec2( 1.0,  1.0) * inverseVP).rgb;
+                            vec3 rgbM  = texture2D(tex, uv).rgb;
+
+                            vec3 lumaW = vec3(0.299, 0.587, 0.114);
+                            float lumaNW = dot(rgbNW, lumaW);
+                            float lumaNE = dot(rgbNE, lumaW);
+                            float lumaSW = dot(rgbSW, lumaW);
+                            float lumaSE = dot(rgbSE, lumaW);
+                            float lumaM  = dot(rgbM,  lumaW);
+
+                            float lumaMin = min(lumaM, min(min(lumaNW, lumaNE), min(lumaSW, lumaSE)));
+                            float lumaMax = max(lumaM, max(max(lumaNW, lumaNE), max(lumaSW, lumaSE)));
+
+                            float range = lumaMax - lumaMin;
+                            if (range < max(0.035, lumaMax * 0.125)) {
+                                return rgbM;
+                            }
+
+                            vec2 dir;
+                            dir.x = -((lumaNW + lumaNE) - (lumaSW + lumaSE));
+                            dir.y =  ((lumaNW + lumaSW) - (lumaNE + lumaSE));
+
+                            float dirReduce = max((lumaNW + lumaNE + lumaSW + lumaSE) * (0.25 * 0.125), 0.0078);
+                            float rcpDirMin = 1.0 / (min(abs(dir.x), abs(dir.y)) + dirReduce);
+                            dir = min(vec2(8.0, 8.0), max(vec2(-8.0, -8.0), dir * rcpDirMin)) * inverseVP;
+
+                            vec3 rgbA = 0.5 * (
+                                texture2D(tex, uv + dir * (1.0 / 3.0 - 0.5)).rgb +
+                                texture2D(tex, uv + dir * (2.0 / 3.0 - 0.5)).rgb
+                            );
+                            vec3 rgbB = rgbA * 0.5 + 0.25 * (
+                                texture2D(tex, uv + dir * -0.5).rgb +
+                                texture2D(tex, uv + dir *  0.5).rgb
+                            );
+                            float lumaB = dot(rgbB, lumaW);
+                            if ((lumaB < lumaMin) || (lumaB > lumaMax)) {
+                                return rgbA;
+                            }
+                            return rgbB;
                         }
 
                         void main() {
                             vec2 centered = vUv - 0.5;
                             float r2 = dot(centered, centered);
-                            vec4 texel = texture2D(tDiffuse, vUv);
-                            vec3 rawRgb = texel.rgb;
+                            vec3 rawRgb = applyFXAA(tDiffuse, vUv, uResolution);
                             if (any(isnan(rawRgb)) || any(isinf(rawRgb))) rawRgb = vec3(0.0);
                             vec3 col = max(rawRgb, vec3(0.0));
 
                             if (uStrength > 0.01) {
                                 vec2 px = 1.0 / max(uResolution, vec2(1.0));
-                                vec3 cComp = safeReinhard(col);
-                                vec3 nComp = safeReinhard(texture2D(tDiffuse, vUv + vec2(0.0, px.y)).rgb);
-                                vec3 sComp = safeReinhard(texture2D(tDiffuse, vUv - vec2(0.0, px.y)).rgb);
-                                vec3 eComp = safeReinhard(texture2D(tDiffuse, vUv + vec2(px.x, 0.0)).rgb);
-                                vec3 wComp = safeReinhard(texture2D(tDiffuse, vUv - vec2(px.x, 0.0)).rgb);
-                                vec3 avgComp = (nComp + sComp + eComp + wComp) * 0.25;
-                                float sharpAmt = mix(0.08, 0.16, uUltraMax) * uStrength;
-                                vec3 sharpComp = clamp(cComp + (cComp - avgComp) * sharpAmt, 0.0, 0.992);
-                                col = sharpComp / max(vec3(0.008), 1.0 - sharpComp);
-
-                                if (uUltraMax > 0.85) {
+                                if (uUltraMax > 0.85 && max(col.r, max(col.g, col.b)) > 1.05) {
                                     vec3 streakL = max(texture2D(tDiffuse, vUv - vec2(px.x * 5.0, 0.0)).rgb, vec3(0.0));
                                     vec3 streakR = max(texture2D(tDiffuse, vUv + vec2(px.x * 5.0, 0.0)).rgb, vec3(0.0));
                                     vec3 anamorphic = max(max(streakL, streakR) - vec3(1.22), vec3(0.0));
@@ -16180,7 +16205,7 @@
           ctx.fillRect(0, 0, s, s);
         });
         // Thin selection ring with inner halo
-        nxg.tex.selRing = nxgCanvasTex(256, (ctx, s) => {
+        nxg.tex.selRing = nxgCanvasTex(512, (ctx, s) => {
           const g = ctx.createRadialGradient(
             s / 2,
             s / 2,
@@ -16330,6 +16355,13 @@
         geo.setAttribute("aVel", mk(3));
         geo.setAttribute("aMeta", mk(4));
         geo.setAttribute("aColor", mk(3));
+        geo.boundingSphere = new THREE.Sphere(new THREE.Vector3(0, 0, 0), MAP_HALF * 2);
+        geo.boundingBox = new THREE.Box3(
+          new THREE.Vector3(-MAP_HALF * 2, -100, -MAP_HALF * 2),
+          new THREE.Vector3(MAP_HALF * 2, 200, MAP_HALF * 2),
+        );
+        geo.computeBoundingSphere = () => geo.boundingSphere;
+        geo.computeBoundingBox = () => geo.boundingBox;
         const meta = geo.attributes.aMeta.array;
         for (let i = 0; i < NXG_PART_CAP; i++) meta[i * 4] = -1000;
         const mat = new THREE.ShaderMaterial({
@@ -16375,7 +16407,10 @@
       const _nxgCol = new THREE.Color();
       // opts: speed, up, life, size, gravity, spread (start radius), yOff
       function nxgEmit(pos, colorHex, count, opts = {}) {
-        if (!nxg.parts || userSettings.qualityPreset === "ultralight") return;
+        if (!nxg.parts || userSettings.qualityPreset === "ultralight" || !pos) return;
+        const posX = Number.isFinite(pos.x) ? pos.x : 0;
+        const posY = Number.isFinite(pos.y) ? pos.y : 0;
+        const posZ = Number.isFinite(pos.z) ? pos.z : 0;
         if (
           userSettings.qualityPreset === "potato" ||
           userSettings.qualityPreset === "performance"
@@ -16400,9 +16435,9 @@
           nxg.partHead = (nxg.partHead + 1) % NXG_PART_CAP;
           const a = Math.random() * Math.PI * 2,
             r = Math.sqrt(Math.random());
-          P[i * 3] = pos.x + Math.cos(a) * r * spread;
-          P[i * 3 + 1] = (pos.y || 0) + yOff + (Math.random() - 0.5) * spread;
-          P[i * 3 + 2] = pos.z + Math.sin(a) * r * spread;
+          P[i * 3] = posX + Math.cos(a) * r * spread;
+          P[i * 3 + 1] = posY + yOff + (Math.random() - 0.5) * spread;
+          P[i * 3 + 2] = posZ + Math.sin(a) * r * spread;
           const sp = speed * (0.35 + Math.random() * 0.65);
           V[i * 3] = Math.cos(a) * sp;
           V[i * 3 + 1] = up * (0.3 + Math.random() * 0.7);
@@ -16567,21 +16602,29 @@
                             float d0 = texture2D(tDepth, vUv).x;
                             if (d0 >= 0.99995) { gl_FragColor = c; return; }
                             float z0 = linZ(d0);
-                            float ao = 0.0, ws = 0.0;
-                            for (int i = 0; i < 4; i++) {
-                                vec2 o = vec2(i == 0 || i == 2 ? -1.0 : 1.0, i < 2 ? -1.0 : 1.0) * uAOTexel;
-                                float zi = linZ(texture2D(tDepth, vUv + o).x);
-                                float w = 1.0 / (1.0 + abs(zi - z0) * 2.2);
-                                ao += texture2D(tAO, vUv + o).r * w; ws += w;
-                            }
-                            ao = mix(1.0, ao / max(ws, 0.0001), uStrength);
+                            vec4 depthTaps = vec4(
+                                texture2D(tDepth, vUv + vec2(-uAOTexel.x, -uAOTexel.y)).x,
+                                texture2D(tDepth, vUv + vec2( uAOTexel.x, -uAOTexel.y)).x,
+                                texture2D(tDepth, vUv + vec2(-uAOTexel.x,  uAOTexel.y)).x,
+                                texture2D(tDepth, vUv + vec2( uAOTexel.x,  uAOTexel.y)).x
+                            );
+                            vec4 aoTaps = vec4(
+                                texture2D(tAO, vUv + vec2(-uAOTexel.x, -uAOTexel.y)).r,
+                                texture2D(tAO, vUv + vec2( uAOTexel.x, -uAOTexel.y)).r,
+                                texture2D(tAO, vUv + vec2(-uAOTexel.x,  uAOTexel.y)).r,
+                                texture2D(tAO, vUv + vec2( uAOTexel.x,  uAOTexel.y)).r
+                            );
+                            vec4 zDelta = abs(depthTaps - vec4(d0)) * (200.0 * (1.0 - d0));
+                            vec4 weights = 1.0 / (1.0 + zDelta);
+                            float ao = dot(aoTaps, weights) / max(dot(weights, vec4(1.0)), 0.0001);
+                            ao = mix(1.0, ao, uStrength);
                             // Shadowed creases pick up a cool sky tint instead of going flat grey
                             c.rgb *= mix(vec3(0.20, 0.25, 0.38), vec3(1.0), ao);
                             if (uCloud > 0.01) {
                                 vec4 vp = uInvProj * vec4(vUv * 2.0 - 1.0, d0 * 2.0 - 1.0, 1.0);
                                 vec3 wp = (uCamWorld * vec4(vp.xyz / vp.w, 1.0)).xyz;
                                 vec2 q = wp.xz * 0.017 + uTime * vec2(0.011, 0.0065);
-                                float cl = vn(q) * 0.62 + vn(q * 2.3 + 7.1) * 0.38;
+                                float cl = vn(q);
                                 c.rgb *= 1.0 - smoothstep(0.52, 0.80, cl) * uCloud;
                             }
                             // Aerial perspective: far ground eases toward the sky colour, giving the map real depth
@@ -16672,7 +16715,7 @@
             sz * lean,
           );
           uv.push(0, 0, 1, 0, 0.5, 1);
-          col.push(0.42, 0.42, 0.42, 0.42, 0.42, 0.42, 1.15, 1.15, 1.15);
+          col.push(0.72, 0.76, 0.68, 0.72, 0.76, 0.68, 1.08, 1.12, 1.05);
           nrm.push(0, 1, 0, 0, 1, 0, 0, 1, 0);
         }
         const geo = new THREE.BufferGeometry();
@@ -17089,22 +17132,22 @@
               nxg.dynHighTime = 0;
             }
           } else if (!(nxg.dynHold > 0)) {
-            if (_fpsSmooth < 36) {
+            if (_fpsSmooth < 58) {
               nxg.dynLowTime += dt;
               nxg.dynHighTime = 0;
-            } else if (_fpsSmooth > 58) {
+            } else if (_fpsSmooth > 85) {
               nxg.dynHighTime += dt;
               nxg.dynLowTime = 0;
             } else {
               nxg.dynLowTime = Math.max(0, nxg.dynLowTime - dt);
               nxg.dynHighTime = 0;
             }
-            if (nxg.dynLowTime > 4.0 && nxg.dynResScale > 0.6) {
+            if (nxg.dynLowTime > 1.8 && nxg.dynResScale > 0.6) {
               nxg.dynProbe = { prev: nxg.dynResScale, fps: _fpsSmooth, t: 0 };
-              nxg.dynResScale = Math.max(0.6, nxg.dynResScale - 0.1);
+              nxg.dynResScale = Math.max(0.6, nxg.dynResScale - 0.08);
               nxg.dynLowTime = 0;
               applyRendererResolution();
-            } else if (nxg.dynHighTime > 12.0 && nxg.dynResScale < 1.0) {
+            } else if (nxg.dynHighTime > 8.0 && nxg.dynResScale < 1.0) {
               nxg.dynResScale = Math.min(1.0, nxg.dynResScale + 0.05);
               nxg.dynHighTime = 0;
               applyRendererResolution();
@@ -18412,26 +18455,6 @@
           )
           .normalize();
         window._activeSunDir = sc.sunDir;
-        // Keep sunLight anchored to the last baked shadow texel center so shadows never slide between shadowMap updates
-        const bakedX =
-          window._bakedShadowX !== undefined
-            ? window._bakedShadowX
-            : inHeroSelect
-              ? 0
-              : cameraFocus.x;
-        const bakedZ =
-          window._bakedShadowZ !== undefined
-            ? window._bakedShadowZ
-            : inHeroSelect
-              ? 0
-              : cameraFocus.z;
-        sunLight.target.position.set(bakedX, 0, bakedZ);
-        sunLight.target.updateMatrixWorld();
-        sunLight.position.set(
-          bakedX + sc.sunDir.x * 135,
-          sc.sunDir.y * 135,
-          bakedZ + sc.sunDir.z * 135,
-        );
         sunLight.color.copy(sc.moonLightCol).lerp(sc.dayLightCol, sunFactor);
 
         const weatherDim = 1.0 - rainFactor * 0.14 - mistFactor * 0.1;
@@ -19245,6 +19268,16 @@
         if (asset) SHARED_ASSETS.add(asset);
         return asset;
       }
+      const _yUpAxis = new THREE.Vector3(0, 1, 0);
+      let _prismShardGeo = null;
+      let _prismShardMat = null;
+      function getPrismShardAssets() {
+        if (!_prismShardGeo) {
+          _prismShardGeo = registerSharedAsset(new THREE.ConeGeometry(0.32, 2.6, 5));
+          _prismShardMat = registerSharedAsset(new THREE.MeshBasicMaterial({ color: 0x38bdf8 }));
+        }
+        return { geo: _prismShardGeo, mat: _prismShardMat };
+      }
       function freezeStaticObject(obj) {
         if (!obj) return obj;
         obj.traverse((child) => {
@@ -19487,34 +19520,18 @@ varying vec3 vTerrainNormal;
                             return mix(mix(a, b, f.x), mix(c, d, f.x), f.y);
                         }
                         float fbmTerrain(vec2 p) {
-                            float v = 0.0;
-                            float a = 0.54;
                             mat2 rot = mat2(0.8, -0.6, 0.6, 0.8);
-                            for (int i = 0; i < 3; i++) {
-                                v += a * valNoise(p);
-                                p = rot * p * 2.05;
-                                a *= 0.5;
-                            }
-                            return v;
+                            return valNoise(p) * 0.65 + valNoise(rot * p * 2.05) * 0.35;
                         }
                         float terrainMicroHeight(vec2 wp, float baseMacroMicro) {
                             float blades = valNoise(vec2(wp.x * 3.8 + wp.y * 1.4, wp.y * 4.2 - wp.x * 1.2));
-                            float tufts = valNoise(wp * 1.9);
-                            return baseMacroMicro + blades * 0.15 + tufts * 0.10;
+                            return baseMacroMicro + blades * 0.18;
                         }
-                        // Distance to the nearest cell border: 0 on a seam, rising toward the middle of each basalt plate
+                        // Fast domain-warped basalt crack seam
                         float direSeam(vec2 p) {
-                            vec2 n = floor(p), f = fract(p);
-                            float d1 = 8.0, d2 = 8.0;
-                            for (int j = -1; j <= 1; j++) {
-                                for (int i = -1; i <= 1; i++) {
-                                    vec2 g = vec2(float(i), float(j));
-                                    vec2 r = g + vec2(hash21(n + g), hash21(n + g + 17.3)) - f;
-                                    float d = dot(r, r);
-                                    if (d < d1) { d2 = d1; d1 = d; } else if (d < d2) { d2 = d; }
-                                }
-                            }
-                            return sqrt(d2) - sqrt(d1);
+                            vec2 w = p + vec2(sin(p.y * 2.1), cos(p.x * 2.1)) * 0.28;
+                            vec2 f = abs(fract(w) - 0.5);
+                            return min(f.x, f.y) * 2.2;
                         }
                     `,
             )
@@ -19578,7 +19595,7 @@ varying vec3 vTerrainNormal;
 
                         if (uUltraMax > 0.85) {
                             // Ultra Max: Fine high-frequency grass-blade & moss micro-texture (deepens lush emerald contrast)
-                            float fineTurf = valNoise(wpXZ * 6.8) * 0.6 + valNoise(wpXZ * 13.5) * 0.4;
+                            float fineTurf = valNoise(wpXZ * 8.2);
                             diffuseColor.rgb *= mix(0.84, 1.02, fineTurf);
 
                             // Ultra Max: Carved Mid-Lane Ancient Cobblestone Mosaic & Golden Border Inlay
@@ -19634,9 +19651,7 @@ varying vec3 vTerrainNormal;
                         if (detailFade > 0.01) {
                             float baseMM = nMacro * 0.45 + nMicro * 0.30;
                             float hC = terrainMicroHeight(vTerrainWorldPos.xz, baseMM);
-                            float hX = terrainMicroHeight(vTerrainWorldPos.xz + vec2(0.22, 0.0), baseMM);
-                            float hZ = terrainMicroHeight(vTerrainWorldPos.xz + vec2(0.0, 0.22), baseMM);
-                            vec3 worldBump = normalize(vec3((hC - hX) * 1.45, 1.0, (hC - hZ) * 1.45));
+                            vec3 worldBump = normalize(vec3(-dFdx(hC) * 22.0, 1.0, -dFdy(hC) * 22.0));
                             vec3 viewBump = normalize((viewMatrix * vec4(worldBump, 0.0)).xyz);
                             normal = normalize(mix(normal, viewBump, mix(0.32, 0.56, uUltraMax) * detailFade));
                         }
@@ -20071,13 +20086,9 @@ roughnessFactor *= mix(1.0, 0.38, wetRough);`,
                             gl_FragColor = vec4(finalRGB, alpha);
                             return;
                         }
-                        float eps = 0.34;
                         float hC = waterHeight(wp, true);
-                        float hX = waterHeight(wp + vec2(eps, 0.0), false);
-                        float hZ = waterHeight(wp + vec2(0.0, eps), false);
-
-                        // Silky liquid surface normal
-                        vec3 normal = normalize(vec3((hC - hX) * 1.45, 1.15, (hC - hZ) * 1.45));
+                        // Fast screen-space wave normal via hardware derivatives (saves 4 texture lookups)
+                        vec3 normal = normalize(vec3(-dFdx(hC) * 36.0, 1.15, -dFdy(hC) * 36.0));
                         vec3 viewDir = normalize(cameraPosition - vWorldPos);
                         float ndotv = max(dot(normal, viewDir), 0.0);
 
@@ -20089,8 +20100,10 @@ roughnessFactor *= mix(1.0, 0.38, wetRough);`,
                         vec3 waterCol = mix(uShallowColor, uDeepColor, pow(depthFactor, 0.80));
                         float caustMask = 1.0 - depthFactor * 0.76;
                         vec2 flow = vec2(0.7071, -0.7071);
-                        float c1 = texture2D(uWaterTex, wp * 0.036 - flow * uTime * 0.028).b;
-                        float c2 = texture2D(uWaterTex, wp * 0.058 + vec2(0.42, 0.91) * uTime * 0.022 + 0.31).b;
+                        vec4 texCaust1 = texture2D(uWaterTex, wp * 0.036 - flow * uTime * 0.028);
+                        vec4 texCaust2 = texture2D(uWaterTex, wp * 0.058 + vec2(0.42, 0.91) * uTime * 0.022 + 0.31);
+                        float c1 = texCaust1.b;
+                        float c2 = texCaust2.b;
                         if (uUltraMax > 0.5) {
                             float cR = smoothstep(0.50, 0.88, c1 * 0.62 + c2 * 0.38);
                             float cG = smoothstep(0.47, 0.86, c1 * 0.52 + c2 * 0.48);
@@ -20113,8 +20126,8 @@ roughnessFactor *= mix(1.0, 0.38, wetRough);`,
                         vec3 halfVec = normalize(uSunDir + viewDir);
                         float ndoth = max(dot(normal, halfVec), 0.0);
                         float spec = pow(ndoth, mix(56.0, 96.0, uUltraMax)) * mix(0.62, 0.98, uUltraMax);
-                        float microRippleA = texture2D(uWaterTex, wp * 0.14 - flow * uTime * 0.065).g * 2.0 - 1.0;
-                        float microRippleB = texture2D(uWaterTex, wp * 0.22 + vec2(0.45, 0.88) * uTime * 0.052).a * 2.0 - 1.0;
+                        float microRippleA = texCaust1.g * 2.0 - 1.0;
+                        float microRippleB = texCaust2.a * 2.0 - 1.0;
                         vec3 glintNorm = normalize(normal + vec3(microRippleA * 0.48, 0.0, microRippleB * 0.48));
                         float glintDot = max(dot(glintNorm, halfVec), 0.0);
                         float glintSparkle = pow(glintDot, 132.0) * mix(0.75, 1.45, uUltraMax) * smoothstep(0.06, 0.35, vBankDist);
@@ -20122,7 +20135,7 @@ roughnessFactor *= mix(1.0, 0.38, wetRough);`,
                         surfaceCol += uSunColor * (spec + sheen + glintSparkle);
 
                         // Delicate shoreline & pre-baked emergent boulder foam collars
-                        float foamNoise = texture2D(uWaterTex, wp * 0.055 - flow * uTime * 0.026).a;
+                        float foamNoise = texCaust1.a;
                         float waveLap = sin(vBankDist * 24.0 - uTime * 1.45 + foamNoise * 2.6) * 0.5 + 0.5;
                         float bankFoam = smoothstep(0.13, 0.01, vBankDist) * smoothstep(0.46, 0.78, foamNoise * 0.65 + waveLap * 0.35);
 
@@ -22047,7 +22060,8 @@ diffuseColor.rgb *= mix(0.58, 1.04, groundAO) * canopyShade;`,
         const radWillows = [];
         const direSpires = [];
 
-        for (let i = 0; i < 860; i++) {
+        const placedTrees = [];
+        for (let i = 0; i < 920; i++) {
           const tx = (Math.random() - 0.5) * 368;
           const tz = (Math.random() - 0.5) * 368;
           const distLane = Math.abs(tx + tz) / Math.SQRT2;
@@ -22060,6 +22074,10 @@ diffuseColor.rgb *= mix(0.58, 1.04, groundAO) * canopyShade;`,
             continue;
           if (clearZones.some((c) => Math.hypot(tx - c.x, tz - c.z) < c.r))
             continue;
+          // Minimum 5.8m spacing between any two trees eliminates all foliage collision, clipping, and z-fighting
+          if (placedTrees.some((p) => Math.hypot(tx - p.x, tz - p.z) < 5.8))
+            continue;
+          placedTrees.push({ x: tx, z: tz });
 
           const isRad = tx - tz < 0;
           const sc = 0.86 + Math.random() * 0.72;
@@ -22170,7 +22188,7 @@ diffuseColor.rgb *= mix(0.58, 1.04, groundAO) * canopyShade;`,
             radOaks.length,
           );
           oakInst.castShadow = false;
-          oakInst.receiveShadow = true;
+          oakInst.receiveShadow = false;
 
           radOaks.forEach((t, i) => {
             const sx = t.sc * (1.02 + (i % 3) * 0.06);
@@ -22210,7 +22228,7 @@ diffuseColor.rgb *= mix(0.58, 1.04, groundAO) * canopyShade;`,
             radPines.length,
           );
           pineInst.castShadow = false;
-          pineInst.receiveShadow = true;
+          pineInst.receiveShadow = false;
 
           radPines.forEach((t, i) => {
             const sx = t.sc * (0.94 + (i % 3) * 0.05);
@@ -22249,7 +22267,7 @@ diffuseColor.rgb *= mix(0.58, 1.04, groundAO) * canopyShade;`,
             radWillows.length,
           );
           willowInst.castShadow = false;
-          willowInst.receiveShadow = true;
+          willowInst.receiveShadow = false;
 
           radWillows.forEach((t, i) => {
             dummy.position.set(t.x, t.y - 0.1, t.z);
@@ -22338,7 +22356,7 @@ diffuseColor.rgb *= mix(0.58, 1.04, groundAO) * canopyShade;`,
             direSpires.length,
           );
           direCrownInst.castShadow = false;
-          direCrownInst.receiveShadow = true;
+          direCrownInst.receiveShadow = false;
 
           direSpires.forEach((s, i) => {
             dummy.position.set(s.x, s.y - 0.1, s.z);
@@ -23844,45 +23862,16 @@ diffuseColor.rgb *= mix(0.58, 1.04, groundAO) * canopyShade;`,
 
       function spawnFloatText(pos3D, text, color = "#facc15", fontSize = 15) {
         if (!userSettings.floatingTextEnabled) return;
-        const q = userSettings.qualityPreset;
-        if (
-          LowRamOptimizer.profile.isLowRam ||
-          q === "ultralight" ||
-          q === "potato"
-        ) {
-          const sc = projectToScreen(pos3D, 2.4);
-          if (sc.visible) {
-            LowRamOptimizer.FloatTextPool.spawn(
-              sc.x + (Math.random() - 0.5) * 18,
-              sc.y,
-              text,
-              color,
-              Math.min(fontSize, 13),
-            );
-          }
-          return;
+        const sc = projectToScreen(pos3D, 2.4);
+        if (sc.visible) {
+          LowRamOptimizer.FloatTextPool.spawn(
+            sc.x + (Math.random() - 0.5) * 18,
+            sc.y,
+            text,
+            color,
+            fontSize,
+          );
         }
-        const maxPopups =
-          q === "ultralight"
-            ? 8
-            : q === "potato" || q === "performance"
-              ? 16
-              : 40;
-        while (floatTexts.length >= maxPopups) {
-          const oldest = floatTexts.shift();
-          if (oldest && oldest.el) oldest.el.remove();
-        }
-        const el = document.createElement("div");
-        el.className = "floating-text";
-        el.style.color = color;
-        el.style.fontSize = `${fontSize}px`;
-        el.textContent = text;
-        worldUiLayer.appendChild(el);
-        const p = pos3D.clone();
-        p.x += (Math.random() - 0.5) * 1.1;
-        p.y += 2.4;
-        p.z += (Math.random() - 0.5) * 1.1;
-        floatTexts.push({ el, pos: p, vy: 3.5, life: 0.95, maxLife: 0.95 });
       }
 
       function showBanner(title, subtitle, colorClass = "text-amber-400") {
@@ -25946,7 +25935,7 @@ diffuseColor.rgb *= mix(0.58, 1.04, groundAO) * canopyShade;`,
         // 9. Ground Faction Rune Aura (Ultra Max Exclusive)
         if (isUltraMaxMode && heroCfgObj && ctx.root && !ctx.isPreview) {
           const umaxGroundRing = new THREE.Mesh(
-            new THREE.RingGeometry(1.26, 1.46, 36),
+            new THREE.RingGeometry(1.26, 1.46, 80),
             new THREE.MeshBasicMaterial({
               color: heroCfgObj.primaryHex,
               side: THREE.DoubleSide,
@@ -36378,7 +36367,11 @@ diffuseColor.rgb *= mix(0.58, 1.04, groundAO) * canopyShade;`,
             endMatch(this.team === "dire" ? "radiant" : "dire");
           } else {
             this.mesh.visible = false;
-            this.bar.el.remove();
+            if (this.mesh) {
+              scene.remove(this.mesh);
+              disposeObject3D(this.mesh);
+            }
+            if (this.bar && this.bar.el) this.bar.el.remove();
           }
         }
 
@@ -38024,9 +38017,11 @@ diffuseColor.rgb *= mix(0.58, 1.04, groundAO) * canopyShade;`,
                 playerHero.castAnim > 0 ||
                 playerHero.hitFlashTimer > 0 ||
                 playerHero.celebrateTimer > 0;
-              const effHudInterval = isHeroBusy
-                ? hudInterval
-                : Math.max(hudInterval, 1 / 12);
+              const effHudInterval = !useDedicatedRenderer
+                ? 1 / 10
+                : isHeroBusy
+                  ? hudInterval
+                  : Math.max(hudInterval, 1 / 12);
               hudAccum += dt;
               if (hudAccum >= effHudInterval) {
                 const stepDt = hudAccum;
@@ -41732,10 +41727,11 @@ diffuseColor.rgb *= mix(0.58, 1.04, groundAO) * canopyShade;`,
         spawnRoshanBoss();
       }
 
-      function spawnCreepWave() {
-        if (gameOver) return;
-        const m = getEscalationMults();
-        const makeFlankPath = (isRad, sideOff) => {
+      const _radFlankCache = {};
+      const _direFlankCache = {};
+      function getCachedFlankPath(isRad, sideOff) {
+        const cache = isRad ? _radFlankCache : _direFlankCache;
+        if (!cache[sideOff]) {
           const nx = 0.70710678 * sideOff;
           const nz = 0.70710678 * sideOff;
           const nodes = isRad
@@ -41755,12 +41751,18 @@ diffuseColor.rgb *= mix(0.58, 1.04, groundAO) * canopyShade;`,
                 [-78, 78],
                 [-134, 134],
               ];
-          return nodes.map(([px, pz], idx) =>
+          cache[sideOff] = nodes.map(([px, pz], idx) =>
             idx === nodes.length - 1
               ? new THREE.Vector3(px, 0, pz)
               : new THREE.Vector3(px + nx, 0, pz + nz),
           );
-        };
+        }
+        return cache[sideOff];
+      }
+
+      function spawnCreepWave() {
+        if (gameOver) return;
+        const m = getEscalationMults();
 
         [
           { dx: -2.2, dz: 0.4, sub: "melee", side: 3.35 },
@@ -41769,8 +41771,8 @@ diffuseColor.rgb *= mix(0.58, 1.04, groundAO) * canopyShade;`,
           { dx: -3.2, dz: 3.2, sub: "ranged", side: -2.35 },
         ].forEach((f) => {
           const isR = f.sub === "ranged";
-          const radPath = makeFlankPath(true, f.side);
-          const direPath = makeFlankPath(false, -f.side);
+          const radPath = getCachedFlankPath(true, f.side);
+          const direPath = getCachedFlankPath(false, -f.side);
 
           const radMegaMult = radiantMegaCreeps ? 2.15 : 1.0;
           const radMegaReward = radiantMegaCreeps ? 0.4 : 1.0;
@@ -44495,6 +44497,15 @@ diffuseColor.rgb *= mix(0.58, 1.04, groundAO) * canopyShade;`,
       const _sparkleFlareVGeo = registerSharedAsset(
         new THREE.PlaneGeometry(0.1, 0.68),
       );
+      const _umaxStarHaloMat = registerSharedAsset(
+        new THREE.MeshBasicMaterial({
+          color: 0xffffff,
+          transparent: true,
+          opacity: 0.92,
+          blending: THREE.AdditiveBlending,
+          depthWrite: false,
+        }),
+      );
 
       function spawnHeroAttackSparkles(
         pos,
@@ -45185,13 +45196,7 @@ diffuseColor.rgb *= mix(0.58, 1.04, groundAO) * canopyShade;`,
           if (isUmaxHeroProj) {
             const starHalo = new THREE.Mesh(
               _sparkleDiamondGeo,
-              new THREE.MeshBasicMaterial({
-                color: 0xffffff,
-                transparent: true,
-                opacity: 0.92,
-                blending: THREE.AdditiveBlending,
-                depthWrite: false,
-              }),
+              _umaxStarHaloMat,
             );
             starHalo.scale.set(2.8, 2.8, 2.8);
             orb.add(starHalo);
@@ -46375,6 +46380,10 @@ diffuseColor.rgb *= mix(0.58, 1.04, groundAO) * canopyShade;`,
         }
       }
 
+      const _aliveCampSet = new Set();
+      const _scratchHookVec = new THREE.Vector3();
+      const _scratchHookVec2 = new THREE.Vector3();
+
       function stepSimulation(dt) {
         if (hitstopTimer > 0) {
           hitstopTimer = Math.max(0, hitstopTimer - dt);
@@ -46540,7 +46549,7 @@ diffuseColor.rgb *= mix(0.58, 1.04, groundAO) * canopyShade;`,
           }
         }
 
-        const _aliveCampSet = new Set();
+        _aliveCampSet.clear();
         for (let i = 0; i < units.length; i++) {
           const u = units[i];
           if (!u.dead && u.camp) _aliveCampSet.add(u.camp);
@@ -46793,6 +46802,11 @@ diffuseColor.rgb *= mix(0.58, 1.04, groundAO) * canopyShade;`,
               u.respawnTimer -= dt;
               if (u.respawnTimer <= 0) u.respawn();
             } else {
+              if (u.mesh) {
+                scene.remove(u.mesh);
+                disposeObject3D(u.mesh);
+              }
+              if (u.bar && u.bar.el) u.bar.el.remove();
               units.splice(i, 1);
             }
             continue;
@@ -47906,7 +47920,7 @@ diffuseColor.rgb *= mix(0.58, 1.04, groundAO) * canopyShade;`,
                 projectiles.splice(i, 1);
                 continue;
               }
-              const toHook = new THREE.Vector3().subVectors(
+              const toHook = _scratchHookVec.subVectors(
                 p.mesh.position,
                 ownerPos,
               );
@@ -47941,7 +47955,7 @@ diffuseColor.rgb *= mix(0.58, 1.04, groundAO) * canopyShade;`,
               p.owner.targetPos = null;
             } else {
               // phase === 'return': reel hook (and hooked enemy!) back to caster
-              const toOwner = new THREE.Vector3().subVectors(
+              const toOwner = _scratchHookVec.subVectors(
                 ownerPos,
                 p.mesh.position,
               );
@@ -47964,7 +47978,7 @@ diffuseColor.rgb *= mix(0.58, 1.04, groundAO) * canopyShade;`,
                 !p.hookedTarget.dead
               ) {
                 // Winch Thalindor directly onto the hooked victim!
-                const toVictim = new THREE.Vector3().subVectors(
+                const toVictim = _scratchHookVec2.subVectors(
                   p.hookedTarget.mesh.position,
                   p.owner.mesh.position,
                 );
@@ -48367,14 +48381,12 @@ diffuseColor.rgb *= mix(0.58, 1.04, groundAO) * canopyShade;`,
                       p.owner.hp + p.healOwner,
                     );
                   if (p.prismSplit) {
+                    const { geo: spGeo, mat: spMat } = getPrismShardAssets();
                     [-0.45, 0, 0.45].forEach((sAng) => {
                       const spDir = p.dir
                         .clone()
-                        .applyAxisAngle(new THREE.Vector3(0, 1, 0), sAng);
-                      const spMesh = new THREE.Mesh(
-                        new THREE.ConeGeometry(0.32, 2.6, 5),
-                        new THREE.MeshBasicMaterial({ color: 0x38bdf8 }),
-                      );
+                        .applyAxisAngle(_yUpAxis, sAng);
+                      const spMesh = new THREE.Mesh(spGeo, spMat);
                       spMesh.rotation.x = Math.PI / 2;
                       spMesh.rotation.y = Math.atan2(spDir.x, spDir.z);
                       spMesh.position.set(px, 1.5, pz);
@@ -53525,17 +53537,18 @@ diffuseColor.rgb *= mix(0.58, 1.04, groundAO) * canopyShade;`,
       function applyRendererResolution() {
         const preset = userSettings.qualityPreset || "balanced";
         const isUltraMax = preset === "ultramax";
+        const isUltra = preset === "ultra";
         const isUltraLight = preset === "ultralight";
         const detailLvl = getGraphicsShaderDetailLevel(preset);
         const nativeDpr = Math.max(1, window.devicePixelRatio || 1);
         const dprCap = isUltraMax
           ? Math.min(2.0, nativeDpr)
-          : preset === "ultra"
-            ? Math.min(1.65, nativeDpr)
+          : isUltra
+            ? Math.min(1.5, nativeDpr)
             : preset === "high"
-              ? 1.3
+              ? Math.min(1.25, nativeDpr)
               : preset === "balanced"
-                ? 1.05
+                ? 1.0
                 : preset === "performance"
                   ? 0.85
                   : preset === "potato"
@@ -53560,44 +53573,50 @@ diffuseColor.rgb *= mix(0.58, 1.04, groundAO) * canopyShade;`,
           minDprFloor,
           Math.min(nativeDpr, dprCap) * scaleMult * nxg.dynResScale,
         );
-        if (userSettings.dynResEnabled !== false) {
-          // Native 1:1 Retina pixel budget (~8.8M px = full 2x Retina laptop/desktop without wasteful sub-pixel oversampling)
-          const pxBudget = isUltraMax
-            ? 8.8e6
-            : preset === "ultra"
-              ? 6.4e6
-              : preset === "high"
-                ? 4.4e6
-                : preset === "balanced"
-                  ? 3.2e6
-                  : preset === "performance"
-                    ? 2.0e6
-                    : preset === "potato"
-                      ? 1.2e6
-                      : 0.62e6;
-          const cssPx = Math.max(1, window.innerWidth * window.innerHeight);
-          if (cssPx * effectiveDpr * effectiveDpr > pxBudget)
-            effectiveDpr = Math.max(minDprFloor, Math.sqrt(pxBudget / cssPx));
-        }
-        const bloomScale = isUltraMax
-          ? 0.32
-          : preset === "ultra"
-            ? 0.28
+        // Generous DPR ceiling for Ultra Max enabling pin-sharp Retina supersampling without artificial downscaling
+        const maxDprCeiling = isUltraMax
+          ? Math.min(2.0, nativeDpr * (scaleMult > 1.05 ? 1.4 : 1.05))
+          : isUltra
+            ? 1.5
+            : isHigh
+              ? 1.25
+              : 1.0;
+        effectiveDpr = Math.min(maxDprCeiling, effectiveDpr);
+
+        // Physical desktop pixel budget ceiling:
+        // Ultra Max supports full 4.5M pixels (1440p / Retina supersampled) for pin-sharp fidelity
+        const cssPx = Math.max(1, window.innerWidth * window.innerHeight);
+        const maxDesktopPixels = isUltraMax
+          ? 4.5e6
+          : isUltra
+            ? 3.0e6
             : preset === "high"
-              ? 0.24
+              ? 2.2e6
               : preset === "balanced"
-                ? 0.2
-                : 0.16;
+                ? 1.6e6
+                : preset === "performance"
+                  ? 1.2e6
+                  : preset === "potato"
+                    ? 0.75e6
+                    : 0.5e6;
+        if (cssPx * effectiveDpr * effectiveDpr > maxDesktopPixels) {
+          effectiveDpr = Math.max(minDprFloor, Math.sqrt(maxDesktopPixels / cssPx));
+        }
+
+        const bloomScale = isUltraMax
+          ? 0.25
+          : preset === "ultra"
+            ? 0.22
+            : preset === "high"
+              ? 0.18
+              : preset === "balanced"
+                ? 0.15
+                : 0.12;
 
         renderer.setPixelRatio(effectiveDpr);
         renderer.setSize(window.innerWidth, window.innerHeight);
         if (_hdrRT) {
-          const wantSamples =
-            renderer.capabilities.isWebGL2 &&
-            !_isTouchBoot &&
-            effectiveDpr < 1.5
-              ? 4
-              : 0;
+          const wantSamples = 0; // Disable 4x MSAA on HDR half-float target to eliminate catastrophic GPU resolve stalls
           if (_hdrRT.samples !== wantSamples) {
             _hdrRT.samples = wantSamples;
             _hdrRT.dispose();
@@ -53748,9 +53767,9 @@ diffuseColor.rgb *= mix(0.58, 1.04, groundAO) * canopyShade;`,
           buildUltraMaxEnvironmentDetails();
         }
 
-        // Tight-frustum 2048 shadow map preserves crisp shadow texel density at 4x lower GPU cost than 4096
+        // Calibrated 1536 shadow map with tight 64m frustum delivers crisp 8cm texels at 44% lower fillrate
         const shSize = isUltraMax
-          ? 2048
+          ? 1536
           : isUltra
             ? 1536
             : isHigh
@@ -53782,13 +53801,14 @@ diffuseColor.rgb *= mix(0.58, 1.04, groundAO) * canopyShade;`,
           sunLight.shadow.camera.bottom = -targetExt;
           sunLight.shadow.camera.updateProjectionMatrix();
         }
+        sunLight.shadow.bias = -0.00025;
         sunLight.shadow.normalBias = isUltraMax
-          ? 0.024
+          ? 0.012
           : isUltra
-            ? 0.028
+            ? 0.016
             : isHigh
-              ? 0.034
-              : 0.044;
+              ? 0.024
+              : 0.034;
         if (sunLight.shadow.mapSize.width !== shSize) {
           sunLight.shadow.mapSize.set(shSize, shSize);
           if (sunLight.shadow.map) {
@@ -54535,9 +54555,12 @@ diffuseColor.rgb *= mix(0.58, 1.04, groundAO) * canopyShade;`,
             window.toggleMobileTouchPad(shouldShowTouch, true);
           }
         }
+        _cachedStageWinRect = null;
       });
 
       let previewIdleClock = 0;
+      let _cachedStageWinRect = null;
+      let _cachedStageWinTime = 0;
       function updateCameraRig(dt) {
         if (inTitleScreen) {
           previewIdleClock += dt;
@@ -54608,21 +54631,26 @@ diffuseColor.rgb *= mix(0.58, 1.04, groundAO) * canopyShade;`,
           const fovTan = Math.tan((camera.fov * 0.5 * Math.PI) / 180);
           let heightRatio = 0.52;
           let ndcShiftY = 0.0;
-          const stageEl = document.getElementById("hero-3d-stage-window");
-          if (stageEl && window.innerHeight > 0) {
-            const rect = stageEl.getBoundingClientRect();
-            if (rect.width > 0 && rect.height > 0) {
-              const stageCenterY = rect.top + rect.height * 0.5;
-              ndcShiftY = -(
-                (stageCenterY - window.innerHeight * 0.5) /
-                (window.innerHeight * 0.5)
-              );
-              heightRatio = THREE.MathUtils.clamp(
-                rect.height / window.innerHeight,
-                0.3,
-                0.85,
-              );
+          const nowMs = performance.now();
+          if (!_cachedStageWinRect || nowMs - _cachedStageWinTime > 400) {
+            const stageEl = getHudEl("hero-3d-stage-window");
+            if (stageEl && window.innerHeight > 0) {
+              _cachedStageWinRect = stageEl.getBoundingClientRect();
+              _cachedStageWinTime = nowMs;
             }
+          }
+          const rect = _cachedStageWinRect;
+          if (rect && rect.width > 0 && rect.height > 0 && window.innerHeight > 0) {
+            const stageCenterY = rect.top + rect.height * 0.5;
+            ndcShiftY = -(
+              (stageCenterY - window.innerHeight * 0.5) /
+              (window.innerHeight * 0.5)
+            );
+            heightRatio = THREE.MathUtils.clamp(
+              rect.height / window.innerHeight,
+              0.3,
+              0.85,
+            );
           }
 
           const autoDist = subjectWorldH / (2 * fovTan * heightRatio);
@@ -54705,19 +54733,36 @@ diffuseColor.rgb *= mix(0.58, 1.04, groundAO) * canopyShade;`,
             window._bakedShadowZ = desiredZ;
             window._shadowFrustumMoved = true;
           }
-          const bx = window._bakedShadowX;
-          const bz = window._bakedShadowZ;
-          sunLight.target.position.set(bx, 0, bz);
-          sunLight.target.updateMatrixWorld();
-          const sDir = window._activeSunDir;
-          if (sDir) {
-            sunLight.position.set(
-              bx + sDir.x * 135,
-              sDir.y * 135,
-              bz + sDir.z * 135,
-            );
-          } else {
-            sunLight.position.set(bx + 60, 110, bz + 62);
+          const shadowSkipVal =
+            userSettings.qualityPreset === "ultramax"
+              ? 2
+              : userSettings.qualityPreset === "ultra"
+                ? 3
+                : 4;
+          if (
+            window._shadowFrustumMoved ||
+            (_shadowFrameCounter + 1) % shadowSkipVal === 0
+          ) {
+            const bx =
+              window._bakedShadowX !== undefined
+                ? window._bakedShadowX
+                : desiredX;
+            const bz =
+              window._bakedShadowZ !== undefined
+                ? window._bakedShadowZ
+                : desiredZ;
+            sunLight.target.position.set(bx, 0, bz);
+            sunLight.target.updateMatrixWorld();
+            const sDir = window._activeSunDir;
+            if (sDir) {
+              sunLight.position.set(
+                bx + sDir.x * 135,
+                sDir.y * 135,
+                bz + sDir.z * 135,
+              );
+            } else {
+              sunLight.position.set(bx + 60, 110, bz + 62);
+            }
           }
         }
 
@@ -54757,8 +54802,8 @@ diffuseColor.rgb *= mix(0.58, 1.04, groundAO) * canopyShade;`,
           prevTime = now;
           return;
         }
-        const settingsModalEl = document.getElementById("settings-modal");
-        const mpModalEl = document.getElementById("multiplayer-modal");
+        const settingsModalEl = getHudEl("settings-modal");
+        const mpModalEl = getHudEl("multiplayer-modal");
         if (
           (settingsModalEl && !settingsModalEl.classList.contains("hidden")) ||
           (mpModalEl && !mpModalEl.classList.contains("hidden"))
@@ -54874,13 +54919,13 @@ diffuseColor.rgb *= mix(0.58, 1.04, groundAO) * canopyShade;`,
                   : userSettings.qualityPreset === "balanced"
                     ? 6
                     : 10;
-          if (
-            userSettings.shadowsEnabled &&
-            (window._shadowFrustumMoved ||
-              ++_shadowFrameCounter % shadowSkip === 0)
-          ) {
-            window._shadowFrustumMoved = false;
-            renderer.shadowMap.needsUpdate = true;
+          if (userSettings.shadowsEnabled) {
+            if (window._shadowFrustumMoved) {
+              window._shadowFrustumMoved = false;
+              renderer.shadowMap.needsUpdate = true;
+            } else if (++_shadowFrameCounter % shadowSkip === 0) {
+              renderer.shadowMap.needsUpdate = true;
+            }
           }
         }
         nxgTick(dt);
